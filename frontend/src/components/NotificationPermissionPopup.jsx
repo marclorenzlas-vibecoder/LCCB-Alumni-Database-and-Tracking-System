@@ -37,9 +37,19 @@ const NotificationPermissionPopup = () => {
         localStorage.setItem(`notification_prompt_shown_${user.id}`, 'true');
         localStorage.setItem(`notifications_enabled_${user.id}`, 'true');
         closePopup();
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to save notification preference:', errorData);
+        // Still close the popup and save locally even if backend fails
+        localStorage.setItem(`notification_prompt_shown_${user.id}`, 'true');
+        localStorage.setItem(`notifications_enabled_${user.id}`, 'true');
+        closePopup();
       }
     } catch (error) {
       console.error('Error saving notification preference:', error);
+      // Still close the popup and save locally even if backend fails
+      localStorage.setItem(`notification_prompt_shown_${user.id}`, 'true');
+      localStorage.setItem(`notifications_enabled_${user.id}`, 'true');
       closePopup();
     }
   };
@@ -63,9 +73,19 @@ const NotificationPermissionPopup = () => {
         localStorage.setItem(`notification_prompt_shown_${user.id}`, 'true');
         localStorage.setItem(`notifications_enabled_${user.id}`, 'false');
         closePopup();
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to save notification preference:', errorData);
+        // Still close the popup and save locally even if backend fails
+        localStorage.setItem(`notification_prompt_shown_${user.id}`, 'true');
+        localStorage.setItem(`notifications_enabled_${user.id}`, 'false');
+        closePopup();
       }
     } catch (error) {
       console.error('Error saving notification preference:', error);
+      // Still close the popup and save locally even if backend fails
+      localStorage.setItem(`notification_prompt_shown_${user.id}`, 'true');
+      localStorage.setItem(`notifications_enabled_${user.id}`, 'false');
       closePopup();
     }
   };

@@ -652,6 +652,15 @@ router.put('/notification-preference', async (req, res) => {
       updateData.notification_prompt_shown = promptShown;
     }
 
+    // Check if user exists first
+    const existingUser = await prisma.user.findUnique({
+      where: { id: parseInt(userId) }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: parseInt(userId) },
       data: updateData
@@ -667,7 +676,10 @@ router.put('/notification-preference', async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating notification preference:', error);
-    res.status(500).json({ error: 'Failed to update notification preference' });
+    res.status(500).json({ 
+      error: 'Failed to update notification preference',
+      details: error.message 
+    });
   }
 });
 
