@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Registration - LCCB Alumni System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 480px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #aaa;
+        }
+
+        .required {
+            color: #e74c3c;
+            margin-left: 2px;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-top: 20px;
+        }
+
+        .note strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Teacher Registration</h1>
+            <p>LCCB Alumni Management System</p>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <form id="teacherRegisterForm" action="/api/auth/register-teacher" method="POST">
+            <div class="form-group">
+                <label for="email">Email Address <span class="required">*</span></label>
+                <input type="email" id="email" name="email" placeholder="example@lccbonline.com" required>
+            </div>
+
+            <div class="form-group">
+                <label for="username">Full Name <span class="required">*</span></label>
+                <input type="text" id="username" name="username" placeholder="Enter your full name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="department">Department</label>
+                <select id="department" name="department">
+                    <option value="">Select Department</option>
+                    <option value="Administration">Administration</option>
+                    <option value="Business Management">Business Management</option>
+                    <option value="Information Technology">Information Technology</option>
+                    <option value="Hospitality Management">Hospitality Management</option>
+                    <option value="Tourism Management">Tourism Management</option>
+                    <option value="Office Management">Office Management</option>
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Maritime">Maritime</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password <span class="required">*</span></label>
+                <input type="password" id="password" name="password" placeholder="Create a strong password" minlength="6" required>
+            </div>
+
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password <span class="required">*</span></label>
+                <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Re-enter your password" minlength="6" required>
+            </div>
+
+            <button type="submit" class="btn-submit" id="submitBtn">Create Teacher Account</button>
+        </form>
+
+        <div class="note">
+            <strong>📌 Important:</strong>
+            Only LCCB staff with @lccbonline.com email addresses can register as teachers.
+        </div>
+    </div>
+
+        <!-- Success Popup -->
+        <div id="successPopup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(2px); z-index:50; align-items:center; justify-content:center;">
+            <div style="background:#fff; width:100%; max-width:400px; padding:28px 30px; border-radius:14px; box-shadow:0 15px 40px -5px rgba(0,0,0,.25); font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                <h2 style="margin:0 0 10px; font-size:22px; color:#2d3748; display:flex; align-items:center; gap:8px;">
+                    <span style="display:inline-flex; width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#48bb78,#38a169); color:#fff; align-items:center; justify-content:center; font-size:16px; font-weight:600;">✓</span>
+                    Registration Successful
+                </h2>
+                <p style="margin:0 0 18px; font-size:14px; line-height:1.4; color:#4a5568;">Teacher account has been created. You can log in now using your email and password.</p>
+                <div style="display:flex; gap:10px;">
+                    <button id="popupLoginBtn" style="flex:1; background:#2b6cb0; color:#fff; border:none; padding:12px 16px; font-size:14px; font-weight:600; border-radius:8px; cursor:pointer;">Go to Login</button>
+                    <button id="popupCloseBtn" style="flex:1; background:#e2e8f0; color:#2d3748; border:none; padding:12px 16px; font-size:14px; font-weight:600; border-radius:8px; cursor:pointer;">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const form = document.getElementById('teacherRegisterForm');
+            const messageDiv = document.getElementById('message');
+            const passwordInput = document.getElementById('password');
+            const confirmInput = document.getElementById('confirmPassword');
+            const emailInput = document.getElementById('email');
+            const popup = document.getElementById('successPopup');
+            const popupLoginBtn = document.getElementById('popupLoginBtn');
+            const popupCloseBtn = document.getElementById('popupCloseBtn');
+
+            function showInline(msg, type) {
+                messageDiv.textContent = msg;
+                messageDiv.className = 'message ' + type;
+                messageDiv.style.display = 'block';
+            }
+
+            function validDomain(email){ return email.endsWith('@lccbonline.com'); }
+
+            emailInput.addEventListener('blur', () => {
+                if(emailInput.value && !validDomain(emailInput.value)) {
+                    showInline('Email must end with @lccbonline.com', 'error');
+                }
+            });
+
+            confirmInput.addEventListener('input', () => {
+                if(confirmInput.value && confirmInput.value !== passwordInput.value) {
+                    confirmInput.style.borderColor = '#e74c3c';
+                } else {
+                    confirmInput.style.borderColor = '#e1e8ed';
+                }
+            });
+
+            popupLoginBtn.addEventListener('click', () => {
+                window.location.href = 'http://localhost:3002/login';
+            });
+            popupCloseBtn.addEventListener('click', () => {
+                popup.style.display = 'none';
+            });
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                // Client validations
+                if(!validDomain(emailInput.value)) {
+                    showInline('Email must end with @lccbonline.com', 'error');
+                    return;
+                }
+                if(passwordInput.value !== confirmInput.value) {
+                    showInline('Passwords do not match', 'error');
+                    return;
+                }
+                // Disable button
+                const btn = document.getElementById('submitBtn');
+                btn.disabled = true; btn.textContent = 'Creating...';
+                messageDiv.style.display = 'none';
+                try {
+                    const res = await fetch('/api/auth/register-teacher', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept':'application/json' },
+                        body: JSON.stringify({
+                            username: document.getElementById('username').value,
+                            email: emailInput.value,
+                            password: passwordInput.value,
+                            department: document.getElementById('department').value || null
+                        })
+                    });
+                    if(!res.ok){
+                        const data = await res.json().catch(()=>({error:'Registration failed'}));
+                        showInline(data.error || 'Registration failed', 'error');
+                    } else {
+                        form.reset();
+                        popup.style.display = 'flex';
+                    }
+                } catch(err){
+                    showInline('Network error. Try again.', 'error');
+                } finally {
+                    btn.disabled = false; btn.textContent = 'Create Teacher Account';
+                }
+            });
+        </script>
+</body>
+</html>
