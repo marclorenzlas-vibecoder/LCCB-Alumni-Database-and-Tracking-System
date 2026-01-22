@@ -139,6 +139,50 @@ async function deleteNotification(notificationId) {
 }
 
 /**
+ * Create notification for a specific user
+ * @param {number} userId - User ID to notify
+ * @param {string} type - Notification type (EVENT, ACHIEVEMENT, ANNOUNCEMENT, GENERAL, JOB_APPLICATION)
+ * @param {string} title - Notification title
+ * @param {string} message - Notification message
+ * @param {string} link - Link to the relevant content
+ * @returns {Promise<Object>} Created notification
+ */
+async function createUserNotification(userId, { type, title, message, link }) {
+  try {
+    console.log(`📬 Creating notification for user ${userId}:`, { type, title, message, link });
+    
+    // Verify user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, notification_enabled: true }
+    });
+    
+    if (!user) {
+      console.error(`❌ User ${userId} not found`);
+      throw new Error(`User ${userId} not found`);
+    }
+    
+    console.log(`✅ User found:`, user);
+    
+    const notification = await prisma.notification.create({
+      data: {
+        user_id: userId,
+        type: type,
+        title: title,
+        message: message,
+        link: link,
+        is_read: false
+      }
+    });
+    console.log(`✅ Notification created successfully:`, notification);
+    return notification;
+  } catch (error) {
+    console.error('❌ Error creating user notification:', error);
+    throw error;
+  }
+}
+
+/**
  * Get unread notification count for a user
  * @param {number} userId - User ID
  * @returns {Promise<number>} Count of unread notifications
@@ -177,6 +221,7 @@ async function deleteAllNotifications(userId) {
 
 module.exports = {
   createNotifications,
+  createUserNotification,
   getUserNotifications,
   markAsRead,
   markAllAsRead,

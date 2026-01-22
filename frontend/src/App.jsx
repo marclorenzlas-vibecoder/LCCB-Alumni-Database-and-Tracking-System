@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './components/Home';
 import Dashboard from './components/Dashboard';
@@ -14,6 +14,7 @@ import Events from './components/Events';
 import EventDetail from './components/EventDetail';
 import Achievements from './components/Achievements';
 import Employment from './components/Employment';
+import JobApplications from './components/JobApplications';
 import Donations from './components/Donations';
 import OAuthCallback from './components/OAuthCallback';
 import TeacherLogin from './components/TeacherLogin';
@@ -25,9 +26,30 @@ import { authService } from './services/authService';
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = authService.getCurrentUser();
   const token = localStorage.getItem('token');
   const isAuthenticated = !!(user && token);
+
+  // Prevent back button navigation - always go to home
+  useEffect(() => {
+    if (isAuthenticated) {
+      const handlePopState = (e) => {
+        if (location.pathname !== '/home') {
+          window.history.pushState(null, '', window.location.pathname);
+          navigate('/home', { replace: true });
+        }
+      };
+
+      // Push a state to enable popstate detection
+      window.history.pushState(null, '', window.location.pathname);
+      window.addEventListener('popstate', handlePopState);
+      
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }
+  }, [isAuthenticated, location.pathname, navigate]);
 
   // Pages where Navbar should be hidden
   const hideNavbarRoutes = ['/login', '/Login', '/register', '/teacher/login', '/teacher/register', '/pending-approval'];
@@ -104,6 +126,11 @@ function AppContent() {
           <Route path="/employment" element={
             <ProtectedRoute>
               <Employment />
+            </ProtectedRoute>
+          } />
+          <Route path="/job-applications/:jobId" element={
+            <ProtectedRoute>
+              <JobApplications />
             </ProtectedRoute>
           } />
           <Route path="/donations" element={

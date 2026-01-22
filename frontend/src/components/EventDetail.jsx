@@ -179,7 +179,7 @@ const EventDetail = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading event details...</p>
         </div>
       </div>
@@ -191,7 +191,7 @@ const EventDetail = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-600">Event not found</p>
-          <button onClick={() => navigate('/events')} className="mt-4 text-blue-600 hover:underline">
+          <button onClick={() => navigate('/events')} className="mt-4 text-blue-900 hover:underline">
             Back to Events
           </button>
         </div>
@@ -200,234 +200,384 @@ const EventDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-5xl mx-auto px-4">
-        {/* Back Button */}
-        <button
-          onClick={() => navigate('/events')}
-          className="mb-6 flex items-center text-gray-600 hover:text-gray-900"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Events
-        </button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-50">
+      {/* Hero Section with Image */}
+      {event.image && (
+        <div className="relative h-[500px] w-full overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/60"></div>
+          <img
+            src={`http://localhost:5001${event.image}`}
+            alt={event.name}
+            className="w-full h-full object-cover"
+          />
+          
+          {/* Back Button - Floating */}
+          <button
+            onClick={() => navigate('/events')}
+            className="absolute top-6 left-6 flex items-center gap-2 px-4 py-2 bg-white/95 backdrop-blur-sm text-gray-800 rounded-full hover:bg-white shadow-lg transition-all hover:scale-105"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="font-medium">Back to Events</span>
+          </button>
 
-        {/* Event Header */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
-          {/* Event Image */}
-          {event.image && (
-            <div className="w-full h-96 bg-gray-200">
-              <img
-                src={`http://localhost:5001${event.image}`}
-                alt={event.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
-
-          <div className="p-8">
-            {/* Event Title and Join Button */}
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex-1">
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">{event.name}</h1>
-                <div className="flex items-center gap-4 text-gray-600">
-                  <div className="flex items-center">
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Event Title Overlay */}
+          <div className="absolute bottom-0 left-0 right-0 p-8 md:p-12">
+            <div className="max-w-6xl mx-auto">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 border border-white/20">
+                <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg">
+                  {event.name}
+                </h1>
+                <div className="flex flex-wrap items-center gap-4 md:gap-6 text-white/90">
+                  <div className="flex items-center gap-2 bg-white/20 rounded-full px-4 py-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    <span className="font-semibold">{attendees.length} people interested</span>
+                    <span className="font-semibold">{attendees.length} Interested</span>
                   </div>
-                </div>
-              </div>
-
-              {/* Join/Leave Button */}
-              {user && user.role !== 'TEACHER' && (
-                <div className="ml-4">
-                  {isAttending ? (
-                    <button
-                      onClick={handleLeaveEvent}
-                      className="px-6 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-semibold border border-red-300"
-                      title="Click to leave this event"
-                    >
-                      Leave Event
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleJoinEvent}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-                    >
-                      Join Event
-                    </button>
+                  {event.date && (
+                    <div className="flex items-center gap-2 bg-white/20 rounded-full px-4 py-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className="font-medium">
+                        {new Date(event.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  {event.location && (
+                    <div className="flex items-center gap-2 bg-white/20 rounded-full px-4 py-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span className="font-medium">{event.location}</span>
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-
-            {/* Event Details Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              {/* Date */}
-              {event.date && (
-                <div className="flex items-start">
-                  <svg className="w-6 h-6 text-blue-600 mr-3 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <div>
-                    <p className="text-sm text-gray-500">Date</p>
-                    <p className="text-lg font-semibold text-gray-900">
-                      {new Date(event.date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Location */}
-              {event.location && (
-                <div className="flex items-start">
-                  <svg className="w-6 h-6 text-blue-600 mr-3 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <div>
-                    <p className="text-sm text-gray-500">Location</p>
-                    <p className="text-lg font-semibold text-gray-900">{event.location}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            {event.description && (
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">About This Event</h2>
-                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{event.description}</p>
               </div>
-            )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Section */}
+      <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content - Left Column */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Event Details Card */}
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Event Details
+                </h2>
+              </div>
+              <div className="p-6 md:p-8">
+                {/* Date and Location Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  {event.date && (
+                    <div className="flex items-start gap-4 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                      <div className="p-3 bg-blue-600 rounded-xl text-white">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Date & Time</p>
+                        <p className="text-base font-bold text-gray-900">
+                          {new Date(event.date).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {event.location && (
+                    <div className="flex items-start gap-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                      <div className="p-3 bg-indigo-600 rounded-xl text-white">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-1">Location</p>
+                        <p className="text-base font-bold text-gray-900">{event.location}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Description */}
+                {event.description && (
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      About This Event
+                    </h3>
+                    <div className="prose max-w-none">
+                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-base">{event.description}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Attendees Section */}
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                People Interested ({attendees.length})
-              </h2>
-              
-              {attendees.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {attendees.map((attendance) => (
-                    <div key={attendance.id} className="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
-                      {attendance.alumni?.profile_image ? (
-                        <img
-                          src={`http://localhost:5001${attendance.alumni.profile_image}`}
-                          alt={`${attendance.alumni.first_name} ${attendance.alumni.last_name}`}
-                          className="w-16 h-16 rounded-full object-cover mb-2"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xl mb-2">
-                          {attendance.alumni?.first_name?.charAt(0)}{attendance.alumni?.last_name?.charAt(0)}
-                        </div>
-                      )}
-                      <p className="text-sm font-semibold text-gray-900 text-center">
-                        {attendance.alumni?.first_name} {attendance.alumni?.last_name}
-                      </p>
-                      {attendance.alumni?.course && (
-                        <p className="text-xs text-gray-500 text-center">{attendance.alumni.course}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 bg-gray-50 rounded-lg">
-                  <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
-                  <p className="text-gray-500">No one has joined yet. Be the first!</p>
+                  People Interested ({attendees.length})
+                </h2>
+              </div>
+              <div className="p-6 md:p-8">
+                {attendees.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {attendees.map((attendance) => (
+                      <div 
+                        key={attendance.id} 
+                        className="flex flex-col items-center p-4 bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl hover:shadow-lg transition-all hover:scale-105 border border-gray-100"
+                      >
+                        {attendance.alumni?.profile_image ? (
+                          <img
+                            src={`http://localhost:5001${attendance.alumni.profile_image}`}
+                            alt={`${attendance.alumni.first_name} ${attendance.alumni.last_name}`}
+                            className="w-16 h-16 rounded-full object-cover mb-3 ring-4 ring-white shadow-md"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg mb-3 ring-4 ring-white shadow-md">
+                            {attendance.alumni?.first_name?.charAt(0)}{attendance.alumni?.last_name?.charAt(0)}
+                          </div>
+                        )}
+                        <p className="text-sm font-bold text-gray-900 text-center">
+                          {attendance.alumni?.first_name} {attendance.alumni?.last_name}
+                        </p>
+                        {attendance.alumni?.course && (
+                          <p className="text-xs text-gray-600 text-center mt-1">{attendance.alumni.course}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl border-2 border-dashed border-gray-300">
+                    <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <p className="text-lg font-semibold text-gray-900 mb-2">No one has joined yet</p>
+                    <p className="text-sm text-gray-600">Be the first to show interest in this event!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar - Right Column */}
+          <div className="lg:col-span-1">
+            <div className="space-y-6">
+              {/* Action Card */}
+              {user && user.role !== 'TEACHER' && !isEventPast() && (
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                    <h3 className="text-lg font-bold text-white">Join This Event</h3>
+                  </div>
+                  <div className="p-6">
+                    {isAttending ? (
+                      <>
+                        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl mb-4">
+                          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-sm font-semibold text-green-800">You're attending!</span>
+                        </div>
+                        <button
+                          onClick={handleLeaveEvent}
+                          className="w-full px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                        >
+                          Leave Event
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Register your interest and stay updated about this event.
+                        </p>
+                        <button
+                          onClick={handleJoinEvent}
+                          className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
+                        >
+                          <span className="flex items-center justify-center gap-2">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Join Event
+                          </span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
+
+              {/* Quick Info Card */}
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl shadow-xl overflow-hidden text-white p-6">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Event Status
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white/10 rounded-lg backdrop-blur-sm">
+                    <span className="text-sm">Status</span>
+                    <span className="text-sm font-bold">
+                      {isEventPast() ? 'Completed' : 'Upcoming'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/10 rounded-lg backdrop-blur-sm">
+                    <span className="text-sm">Attendees</span>
+                    <span className="text-sm font-bold">{attendees.length}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Gallery Section - Only for Past Events */}
         {isEventPast() && (
-          <div className="bg-white rounded-lg shadow-lg p-8 mt-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Event Gallery</h2>
-              {gallery.length > 0 && (
-                <span className="text-sm text-gray-500">
-                  {gallery.length} {gallery.length === 1 ? 'photo' : 'photos'}
-                </span>
-              )}
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 mt-8">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Event Gallery
+                </h2>
+                {gallery.length > 0 && (
+                  <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm font-semibold text-white">
+                    {gallery.length} {gallery.length === 1 ? 'Photo' : 'Photos'}
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Upload Section - Admin/Teacher Only */}
-            {isTeacher && (
-              <div className="mb-8 p-6 bg-blue-50 rounded-lg border-2 border-dashed border-blue-300">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload Event Photos</h3>
-                <div className="space-y-4">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                  />
-                  {selectedFiles.length > 0 && (
-                    <div className="text-sm text-gray-600">
-                      {selectedFiles.length} {selectedFiles.length === 1 ? 'file' : 'files'} selected
+            <div className="p-6 md:p-8">
+              {/* Upload Section - Admin/Teacher Only */}
+              {isTeacher && (
+                <div className="mb-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-dashed border-blue-300">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-blue-600 rounded-lg">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
                     </div>
-                  )}
-                  <button
-                    onClick={handleUploadPhotos}
-                    disabled={uploadingPhotos || selectedFiles.length === 0}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {uploadingPhotos ? 'Uploading...' : 'Upload Photos'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Gallery Grid */}
-            {gallery.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {gallery.map((photo, index) => (
-                  <div key={photo.id} className="relative group">
-                    <div 
-                      className="aspect-square overflow-hidden rounded-lg cursor-pointer"
-                      onClick={() => openLightbox(index)}
-                    >
-                      <img
-                        src={`http://localhost:5001${photo.image}`}
-                        alt={`Gallery ${index + 1}`}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                      />
-                    </div>
-                    {isTeacher && (
-                      <button
-                        onClick={() => handleDeletePhoto(photo.id)}
-                        className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
+                    <h3 className="text-lg font-bold text-gray-900">Upload Event Photos</h3>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-gray-500">
-                <svg className="h-16 w-16 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-lg font-medium">No photos yet</p>
-                {isTeacher && <p className="text-sm mt-2">Upload some memorable moments from this event!</p>}
-              </div>
-            )}
+                  <div className="space-y-4">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="block w-full text-sm text-gray-600 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-600 file:to-indigo-600 file:text-white hover:file:from-blue-700 hover:file:to-indigo-700 file:shadow-lg file:cursor-pointer transition-all"
+                    />
+                    {selectedFiles.length > 0 && (
+                      <div className="flex items-center gap-2 text-sm text-gray-700 bg-white p-3 rounded-lg">
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-semibold">
+                          {selectedFiles.length} {selectedFiles.length === 1 ? 'file' : 'files'} selected
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      onClick={handleUploadPhotos}
+                      disabled={uploadingPhotos || selectedFiles.length === 0}
+                      className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+                    >
+                      {uploadingPhotos ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Uploading...
+                        </span>
+                      ) : (
+                        'Upload Photos'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Gallery Grid */}
+              {gallery.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {gallery.map((photo, index) => (
+                    <div key={photo.id} className="relative group">
+                      <div 
+                        className="aspect-square overflow-hidden rounded-xl cursor-pointer shadow-md hover:shadow-2xl transition-all border-2 border-transparent hover:border-blue-400"
+                        onClick={() => openLightbox(index)}
+                      >
+                        <img
+                          src={`http://localhost:5001${photo.image}`}
+                          alt={`Gallery ${index + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      </div>
+                      {isTeacher && (
+                        <button
+                          onClick={() => handleDeletePhoto(photo.id)}
+                          className="absolute top-3 right-3 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-700 shadow-lg hover:scale-110"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl border-2 border-dashed border-gray-300">
+                  <div className="max-w-xs mx-auto">
+                    <div className="bg-gradient-to-br from-blue-100 to-indigo-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900 mb-2">No photos yet</p>
+                    <p className="text-sm text-gray-600">
+                      {isTeacher 
+                        ? "Upload some memorable moments from this event to share with everyone!" 
+                        : "Check back soon for photos from this event!"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -113,6 +113,8 @@ export const authService = {
   },
 
   // Role helpers based on email domain
+  // Teachers have @lccbonline.com emails
+  // Alumni have @gmail.com emails
   isTeacher: () => {
     const userStr = localStorage.getItem('user');
     if (!userStr) return false;

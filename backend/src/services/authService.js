@@ -239,7 +239,12 @@ async function loginUser(email, password) {
           level: user.alumni.level,
           course: user.alumni.course,
           batch: user.alumni.batch,
-          graduationYear: user.alumni.graduation_year || user.alumni.graduationYear
+          graduationYear: user.alumni.graduation_year || user.alumni.graduationYear,
+          currentPosition: user.alumni.current_position,
+          current_position: user.alumni.current_position,
+          company: user.alumni.company,
+          location: user.alumni.location,
+          skills: user.alumni.skills
         } : null
       }
     };

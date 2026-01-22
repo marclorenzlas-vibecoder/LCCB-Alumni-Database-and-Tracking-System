@@ -106,9 +106,9 @@ const Home = () => {
       <NotificationPermissionPopup />
       
       {/* Hero Section - Clean & Modern */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800" style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+      <div className="relative overflow-hidden bg-gradient-to-br from-blue-800 via-blue-900 to-indigo-900" style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
         {/* Blue overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/90 via-blue-700/90 to-indigo-800/90"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-800/90 via-blue-900/90 to-indigo-900/90"></div>
         
         <div className="relative px-8 lg:px-16 pt-32 pb-20">
           <div className="text-center max-w-4xl mx-auto">
@@ -122,7 +122,7 @@ const Home = () => {
             <div className="flex flex-col sm:flex-row gap-4 mb-20 justify-center">
               <button 
                 onClick={() => navigate('/alumni')}
-                className="group px-8 py-4 bg-white text-blue-600 rounded-full font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
+                className="group px-8 py-4 bg-white text-blue-900 rounded-full font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
               >
                 Explore Alumni Directory
                 <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -131,7 +131,7 @@ const Home = () => {
               </button>
               <button 
                 onClick={() => navigate('/events')}
-                className="group px-8 py-4 bg-transparent border-2 border-white text-white rounded-full font-semibold text-lg hover:bg-white hover:text-blue-600 transition-all duration-300 flex items-center gap-2"
+                className="group px-8 py-4 bg-transparent border-2 border-white text-white rounded-full font-semibold text-lg hover:bg-white hover:text-blue-900 transition-all duration-300 flex items-center gap-2"
               >
                 View Upcoming Events
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -161,8 +161,170 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Features Section - Now directly after hero */}
-      <div className="py-20 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+      {/* About Section */}
+      <div className="py-12 bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">ABOUT</h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Your comprehensive platform for staying connected with the LCCB community
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
+            {/* Left Side - About Content */}
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl p-8 shadow-lg">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">Our Mission</h3>
+                    <p className="text-gray-700 leading-relaxed">
+                      The LCCB Alumni Database and Tracking System is designed to bridge the gap between past and present, 
+                      creating a vibrant ecosystem where alumni can reconnect, collaborate, and support each other's professional 
+                      and personal growth.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl p-8 shadow-lg">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">What We Provide</h3>
+                    <ul className="text-gray-700 space-y-2">
+                      <li className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span>Comprehensive alumni directory with advanced search and filtering</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span>Real-time event management and RSVP tracking</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span>Career services including job postings and application tracking</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span>Achievement showcase and donation management</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span>Instant notifications for important updates and opportunities</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Side - Stats & Features */}
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-blue-800 to-indigo-900 rounded-2xl p-8 text-white shadow-xl">
+                <h3 className="text-2xl font-bold mb-6">Platform Highlights</h3>
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold">{totals.alumni}+</div>
+                      <div className="text-blue-100">Registered Alumni</div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold">{totals.jobs}+</div>
+                      <div className="text-blue-100">Job Opportunities</div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold">{totals.events}+</div>
+                      <div className="text-blue-100">Annual Events</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl p-8 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Key Features</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-gray-700">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="font-medium">Secure account management</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-700">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="font-medium">Interactive alumni profiles</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-700">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="font-medium">Mobile-responsive design</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-700">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="font-medium">Real-time notifications</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Features Section - What We Offer */}
+      <div className="py-12 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -172,8 +334,8 @@ const Home = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             {/* Feature 1 */}
-            <div className="group relative bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
-              <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <div className="group relative bg-gradient-to-br from-blue-100 to-blue-200 rounded-2xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+              <div className="w-14 h-14 bg-blue-900 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.768-.231-1.48-.634-2.026M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.768.231-1.48.634-2.026M14 10a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
@@ -182,7 +344,7 @@ const Home = () => {
               <p className="text-gray-700 mb-6 leading-relaxed">
                 Connect with alumni across various industries. Find mentors, collaborators, and lifelong friends.
               </p>
-              <button onClick={() => navigate('/alumni')} className="text-blue-600 font-semibold hover:gap-2 flex items-center gap-1 transition-all">
+              <button onClick={() => navigate('/alumni')} className="text-blue-900 font-semibold hover:gap-2 flex items-center gap-1 transition-all">
                 Browse Directory 
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -232,7 +394,7 @@ const Home = () => {
       </div>
 
       {/* Events Preview Section */}
-      <div className="py-16 bg-white">
+      <div className="py-10 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -241,7 +403,7 @@ const Home = () => {
             </div>
             <Link 
               to="/events" 
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2">
+              className="px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors duration-200 flex items-center gap-2">
               View All
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -280,7 +442,7 @@ const Home = () => {
                       {event.location || 'TBA'}
                     </div>
                     <div className="mt-auto pt-4">
-                      <Link to="/events" className="w-full inline-flex justify-center items-center px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                      <Link to="/events" className="w-full inline-flex justify-center items-center px-4 py-2.5 bg-blue-900 text-white rounded-md hover:bg-blue-800 transition-colors">
                         View Details
                       </Link>
                     </div>
@@ -293,7 +455,7 @@ const Home = () => {
       </div>
 
       {/* Achievements Preview Section */}
-      <div className="py-16 bg-gray-50">
+      <div className="py-10 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -302,7 +464,7 @@ const Home = () => {
             </div>
             <Link 
               to="/achievements" 
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2">
+              className="px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors duration-200 flex items-center gap-2">
               View All
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -317,24 +479,24 @@ const Home = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {achievements.map((achievement) => (
-                <div key={achievement.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                <div key={achievement.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
                   {achievement.image && (
                     <img
                       src={achievement.image.startsWith('/') ? `http://localhost:5001${achievement.image}` : achievement.image}
                       alt={achievement.title}
-                      className="w-full h-40 object-cover"
+                      className="w-full h-40 object-cover rounded-lg mb-4"
                     />
                   )}
-                  <div className="p-5">
-                    <span className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full">
-                      {achievement.category || 'Achievement'}
-                    </span>
-                    <h3 className="text-lg font-semibold text-gray-900 mt-3 mb-2">{achievement.title}</h3>
-                    <p className="text-gray-600 text-sm line-clamp-3">{achievement.description || 'No description'}</p>
-                    <p className="text-gray-500 text-xs mt-3">
-                      {achievement.date ? new Date(achievement.date).toLocaleDateString() : 'Date not specified'}
-                    </p>
-                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{achievement.title}</h3>
+                  <p className="text-gray-600 text-sm line-clamp-3">{achievement.description}</p>
+                  {achievement.date && (
+                    <div className="mt-3 flex items-center text-gray-500 text-sm">
+                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {new Date(achievement.date).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -343,7 +505,7 @@ const Home = () => {
       </div>
 
       {/* Job Opportunities Preview Section */}
-      <div className="py-16 bg-white">
+      <div className="py-10 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -352,7 +514,7 @@ const Home = () => {
             </div>
             <Link 
               to="/employment" 
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2">
+              className="px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors duration-200 flex items-center gap-2">
               View All
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -405,7 +567,7 @@ const Home = () => {
       </div>
 
       {/* Donations/Campaigns Preview Section */}
-      <div className="py-16 bg-gray-50">
+      <div className="py-10 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -414,7 +576,7 @@ const Home = () => {
             </div>
             <Link 
               to="/donations" 
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2">
+              className="px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors duration-200 flex items-center gap-2">
               View All
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -441,7 +603,7 @@ const Home = () => {
                       />
                     )}
                     <div className="p-5">
-                      <span className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full">
+                      <span className="px-3 py-1 text-xs font-medium text-blue-900 bg-blue-100 rounded-full">
                         {donation.category || 'General'}
                       </span>
                       <h3 className="text-lg font-semibold text-gray-900 mt-3 mb-2">{donation.purpose}</h3>
@@ -456,7 +618,7 @@ const Home = () => {
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                              className="bg-blue-900 h-2 rounded-full transition-all duration-500"
                               style={{ width: `${progress}%` }}
                             />
                           </div>
@@ -472,21 +634,192 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Call to Action - Minimal & Clean */}
-      <div className="py-24 bg-gradient-to-r from-blue-600 to-indigo-700">
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-            Ready to Connect?
-          </h2>
-          <p className="text-xl text-blue-100 mb-10 leading-relaxed">
-            Join our growing community of LCCB alumni and unlock endless opportunities for networking, growth, and success.
-          </p>
-          <button 
-            onClick={() => navigate('/register')}
-            className="px-10 py-4 bg-white text-blue-600 rounded-full font-bold text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
-          >
-            Get Started Today
-          </button>
+      {/* Office Hours & Stay Connected */}
+      <div className="py-10 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Office Hours */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex-shrink-0">
+                  <svg className="w-6 h-6 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Office Hours</h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    Mondays to Fridays: 8:00 AM to 5:00 PM (We observe Noon Break)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 pt-4 border-t border-gray-100">
+                <div className="flex-shrink-0">
+                  <svg className="w-6 h-6 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Location</h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    G/F, L-Shaped Building, La Consolacion College Bacolod, Corner Galo-Gatuslao Streets, Bacolod City 6100
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stay Connected */}
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+              <div className="flex items-start gap-3 mb-6">
+                <div className="flex-shrink-0">
+                  <svg className="w-6 h-6 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Stay Connected</h3>
+                  <p className="text-gray-600 text-sm">
+                    Follow us on social media for the latest updates, news, and alumni stories.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <a href="https://facebook.com/lccb.alumni" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg hover:bg-blue-50 transition-all duration-200 group">
+                  <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-600 transition-colors duration-200">
+                    <svg className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors duration-200" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-blue-900 transition-colors duration-200">Facebook</span>
+                </a>
+                <a href="https://instagram.com/lccb.alumni" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg hover:bg-pink-50 transition-all duration-200 group">
+                  <div className="flex-shrink-0 w-10 h-10 bg-pink-100 rounded-full flex items-center justify-center group-hover:bg-gradient-to-br group-hover:from-purple-600 group-hover:to-pink-600 transition-all duration-200">
+                    <svg className="w-5 h-5 text-pink-600 group-hover:text-white transition-colors duration-200" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0C8.74 0 8.333.015 7.053.072 5.775.132 4.905.333 4.14.63c-.789.306-1.459.717-2.126 1.384S.935 3.35.63 4.14C.333 4.905.131 5.775.072 7.053.012 8.333 0 8.74 0 12s.015 3.667.072 4.947c.06 1.277.261 2.148.558 2.913.306.788.717 1.459 1.384 2.126.667.666 1.336 1.079 2.126 1.384.766.296 1.636.499 2.913.558C8.333 23.988 8.74 24 12 24s3.667-.015 4.947-.072c1.277-.06 2.148-.262 2.913-.558.788-.306 1.459-.718 2.126-1.384.666-.667 1.079-1.335 1.384-2.126.296-.765.499-1.636.558-2.913.06-1.28.072-1.687.072-4.947s-.015-3.667-.072-4.947c-.06-1.277-.262-2.149-.558-2.913-.306-.789-.718-1.459-1.384-2.126C21.319 1.347 20.651.935 19.86.63c-.765-.297-1.636-.499-2.913-.558C15.667.012 15.26 0 12 0zm0 2.16c3.203 0 3.585.016 4.85.071 1.17.055 1.805.249 2.227.415.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.057 1.266.07 1.646.07 4.85s-.015 3.585-.074 4.85c-.061 1.17-.256 1.805-.421 2.227-.224.562-.479.96-.899 1.382-.419.419-.824.679-1.38.896-.42.164-1.065.36-2.235.413-1.274.057-1.649.07-4.859.07-3.211 0-3.586-.015-4.859-.074-1.171-.061-1.816-.256-2.236-.421-.569-.224-.96-.479-1.379-.899-.421-.419-.69-.824-.9-1.38-.165-.42-.359-1.065-.42-2.235-.045-1.26-.061-1.649-.061-4.844 0-3.196.016-3.586.061-4.861.061-1.17.255-1.814.42-2.234.21-.57.479-.96.9-1.381.419-.419.81-.689 1.379-.898.42-.166 1.051-.361 2.221-.421 1.275-.045 1.65-.06 4.859-.06l.045.03zm0 3.678c-3.405 0-6.162 2.76-6.162 6.162 0 3.405 2.76 6.162 6.162 6.162 3.405 0 6.162-2.76 6.162-6.162 0-3.405-2.76-6.162-6.162-6.162zM12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm7.846-10.405c0 .795-.646 1.44-1.44 1.44-.795 0-1.44-.646-1.44-1.44 0-.794.646-1.439 1.44-1.439.793-.001 1.44.645 1.44 1.439z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-pink-900 transition-colors duration-200">Instagram</span>
+                </a>
+                <a href="https://youtube.com/@lccbalumni" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 transition-all duration-200 group">
+                  <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center group-hover:bg-red-600 transition-colors duration-200">
+                    <svg className="w-5 h-5 text-red-600 group-hover:text-white transition-colors duration-200" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-red-900 transition-colors duration-200">YouTube</span>
+                </a>
+                <a href="https://maps.google.com/?q=La+Consolacion+College+Bacolod" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg hover:bg-green-50 transition-all duration-200 group">
+                  <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-600 transition-colors duration-200">
+                    <svg className="w-5 h-5 text-green-600 group-hover:text-white transition-colors duration-200" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0C7.802 0 4 3.403 4 7.602C4 11.8 7.469 16.812 12 24C16.531 16.812 20 11.8 20 7.602C20 3.403 16.199 0 12 0zm0 11c-1.657 0-3-1.343-3-3s1.343-3 3-3 3 1.343 3 3-1.343 3-3 3z"/>
+                    </svg>
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-green-900 transition-colors duration-200">Google Map</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Call to Action - Professional Footer Style */}
+      <div className="bg-blue-900 text-white py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-4 gap-12">
+            {/* About Section */}
+            <div className="col-span-1">
+              <h3 className="text-2xl font-bold mb-4 text-white">LCCB Alumni</h3>
+              <p className="text-gray-300 text-sm leading-relaxed">
+                Building bridges between graduates, fostering professional growth, and strengthening our community through meaningful connections and opportunities.
+              </p>
+            </div>
+
+            {/* Quick Links */}
+            <div>
+              <h4 className="text-lg font-semibold mb-4 text-white">Quick Links</h4>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <button onClick={() => navigate('/alumni')} className="text-gray-300 hover:text-blue-400 transition-colors">
+                    Alumni Directory
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/events')} className="text-gray-300 hover:text-blue-400 transition-colors">
+                    Events Calendar
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/employment')} className="text-gray-300 hover:text-blue-400 transition-colors">
+                    Career Opportunities
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/donations')} className="text-gray-300 hover:text-blue-400 transition-colors">
+                    Support LCCB
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Get Involved */}
+            <div>
+              <h4 className="text-lg font-semibold mb-4 text-white">Get Involved</h4>
+              <ul className="space-y-2 text-sm">
+                <li className="text-gray-300 flex items-start">
+                  <svg className="w-4 h-4 mr-2 mt-0.5 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Network with fellow graduates
+                </li>
+                <li className="text-gray-300 flex items-start">
+                  <svg className="w-4 h-4 mr-2 mt-0.5 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Attend exclusive events
+                </li>
+                <li className="text-gray-300 flex items-start">
+                  <svg className="w-4 h-4 mr-2 mt-0.5 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Access career resources
+                </li>
+                <li className="text-gray-300 flex items-start">
+                  <svg className="w-4 h-4 mr-2 mt-0.5 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Contribute to the community
+                </li>
+              </ul>
+            </div>
+
+            {/* Join Now CTA */}
+            <div>
+              <h4 className="text-lg font-semibold mb-4 text-white">Join Our Network</h4>
+              <p className="text-gray-300 text-sm mb-4">
+                Become part of our growing alumni community today.
+              </p>
+              <button 
+                onClick={() => navigate('/register')}
+                className="w-full px-6 py-3 bg-white text-blue-900 rounded-lg font-semibold hover:bg-gray-100 transition-colors mb-3"
+              >
+                Register Now
+              </button>
+              <button 
+                onClick={() => navigate('/login')}
+                className="w-full px-6 py-3 border border-gray-600 text-gray-300 rounded-lg font-semibold hover:border-blue-400 hover:text-blue-400 transition-colors"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="border-t border-blue-800 mt-12 pt-8 text-center">
+            <p className="text-gray-300 text-sm">
+              © {new Date().getFullYear()} LCCB Alumni Association. All rights reserved.
+            </p>
+          </div>
         </div>
       </div>
 

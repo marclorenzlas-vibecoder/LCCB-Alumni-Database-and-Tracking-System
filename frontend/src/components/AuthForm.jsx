@@ -189,7 +189,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
         <div className="flex items-center justify-between">
           <button 
             type="submit" 
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            className="bg-blue-900 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
           >
             {isLogin ? 'Sign In' : 'Register'}
           </button>
@@ -197,7 +197,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
           <button 
             type="button"
             onClick={toggleForm}
-            className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800"
+            className="inline-block align-baseline font-bold text-sm text-blue-900 hover:text-blue-800"
           >
             {isLogin ? 'Need an account? Register' : 'Already have an account? Login'}
           </button>

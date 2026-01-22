@@ -95,7 +95,7 @@ const Register = () => {
     <div className="min-h-screen w-full bg-white flex items-center justify-center px-4 py-4">
       <div className="w-full max-w-6xl h-[90vh] max-h-[700px] flex flex-col md:flex-row items-stretch rounded-3xl overflow-hidden shadow-2xl">
         {/* Left Panel - Form */}
-        <div className="w-full md:w-1/2 p-6 md:p-8 bg-white flex flex-col justify-center overflow-y-auto scrollbar-hide">
+        <div className="w-full md:w-1/2 p-6 md:p-8 bg-white flex flex-col overflow-y-auto scrollbar-hide">
           <style jsx>{`
             .scrollbar-hide::-webkit-scrollbar {
               display: none;
@@ -260,7 +260,7 @@ const Register = () => {
           </div>
           <button 
             type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 transition-all shadow-lg shadow-blue-600/30 mt-4"
+            className="w-full bg-blue-900 hover:bg-blue-800 text-white font-semibold py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 transition-all shadow-lg shadow-blue-900/30 mt-4"
           >
             Sign up
           </button>
@@ -282,7 +282,7 @@ const Register = () => {
           className="hidden md:flex md:w-1/2 p-8 lg:p-12 items-center justify-center relative overflow-hidden bg-cover bg-center"
           style={{ backgroundImage: `url(${loginBackground})` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/85 via-blue-600/80 to-teal-700/85"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-700/85 via-blue-900/80 to-teal-800/85"></div>
           <div className="relative z-10 text-white max-w-md">
             <h2 className="text-3xl lg:text-4xl font-bold mb-3 leading-tight">Join the LCCB Alumni Network</h2>
             <p className="text-base lg:text-lg mb-8 text-white/95 leading-relaxed">Create your account to connect with fellow alumni, share achievements, and access exclusive opportunities.</p>

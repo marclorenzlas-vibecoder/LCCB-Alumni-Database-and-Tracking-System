@@ -188,7 +188,7 @@ const Achievements = () => {
           {isTeacher && (
             <button 
               onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
               </svg>
@@ -205,7 +205,7 @@ const Achievements = () => {
               onClick={() => setSelectedCategory(category)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
                 selectedCategory === category
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-900 text-white'
                   : 'bg-white text-gray-600 hover:bg-gray-100'
               } border border-gray-200`}
             >
@@ -236,14 +236,21 @@ const Achievements = () => {
                 )}
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="px-3 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded-full">
+                  <span className="px-3 py-1 text-sm font-medium text-blue-900 bg-blue-100 rounded-full">
                     {achievement.category || 'General'}
                   </span>
                   <span className="text-gray-500 text-sm">
                     {achievement.date ? new Date(achievement.date).getFullYear() : 'N/A'}
                   </span>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-300">
+                {achievement.alumni && (
+                  <p className="text-sm text-gray-600 mb-3">
+                    <span className="font-semibold text-gray-800">
+                      {achievement.alumni.first_name} {achievement.alumni.last_name}
+                    </span>
+                  </p>
+                )}
+                <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors duration-300">
                   {achievement.title}
                 </h3>
                 <p className="text-gray-600 mb-4 max-h-[7.5rem] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 leading-relaxed">
@@ -258,13 +265,13 @@ const Achievements = () => {
                   <div className="mt-4 flex gap-2">
                     <button
                       onClick={() => handleEdit(achievement)}
-                      className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200 text-sm"
+                      className="flex-1 bg-white text-blue-900 px-4 py-2 rounded-md border border-blue-400 hover:bg-blue-100 transition-colors duration-200 text-sm font-medium"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(achievement.id)}
-                      className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm"
+                      className="flex-1 bg-white text-red-600 px-4 py-2 rounded-md border border-red-300 hover:bg-red-50 transition-colors duration-200 text-sm font-medium"
                     >
                       Delete
                     </button>
@@ -279,7 +286,7 @@ const Achievements = () => {
         {/* Modal for Adding Achievement */}
         {showModal && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto">
+            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl">
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Achievement' : 'Add New Achievement'}
@@ -298,7 +305,7 @@ const Achievements = () => {
                         value={formData.alumni_id}
                         onChange={handleInputChange}
                         required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                       >
                         <option value="">Select an alumni</option>
                         {alumniList.map((alumni) => (
@@ -318,7 +325,7 @@ const Achievements = () => {
                         value={formData.title}
                         onChange={handleInputChange}
                         required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                         placeholder="Achievement title"
                         autoComplete="off"
                         spellCheck={false}
@@ -332,7 +339,7 @@ const Achievements = () => {
                         name="description"
                         value={formData.description}
                         onChange={handleInputChange}
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900 resize-none"
                         placeholder="Achievement description"
                         rows="4"
                       />
@@ -346,7 +353,7 @@ const Achievements = () => {
                         name="date"
                         value={formData.date}
                         onChange={handleInputChange}
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -358,7 +365,7 @@ const Achievements = () => {
                         name="image"
                         accept="image/*"
                         onChange={handleInputChange}
-                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-100 file:text-blue-900 hover:file:bg-blue-200"
                       />
                       {formData.image && (
                         <p className="text-sm text-gray-500 mt-1">Selected: {formData.image.name}</p>
@@ -385,7 +392,7 @@ const Achievements = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 disabled:bg-blue-400"
                     >
                       {loading ? 'Saving...' : (editingId ? 'Update Achievement' : 'Add Achievement')}
                     </button>

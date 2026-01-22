@@ -82,6 +82,10 @@ router.post('/login', async (req, res) => {
     }
     res.json(result);
   } catch (error) {
+    // Check if error message indicates blocked account
+    if (error.message && error.message.includes('blocked')) {
+      return res.status(403).json({ error: error.message, isBlocked: true });
+    }
     res.status(401).json({ error: 'Invalid credentials' });
   }
 });

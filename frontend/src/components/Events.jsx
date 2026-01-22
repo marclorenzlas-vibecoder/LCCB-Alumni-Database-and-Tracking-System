@@ -360,7 +360,7 @@ const Events = () => {
             {isTeacher && (
               <button
                 onClick={() => setShowEventModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -391,7 +391,7 @@ const Events = () => {
                   placeholder="Search by event name, description, or location..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
                 />
               </div>
             </div>
@@ -405,7 +405,7 @@ const Events = () => {
                 id="type"
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
               >
                 <option value="">All Types</option>
                 {eventTypes.map(type => (
@@ -423,7 +423,7 @@ const Events = () => {
                 id="status"
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
               >
                 <option value="all">All Events</option>
                 <option value="upcoming">Upcoming</option>
@@ -443,7 +443,7 @@ const Events = () => {
                 id="sort"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
               >
                 <option value="date">Date</option>
                 <option value="name">Name</option>
@@ -453,7 +453,7 @@ const Events = () => {
             
             <button
               onClick={clearFilters}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-4 py-2 text-sm font-medium text-blue-900 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
             >
               Clear Filters
             </button>
@@ -464,7 +464,7 @@ const Events = () => {
             <div>Showing {filteredEvents.length} of {events.length} events</div>
             {selectedStatus === 'all' && (
               <div className="flex gap-4">
-                <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full">
+                <span className="px-3 py-1 bg-blue-100 text-blue-900 rounded-full">
                   {categorizedEvents.upcoming.length} Upcoming
                 </span>
                 <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full">
@@ -514,14 +514,14 @@ const Events = () => {
             {categorizedEvents.upcoming.length > 0 && (
               <div className="mb-12">
                 <div className="flex items-center mb-6">
-                  <div className="h-0.5 w-12 bg-blue-500 mr-4"></div>
+                  <div className="h-0.5 w-12 bg-blue-900 mr-4"></div>
                   <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                     <span className="mr-3">Upcoming Events</span>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
+                    <span className="px-3 py-1 bg-blue-100 text-blue-900 text-sm font-medium rounded-full">
                       {categorizedEvents.upcoming.length}
                     </span>
                   </h2>
-                  <svg className="h-6 w-6 text-blue-600 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-6 w-6 text-blue-900 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </div>
@@ -563,7 +563,7 @@ const Events = () => {
                   </svg>
                 </div>
                 {isPastEventsExpanded && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-all duration-300">
                     {categorizedEvents.past.filter(event => {
                       const matchesSearch = 
                         event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -600,7 +600,7 @@ const Events = () => {
         {/* Add/Edit Event Modal */}
         {showEventModal && (
           <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Event' : 'Add New Event'}
@@ -618,7 +618,7 @@ const Events = () => {
                     value={newEvent.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
                     placeholder="Enter event name"
                   />
                 </div>
@@ -632,7 +632,7 @@ const Events = () => {
                     value={newEvent.description}
                     onChange={handleInputChange}
                     rows="4"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
                     placeholder="Enter event description"
                   />
                 </div>
@@ -647,7 +647,7 @@ const Events = () => {
                       name="date"
                       value={newEvent.date}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
                     />
                   </div>
 
@@ -660,7 +660,7 @@ const Events = () => {
                       name="location"
                       value={newEvent.location}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
                       placeholder="Event location"
                     />
                   </div>
@@ -719,7 +719,7 @@ const Events = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800"
                   >
                     {editingId ? 'Update Event' : 'Add Event'}
                   </button>
@@ -762,7 +762,7 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
     } else if (eventDay.getTime() === today.getTime()) {
       return 'bg-green-100 text-green-700';
     } else {
-      return 'bg-blue-100 text-blue-700';
+      return 'bg-blue-100 text-blue-900';
     }
   };
 
@@ -818,7 +818,7 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
 
       {/* Event Content */}
       <div className="p-6 flex flex-col flex-grow min-h-[280px]">
-        <h3 ref={titleRef} className={`text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors ${titleLines === 1 ? 'min-h-[28px] mb-4' : 'min-h-[56px] mb-2'}`}>
+        <h3 ref={titleRef} className={`text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors ${titleLines === 1 ? 'min-h-[28px] mb-4' : 'min-h-[56px] mb-2'}`}>
           {event.name}
         </h3>
         
@@ -851,7 +851,7 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
         <div className="flex gap-2 mt-auto pt-4">
           <button
             onClick={() => navigate(`/events/${event.id}`)}
-            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 transition-colors"
           >
             View Details
           </button>
@@ -859,13 +859,13 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
-                className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                className="px-3 py-2 text-sm font-medium text-blue-900 bg-blue-100 rounded-md border border-blue-300 hover:bg-blue-200"
               >
                 Edit
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100"
+                className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md border border-red-200 hover:bg-red-100"
               >
                 Delete
               </button>

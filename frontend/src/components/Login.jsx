@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import loginBackground from '../assets/loginbackground2.png';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
@@ -9,6 +9,15 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Redirect to home if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const user = authService.getCurrentUser();
+    if (token && user) {
+      navigate('/home', { replace: true });
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,7 +46,8 @@ const Login = () => {
         if (user && (user.approval_status === 'PENDING' || user.approval_status === 'REJECTED')) {
           setSuccess("Login successful! Checking account status...");
           setTimeout(() => {
-            window.location.href = "/pending-approval";
+            window.history.replaceState(null, '', '/pending-approval');
+            navigate('/pending-approval', { replace: true });
           }, 1500);
           return;
         }
@@ -49,16 +59,23 @@ const Login = () => {
       }
 
       setTimeout(() => {
-        window.location.href = "/";
+        // Clear history and navigate to home
+        window.history.replaceState(null, '', '/home');
+        navigate('/home', { replace: true });
       }, 1500);
     } catch (err) {
       console.error("Login error:", err);
-      // Check if the error message contains 'blocked'
-      if (err.message && err.message.toLowerCase().includes('blocked')) {
-        setError(err.message);
-      } else {
-        setError(err.message || "Login failed");
+      // Extract error message from various formats
+      let errorMessage = "Login failed";
+      
+      if (err.error) {
+        errorMessage = err.error;
+      } else if (err.message) {
+        errorMessage = err.message;
       }
+      
+      // Display the error message (which will include the blocked reason if account is blocked)
+      setError(errorMessage);
     }
   };
 
@@ -145,7 +162,7 @@ const Login = () => {
           </div>
           <button 
             type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 transition-all shadow-lg shadow-blue-600/30"
+            className="w-full bg-blue-900 hover:bg-blue-800 text-white font-semibold py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 transition-all shadow-lg shadow-blue-900/30"
           >
             Sign In
           </button>
@@ -191,7 +208,7 @@ const Login = () => {
           className="hidden md:flex md:w-1/2 p-8 lg:p-12 items-center justify-center relative overflow-hidden bg-cover bg-center"
           style={{ backgroundImage: `url(${loginBackground})` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/85 via-blue-600/80 to-teal-700/85"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-700/85 via-blue-900/80 to-teal-800/85"></div>
           <div className="relative z-10 text-white max-w-md">
             <h2 className="text-3xl lg:text-4xl font-bold mb-3 leading-tight">Connect with Your LCCB Community</h2>
             <p className="text-base lg:text-lg mb-8 text-white/95 leading-relaxed">Access your alumni profile, track achievements, and stay connected with fellow graduates.</p>

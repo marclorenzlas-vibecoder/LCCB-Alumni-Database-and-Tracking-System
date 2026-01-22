@@ -54,7 +54,7 @@ const AlumniProfile = () => {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900"></div>
             <p className="mt-4 text-gray-600">Loading displayProfile...</p>
           </div>
         </div>
@@ -71,7 +71,7 @@ const AlumniProfile = () => {
             <p className="text-gray-600 mb-4">The requested alumni profile could not be found.</p>
             <Link
               to="/alumni-directory"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
             >
               Back to Alumni Directory
             </Link>
@@ -144,7 +144,7 @@ const AlumniProfile = () => {
 
   const getSkillCategoryColor = (category) => {
     const colors = {
-      'Programming': 'bg-blue-100 text-blue-800',
+      'Programming': 'bg-blue-100 text-blue-900',
       'Frontend': 'bg-green-100 text-green-800',
       'Backend': 'bg-purple-100 text-purple-800',
       'Cloud': 'bg-orange-100 text-orange-800',
@@ -207,7 +207,7 @@ const AlumniProfile = () => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Social Links</h3>
         <div className="flex space-x-4">
-          <a href={displayProfile.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+          <a href={displayProfile.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-blue-900 hover:text-blue-800">
             <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
             </svg>
@@ -233,7 +233,7 @@ const AlumniProfile = () => {
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Interests</h3>
         <div className="flex flex-wrap gap-2">
           {displayProfile.interests.map((interest, index) => (
-            <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+            <span key={index} className="px-3 py-1 bg-blue-100 text-blue-900 text-sm rounded-full">
               {interest}
             </span>
           ))}
@@ -260,9 +260,9 @@ const AlumniProfile = () => {
       {/* Current Position */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Current Position</h3>
-        <div className="border-l-4 border-blue-500 pl-4">
+        <div className="border-l-4 border-blue-900 pl-4">
           <h4 className="text-lg font-semibold text-gray-900">{displayProfile.currentJob}</h4>
-          <p className="text-blue-600 font-medium">{displayProfile.company}</p>
+          <p className="text-blue-900 font-medium">{displayProfile.company}</p>
           <p className="text-gray-600">{displayProfile.location}</p>
         </div>
       </div>
@@ -278,13 +278,13 @@ const AlumniProfile = () => {
               )}
               <div className="flex items-start space-x-4">
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div className="flex-1">
                   <h4 className="text-lg font-semibold text-gray-900">{job.jobTitle}</h4>
-                  <p className="text-blue-600 font-medium">{job.company}</p>
+                  <p className="text-blue-900 font-medium">{job.company}</p>
                   <p className="text-gray-600 text-sm">{job.location}</p>
                   <p className="text-gray-500 text-sm">{job.startDate} - {job.endDate}</p>
                   <p className="text-gray-700 mt-2">{job.description}</p>
@@ -344,7 +344,7 @@ const AlumniProfile = () => {
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        className="bg-blue-900 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${skill.level}%` }}
                       ></div>
                     </div>
@@ -400,7 +400,7 @@ const AlumniProfile = () => {
                     href={project.demo} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
+                    className="flex items-center space-x-1 text-blue-900 hover:text-blue-800 text-sm"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />

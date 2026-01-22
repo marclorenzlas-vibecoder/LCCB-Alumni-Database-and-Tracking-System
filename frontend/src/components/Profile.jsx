@@ -294,27 +294,67 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-8 sm:px-8">
-            <div className="flex items-center gap-6">
-              {user.profile_image ? (
-                <img 
-                  src={`http://localhost:5001${user.profile_image}`} 
-                  alt={user.username || 'User'} 
-                  className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center text-blue-600 text-3xl font-bold shadow-lg">
-                  {user.username?.charAt(0).toUpperCase() || 'U'}
+        {/* Enhanced Header */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-6">
+          {/* Gradient Background with Pattern */}
+          <div className="relative bg-gradient-to-br from-blue-800 via-blue-900 to-indigo-900 px-6 py-12 sm:px-8">
+            {/* Decorative Pattern Overlay */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute inset-0" style={{
+                backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+                backgroundSize: '32px 32px'
+              }}></div>
+            </div>
+            
+            {/* Content */}
+            <div className="relative flex flex-col sm:flex-row items-center gap-6">
+              {/* Profile Picture with Enhanced Styling */}
+              <div className="relative group">
+                {user.profile_image ? (
+                  <div className="relative">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full opacity-75 blur group-hover:opacity-100 transition duration-300"></div>
+                    <img 
+                      src={`http://localhost:5001${user.profile_image}`} 
+                      alt={user.username || 'User'} 
+                      className="relative w-28 h-28 rounded-full object-cover border-4 border-white shadow-2xl ring-4 ring-blue-400/50"
+                    />
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full opacity-75 blur"></div>
+                    <div className="relative w-28 h-28 rounded-full bg-white flex items-center justify-center text-blue-600 text-4xl font-bold shadow-2xl ring-4 ring-blue-400/50">
+                      {user.username?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                  </div>
+                )}
+                {/* Status Indicator */}
+                <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-400 rounded-full border-4 border-white shadow-lg"></div>
+              </div>
+              
+              {/* User Information */}
+              <div className="text-white flex-1 text-center sm:text-left">
+                <div className="mb-3">
+                  <h1 className="text-4xl font-bold mb-2 tracking-tight">{user.username || 'User'}</h1>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 text-blue-100">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                      </svg>
+                      <span className="font-medium">{user.email || ''}</span>
+                    </div>
+                  </div>
                 </div>
-              )}
-              <div className="text-white">
-                <h1 className="text-3xl font-bold mb-1">{user.username || 'User'}</h1>
-                <p className="text-blue-100">{user.email || ''}</p>
-                <p className="text-sm text-blue-200 mt-1">
-                  Role: {user.role === 'TEACHER' || user.role === 'teacher' ? 'Teacher' : 'Alumni'}
-                </p>
+                
+                {/* Role Badge */}
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full border border-white/30">
+                  <svg className="w-5 h-5 text-blue-200" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm font-semibold text-white">
+                    {user.role === 'TEACHER' || user.role === 'teacher' ? 'Teacher' : 'Alumni'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -338,7 +378,7 @@ const Profile = () => {
             {!isEditing && (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors text-sm font-medium"
               >
                 Edit Profile
               </button>
@@ -349,7 +389,7 @@ const Profile = () => {
             <form onSubmit={handleUpdateProfile} className="space-y-5">
               <div className="flex justify-center mb-6">
                 <div className="relative">
-                  <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-500 bg-gray-100">
+                  <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-900 bg-gray-100">
                     {profileImagePreview ? (
                       <img src={profileImagePreview} alt="Profile" className="w-full h-full object-cover" />
                     ) : (
@@ -358,7 +398,7 @@ const Profile = () => {
                       </div>
                     )}
                   </div>
-                  <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700">
+                  <label className="absolute bottom-0 right-0 bg-blue-900 text-white p-2 rounded-full cursor-pointer hover:bg-blue-800">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -377,7 +417,7 @@ const Profile = () => {
                   name="username"
                   value={formData.username}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-200 transition-colors"
                   required
                 />
               </div>
@@ -575,7 +615,7 @@ const Profile = () => {
                       <button
                         type="button"
                         onClick={handleAddSocialLink}
-                        className="mt-3 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="mt-3 px-4 py-2 text-sm bg-blue-900 text-white rounded-lg hover:bg-blue-800"
                       >
                         Add Link
                       </button>
@@ -617,7 +657,7 @@ const Profile = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
+                  className="px-6 py-2.5 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors font-medium disabled:opacity-50"
                 >
                   {loading ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -780,7 +820,7 @@ const Profile = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
+                className="px-6 py-2.5 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors font-medium disabled:opacity-50"
               >
                 {loading ? 'Updating...' : 'Update Password'}
               </button>

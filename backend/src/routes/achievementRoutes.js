@@ -93,6 +93,15 @@ router.post('/', upload.single('image'), async (req, res) => {
         image: imagePath,
         description: description ? description.trim() : null,
         date: date ? new Date(date) : null
+      },
+      include: {
+        alumni: {
+          select: {
+            first_name: true,
+            last_name: true,
+            email: true
+          }
+        }
       }
     });
 
@@ -133,7 +142,16 @@ router.put('/:id', upload.single('image'), async (req, res) => {
 
     const achievement = await prisma.achievement.update({
       where: { id: Number(id) },
-      data: updateData
+      data: updateData,
+      include: {
+        alumni: {
+          select: {
+            first_name: true,
+            last_name: true,
+            email: true
+          }
+        }
+      }
     });
 
     res.json(achievement);

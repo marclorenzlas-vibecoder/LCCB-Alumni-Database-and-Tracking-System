@@ -14,6 +14,7 @@ const eventRoutes = require('./routes/eventRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const officerRoutes = require('./routes/officerRoutes');
+const applicationRoutes = require('./routes/applicationRoutes');
 const { PrismaClient } = require('@prisma/client');
 const eventStatusService = require('./services/eventStatusService');
 
@@ -39,7 +40,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin || '*');
     res.header('Vary', 'Origin');
   }
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   // Only send credentials header if coming from our frontend
   if (origin === 'http://localhost:3002') {
@@ -93,6 +94,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/officers', officerRoutes);
+app.use('/api/applications', applicationRoutes);
 
 // Default route redirects to frontend login
 app.get(['/', '/login', '/Login'], (req, res) => {

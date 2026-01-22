@@ -51,10 +51,6 @@ const AlumniDirectory = () => {
   const [selectedGroup, setSelectedGroup] = useState(''); // Placeholder for future grouping logic
   const [sortOrder, setSortOrder] = useState({ field: 'id', direction: 'desc' });
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
   // Viewing / editing / adding
   const [showViewModal, setShowViewModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -162,18 +158,6 @@ const AlumniDirectory = () => {
     });
     return data;
   }, [alumni, searchTerm, selectedLevel, selectedBatch, selectedGroup, sortOrder]);
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredAlumni.length / itemsPerPage);
-  const paginatedAlumni = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredAlumni.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredAlumni, currentPage, itemsPerPage]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedLevel, selectedBatch, selectedGroup]);
 
   // Load batch officers when a batch is selected
   useEffect(() => {
@@ -484,7 +468,7 @@ const AlumniDirectory = () => {
         {isTeacher && (
           <button
             onClick={() => { setNewAlumni(blankAlumni); setShowAddModal(true); }}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-900 hover:bg-blue-800 rounded-md"
           >
             Add New Alumni
           </button>
@@ -493,7 +477,7 @@ const AlumniDirectory = () => {
 
       {/* View Profile Modal */}
       {showViewModal && viewingAlumni && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-40">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
             <button
               onClick={() => { setShowViewModal(false); setViewingAlumni(null); }}
@@ -610,7 +594,7 @@ const AlumniDirectory = () => {
                 {/* Employment */}
                 <div className="bg-gray-50 rounded-lg p-6 md:col-span-2">
                   <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3>{isTeacher && <button onClick={()=>setShowCareerModal(true)} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">+ Add</button>}</div>
-                  <div className="space-y-3">{careers.length===0? <p className="text-gray-500 text-sm">No employment history recorded yet.</p> : careers.map(c => (<div key={c.id} className="bg-white rounded-lg p-4 border border-gray-200"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">{c.job_title}</h4><p className="text-sm text-gray-600">{c.company}</p>{c.description && <p className="text-sm text-gray-600 mt-1">{c.description}</p>}<p className="text-xs text-gray-500 mt-2">{c.start_date? new Date(c.start_date).toLocaleDateString(): 'N/A'} - {c.is_current? 'Present' : (c.end_date? new Date(c.end_date).toLocaleDateString(): 'N/A')}</p></div>{isTeacher && <button onClick={()=>handleDeleteCareer(c.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
+                  <div className="space-y-2">{careers.length===0? <p className="text-gray-500 text-sm">No employment history recorded yet.</p> : careers.map(c => (<div key={c.id} className="bg-white rounded-lg p-3 border border-gray-200"><div className="flex justify-between items-start gap-3"><div className="flex-1 min-w-0"><div className="flex items-start justify-between gap-2"><h4 className="font-semibold text-gray-900 text-sm">{c.job_title}</h4><p className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{c.start_date? new Date(c.start_date).toLocaleDateString('en-US', {month: 'short', year: 'numeric'}): 'N/A'} - {c.is_current? 'Present' : (c.end_date? new Date(c.end_date).toLocaleDateString('en-US', {month: 'short', year: 'numeric'}): 'N/A')}</p></div><p className="text-sm text-blue-600 font-medium">{c.company}</p>{c.description && <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{c.description}</p>}</div>{isTeacher && <button onClick={()=>handleDeleteCareer(c.id)} className="text-red-600 hover:text-red-800 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
                 </div>
                 {/* Donations */}
                 <div className="bg-gray-50 rounded-lg p-6 md:col-span-2">
@@ -618,7 +602,7 @@ const AlumniDirectory = () => {
                   <div className="space-y-3">{donations.length===0? <p className="text-gray-500 text-sm">No donations recorded yet.</p> : donations.map(d => (<div key={d.id} className="bg-white rounded-lg p-4 border border-gray-200"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">${d.amount}</h4>{d.purpose && <p className="text-sm text-gray-600 mt-1">{d.purpose}</p>}{d.date && <p className="text-xs text-gray-500 mt-2">{new Date(d.date).toLocaleDateString()}</p>}</div>{isTeacher && <button onClick={()=>handleDeleteDonation(d.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
                 </div>
               </div>
-              <div className="mt-8 flex justify-end gap-3"><button onClick={()=>{setShowViewModal(false); setViewingAlumni(null);}} className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>{isTeacher && <button onClick={()=>{setEditingAlumni(viewingAlumni); setNewAlumni({...viewingAlumni}); setShowViewModal(false); setShowEditModal(true);}} className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Edit Profile</button>}</div>
+              <div className="mt-8 flex justify-end gap-3"><button onClick={()=>{setShowViewModal(false); setViewingAlumni(null);}} className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>{isTeacher && <button onClick={()=>{setEditingAlumni(viewingAlumni); setNewAlumni({...viewingAlumni}); setShowViewModal(false); setShowEditModal(true);}} className="px-6 py-2 text-sm font-medium text-white bg-blue-900 rounded-lg hover:bg-blue-800">Edit Profile</button>}</div>
             </div>
           </div>
         </div>
@@ -627,7 +611,7 @@ const AlumniDirectory = () => {
       {/* Add Alumni Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-8 relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-8 relative max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="border-b border-gray-200 pb-4 mb-6"><h3 className="text-2xl font-semibold text-gray-900">Add New Alumni</h3><p className="mt-1 text-sm text-gray-500">Enter the details for the new alumni member</p></div>
             <form onSubmit={handleAddAlumni} className="space-y-6">
               <div className="flex items-start space-x-6">
@@ -647,7 +631,7 @@ const AlumniDirectory = () => {
                   <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Skills</label><textarea name="skills" value={newAlumni.skills} onChange={handleInputChange} rows="3" className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none" placeholder="Comma-separated skills" /></div>
                 </div>
               </div>
-              <div className="mt-6 flex justify-end space-x-3"><button type="button" onClick={()=>setShowAddModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button><button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Add Alumni</button></div>
+              <div className="mt-6 flex justify-end space-x-3"><button type="button" onClick={()=>setShowAddModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button><button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800">Add Alumni</button></div>
             </form>
           </div>
         </div>
@@ -689,7 +673,7 @@ const AlumniDirectory = () => {
                   <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Skills</label><textarea name="skills" value={newAlumni.skills || ''} onChange={handleInputChange} rows="3" className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none" placeholder="Comma-separated skills" /></div>
                 </div>
               </div>
-              <div className="mt-6 flex justify-end space-x-3"><button type="button" onClick={()=>{setShowEditModal(false); setEditingAlumni(null); setNewAlumni(blankAlumni);}} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button><button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Save Changes</button></div>
+              <div className="mt-6 flex justify-end space-x-3"><button type="button" onClick={()=>{setShowEditModal(false); setEditingAlumni(null); setNewAlumni(blankAlumni);}} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button><button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800">Save Changes</button></div>
             </form>
           </div>
         </div>
@@ -986,21 +970,21 @@ const AlumniDirectory = () => {
           <div className="flex-1 min-w-[240px]">
             <div className="relative">
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
-              <input type="text" placeholder="Search by name, course, email, company, or date..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoComplete="off" spellCheck={false} className="w-full pl-10 pr-4 py-2.5 rounded-lg border-0 text-sm bg-white placeholder-gray-400 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-500 shadow-sm" />
-              <div className="pointer-events-none absolute inset-x-2 bottom-0 h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent" />
+              <input type="text" placeholder="Search by name, course, email, company, or date..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoComplete="off" spellCheck={false} className="w-full pl-10 pr-4 py-2.5 rounded-lg border-0 text-sm bg-white placeholder-gray-400 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-900 shadow-sm" />
+              <div className="pointer-events-none absolute inset-x-2 bottom-0 h-px bg-gradient-to-r from-transparent via-blue-900 to-transparent" />
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative w-48 min-w-[10rem]">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 14l9-5-9-5-9 5 9 5z" /></svg></div>
-              <select value={selectedLevel} onChange={e=>setSelectedLevel(e.target.value)} className={`appearance-none w-full pl-10 pr-10 py-2.5 rounded-lg border-0 bg-white ring-1 ring-inset shadow-sm text-sm transition ${selectedLevel? 'ring-blue-300 text-gray-900':'ring-gray-300 text-gray-700'} focus:ring-2 focus:ring-blue-500`}>
+              <select value={selectedLevel} onChange={e=>setSelectedLevel(e.target.value)} className={`appearance-none w-full pl-10 pr-10 py-2.5 rounded-lg border-0 bg-white ring-1 ring-inset shadow-sm text-sm transition ${selectedLevel? 'ring-blue-900 text-gray-900':'ring-gray-300 text-gray-700'} focus:ring-2 focus:ring-blue-900`}>
                 {levelOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg></div>
             </div>
             <div className="relative w-40 min-w-[9rem]">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 6v6l4 2" /></svg></div>
-              <select value={selectedBatch} onChange={e=>setSelectedBatch(e.target.value)} className={`appearance-none w-full pl-10 pr-10 py-2.5 rounded-lg border-0 bg-white ring-1 ring-inset shadow-sm text-sm transition ${selectedBatch? 'ring-blue-300 text-gray-900':'ring-gray-300 text-gray-700'} focus:ring-2 focus:ring-blue-500`}>
+              <select value={selectedBatch} onChange={e=>setSelectedBatch(e.target.value)} className={`appearance-none w-full pl-10 pr-10 py-2.5 rounded-lg border-0 bg-white ring-1 ring-inset shadow-sm text-sm transition ${selectedBatch? 'ring-blue-900 text-gray-900':'ring-gray-300 text-gray-700'} focus:ring-2 focus:ring-blue-900`}>
                 <option value="">All Batches</option>
                 {batches.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
@@ -1008,7 +992,7 @@ const AlumniDirectory = () => {
             </div>
             <div className="relative w-56 min-w-[12rem]">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M16 11c1.657 0 3-1.567 3-3.5S17.657 4 16 4s-3 1.567-3 3.5 1.343 3.5 3 3.5zM8 11c1.657 0 3-1.567 3-3.5S9.657 4 8 4 5 5.567 5 7.5 6.343 11 8 11zm0 2c-2.21 0-6 1.12-6 3.333V18a2 2 0 002 2h8.05a5.97 5.97 0 01-.55-2.5c0-1.39.47-2.67 1.26-3.695C10.987 13.22 9.263 13 8 13zm8 0c-2.21 0-6 1.12-6 3.333V18a2 2 0 002 2h8a2 2 0 002-2v-1.667C22 14.12 18.21 13 16 13z" /></svg></div>
-              <select value={selectedGroup} onChange={e=>setSelectedGroup(e.target.value)} className={`appearance-none w-full pl-10 pr-10 py-2.5 rounded-lg border-0 bg-white ring-1 ring-inset shadow-sm text-sm transition ${selectedGroup? 'ring-blue-300 text-gray-900':'ring-gray-300 text-gray-700'} focus:ring-2 focus:ring-blue-500`}>
+              <select value={selectedGroup} onChange={e=>setSelectedGroup(e.target.value)} className={`appearance-none w-full pl-10 pr-10 py-2.5 rounded-lg border-0 bg-white ring-1 ring-inset shadow-sm text-sm transition ${selectedGroup? 'ring-blue-900 text-gray-900':'ring-gray-300 text-gray-700'} focus:ring-2 focus:ring-blue-900`}>
                 <option value="">All Groups</option>
                 {groups.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
@@ -1067,7 +1051,7 @@ const AlumniDirectory = () => {
             {!loading && !error && filteredAlumni.length === 0 && (
               <tr><td colSpan={colCount} className="px-4 py-6 text-center text-sm text-gray-500">No alumni found.</td></tr>
             )}
-            {paginatedAlumni.map(a => (
+            {filteredAlumni.map(a => (
               <tr key={a.id} className="hover:bg-gray-50 hover:shadow-[inset_0_0_0_2000px_rgba(0,0,0,0.03)] cursor-pointer transition-all duration-150" onClick={()=>openViewModal(a)}>
                 <td className="px-4 py-4 whitespace-nowrap">
                   <div className="flex items-center">
@@ -1089,7 +1073,7 @@ const AlumniDirectory = () => {
                       <button
                         type="button"
                         onClick={(e)=>{e.stopPropagation(); setEditingAlumni(a); setNewAlumni({ ...a, profileImageFile: null }); setShowEditModal(true);}}
-                        className="px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                        className="px-3 py-1.5 rounded-md bg-blue-100 text-blue-900 border border-blue-300 hover:bg-blue-200"
                         title="Edit"
                       >
                         Edit
@@ -1128,73 +1112,6 @@ const AlumniDirectory = () => {
           </tbody>
         </table>
       </div>
-
-      {/* Pagination */}
-      {!loading && !error && filteredAlumni.length > 0 && (
-        <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 bg-white">
-          <div className="flex-1 flex justify-between sm:hidden">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-          </div>
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredAlumni.length)}</span> of{' '}
-                <span className="font-medium">{filteredAlumni.length}</span> results
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="sr-only">Previous</span>
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                      currentPage === page
-                        ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="sr-only">Next</span>
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </nav>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Assign Officer Modal */}
       {showAssignOfficerModal && (

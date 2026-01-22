@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import careerService from '../services/careerService';
-import ConfirmModal from './ConfirmModal';
+import applicationService from '../services/applicationService';
 import { authService } from '../services/authService';
+import ConfirmModal from './ConfirmModal';
+import Toast from './Toast';
 
+/**
+ * Employment Component - Job Postings and Applications
+ * 
+ * User Roles (based on email domain):
+ * - Teachers (@lccbonline.com): Can post jobs, edit/delete jobs, and view all applications
+ * - Alumni (@gmail.com): Can apply to jobs and track their applications
+ */
 const Employment = () => {
+  const navigate = useNavigate();
   const [postedJobs, setPostedJobs] = useState([]);
   const isTeacher = authService.isTeacher();
+  const currentUser = authService.getCurrentUser();
   const [alumniList, setAlumniList] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -22,6 +34,15 @@ const Employment = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Application modal state
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [coverLetter, setCoverLetter] = useState('');
+  const [appliedJobs, setAppliedJobs] = useState(new Map()); // Map of job_id -> application status
+  const [applicationLoading, setApplicationLoading] = useState(false);
+  const [applicationCounts, setApplicationCounts] = useState({});
+  const [toast, setToast] = useState(null);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState({
@@ -40,7 +61,127 @@ const Employment = () => {
   useEffect(() => {
     fetchPostedJobs();
     fetchAlumniList();
+    if (currentUser && !isTeacher) {
+      checkApplicationStatus();
+    }
   }, []);
+
+  // Fetch application counts whenever jobs change (for teachers)
+  useEffect(() => {
+    if (isTeacher && postedJobs.length > 0) {
+      fetchApplicationCounts();
+    }
+  }, [postedJobs.length, isTeacher]);
+
+  // Refresh counts when page becomes visible (user returns to tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        if (isTeacher && postedJobs.length > 0) {
+          fetchApplicationCounts();
+        }
+        if (!isTeacher && currentUser) {
+          checkApplicationStatus();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isTeacher, postedJobs.length, currentUser]);
+
+  // Expose fetchApplicationCounts globally for instant updates from other components
+  useEffect(() => {
+    if (isTeacher) {
+      window.refreshApplicationCounts = fetchApplicationCounts;
+    } else if (currentUser) {
+      window.refreshApplicationStatus = checkApplicationStatus;
+    }
+    return () => { 
+      delete window.refreshApplicationCounts;
+      delete window.refreshApplicationStatus;
+    };
+  }, [isTeacher, postedJobs.length, currentUser]);
+
+  const getApplicationStatusButton = (jobId) => {
+    const application = appliedJobs.get(jobId);
+    if (!application) return null;
+
+    const statusConfig = {
+      PENDING: {
+        text: 'Application Pending',
+        bgColor: 'bg-yellow-500'
+      },
+      REVIEWED: {
+        text: 'Under Review',
+        bgColor: 'bg-blue-900'
+      },
+      SHORTLISTED: {
+        text: 'Shortlisted',
+        bgColor: 'bg-green-500'
+      },
+      ACCEPTED: {
+        text: 'Accepted',
+        bgColor: 'bg-green-600'
+      },
+      REJECTED: {
+        text: 'Not Selected',
+        bgColor: 'bg-red-500'
+      }
+    };
+
+    const config = statusConfig[application.status] || statusConfig.PENDING;
+    
+    return (
+      <button 
+        disabled
+        className={`flex-1 ${config.bgColor} text-white px-6 py-2 rounded-md cursor-not-allowed font-medium`}>
+        {config.text}
+      </button>
+    );
+  };
+
+  const checkApplicationStatus = async () => {
+    // Extract alumni ID from nested alumni object
+    const alumniId = currentUser?.alumni?.id || currentUser?.alumniId;
+    if (!alumniId) return;
+    
+    try {
+      const applications = await applicationService.getAlumniApplications(alumniId);
+      const statusMap = new Map();
+      applications.forEach(app => {
+        statusMap.set(app.job_posting_id, {
+          status: app.status,
+          appliedAt: app.applied_at,
+          reviewedAt: app.reviewed_at
+        });
+      });
+      setAppliedJobs(statusMap);
+    } catch (err) {
+      console.error('Error fetching application status:', err);
+    }
+  };
+
+  const fetchApplicationCounts = async () => {
+    if (!isTeacher) return;
+    
+    try {
+      const counts = {};
+      await Promise.all(
+        postedJobs.map(async (job) => {
+          try {
+            const applications = await applicationService.getJobApplications(job.id);
+            counts[job.id] = applications.length;
+          } catch (err) {
+            counts[job.id] = 0;
+          }
+        })
+      );
+      setApplicationCounts(counts);
+    } catch (err) {
+      console.error('Error fetching application counts:', err);
+    }
+  };
 
   const fetchAlumniList = async () => {
     try {
@@ -56,6 +197,22 @@ const Employment = () => {
     try {
       const data = await careerService.getAllJobs();
       setPostedJobs(data);
+      
+      // Fetch counts directly after getting jobs data
+      if (isTeacher && data.length > 0) {
+        const counts = {};
+        await Promise.all(
+          data.map(async (job) => {
+            try {
+              const applications = await applicationService.getJobApplications(job.id);
+              counts[job.id] = applications.length;
+            } catch (err) {
+              counts[job.id] = 0;
+            }
+          })
+        );
+        setApplicationCounts(counts);
+      }
     } catch (err) {
       console.error('Error fetching posted jobs:', err);
     }
@@ -91,11 +248,11 @@ const Employment = () => {
       if (editingId) {
         // Update existing job post
         await careerService.updateJob(editingId, jobData);
-        alert('Job updated successfully!');
+        setToast({ message: 'Job updated successfully!', type: 'success' });
       } else {
         // Create new job post
         await careerService.createJob(jobData);
-        alert('Job posted successfully!');
+        setToast({ message: 'Job posted successfully!', type: 'success' });
       }
 
       await fetchPostedJobs(); // Refresh the list
@@ -148,14 +305,63 @@ const Employment = () => {
           await careerService.deleteJob(id);
           await fetchPostedJobs();
           setConfirmModal({ ...confirmModal, isOpen: false });
-          alert('Job deleted successfully!');
+          setToast({ message: 'Job deleted successfully!', type: 'success' });
         } catch (err) {
           console.error('Error deleting job:', err);
-          alert('Failed to delete job');
+          setToast({ message: 'Failed to delete job', type: 'error' });
           setConfirmModal({ ...confirmModal, isOpen: false });
         }
       }
     });
+  };
+
+  const handleApplyNow = (job) => {
+    // Extract alumni ID from nested alumni object
+    const alumniId = currentUser?.alumni?.id || currentUser?.alumniId;
+    if (!alumniId) {
+      setToast({ message: 'Please log in as an alumni to apply for jobs.', type: 'warning' });
+      return;
+    }
+    
+    setSelectedJob(job);
+    setCoverLetter('');
+    setShowApplicationModal(true);
+  };
+
+  const handleSubmitApplication = async (e) => {
+    e.preventDefault();
+    setApplicationLoading(true);
+
+    try {
+      // Extract alumni ID from nested alumni object
+      const alumniId = currentUser?.alumni?.id || currentUser?.alumniId;
+      await applicationService.applyToJob(
+        selectedJob.id,
+        alumniId,
+        coverLetter
+      );
+      
+      // Update applied jobs map with PENDING status
+      setAppliedJobs(prev => new Map(prev).set(selectedJob.id, {
+        status: 'PENDING',
+        appliedAt: new Date().toISOString(),
+        reviewedAt: null
+      }));
+      
+      // Trigger instant notification refresh for all users
+      if (window.refreshNotifications) {
+        window.refreshNotifications();
+      }
+      
+      setShowApplicationModal(false);
+      setToast({ message: 'Application submitted successfully! The employer will be notified and will review your qualifications.', type: 'success' });
+    } catch (err) {
+      console.error('Error submitting application:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to submit application';
+      setToast({ message: errorMsg, type: 'error' });
+    } finally {
+      setApplicationLoading(false);
+    }
   };
 
   const filteredJobs = postedJobs
@@ -168,6 +374,15 @@ const Employment = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -195,7 +410,7 @@ const Employment = () => {
             {isTeacher && (
               <button 
                 onClick={() => setShowModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                 </svg>
@@ -214,7 +429,7 @@ const Employment = () => {
                 <input
                   type="text"
                   placeholder="Search jobs, companies, or locations..."
-                  className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -234,7 +449,7 @@ const Employment = () => {
                   onClick={() => setSelectedCategory(category)}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
                     selectedCategory === category
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-blue-900 text-white'
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   } border border-gray-200`}
                 >
@@ -310,7 +525,7 @@ const Employment = () => {
                 {job.requirements && (
                   <div className="mt-4">
                     <h4 className="text-sm font-semibold text-gray-900 mb-2">Requirements:</h4>
-                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
+                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <div className="whitespace-pre-wrap">{job.requirements}</div>
                     </div>
                   </div>
@@ -320,7 +535,7 @@ const Employment = () => {
                 {job.description && (
                   <div className="mt-4">
                     <h4 className="text-sm font-semibold text-gray-900 mb-2">Description:</h4>
-                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
+                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <div className="whitespace-pre-wrap">{job.description}</div>
                     </div>
                   </div>
@@ -328,22 +543,31 @@ const Employment = () => {
 
                 <div className="mt-6 flex gap-4">
                   {!isTeacher && (
-                    <button 
-                      onClick={() => alert('Application flow coming soon.')} 
-                      className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200">
-                      Apply Now
-                    </button>
+                    appliedJobs.has(job.id) ? (
+                      getApplicationStatusButton(job.id)
+                    ) : (
+                      <button 
+                        onClick={() => handleApplyNow(job)} 
+                        className="flex-1 bg-blue-900 text-white px-6 py-2 rounded-md hover:bg-blue-800 transition-colors duration-200">
+                        Apply Now
+                      </button>
+                    )
                   )}
                   {isTeacher && (
                     <>
                       <button 
+                        onClick={() => navigate(`/job-applications/${job.id}`)}
+                        className="flex-1 bg-blue-50 text-blue-600 px-6 py-2 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium">
+                        View Applications ({applicationCounts[job.id] || 0})
+                      </button>
+                      <button 
                         onClick={() => handleEdit(job)}
-                        className="flex-1 bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors duration-200">
+                        className="flex-1 bg-blue-50 text-blue-600 px-6 py-2 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors duration-200 font-medium">
                         Edit
                       </button>
                       <button 
                         onClick={() => handleDelete(job.id)}
-                        className="flex-1 bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition-colors duration-200">
+                        className="flex-1 bg-red-50 text-red-600 px-6 py-2 rounded-md border border-red-200 hover:bg-red-100 transition-colors duration-200 font-medium">
                         Delete
                       </button>
                     </>
@@ -357,36 +581,21 @@ const Employment = () => {
         {/* Modal for Posting a Job */}
         {showModal && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl">
+            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl z-10">
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Job Posting' : 'Post a Job Opportunity'}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">Enter the details for the {editingId ? 'job update' : 'new job posting'}</p>
               </div>
-              <div className="mt-6">
+              <div className="mt-6 overflow-y-auto scrollbar-hide flex-1" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+                <style jsx>{`
+                  .scrollbar-hide::-webkit-scrollbar {
+                    display: none;
+                  }
+                `}</style>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Posted By (Alumni) *
-                      </label>
-                      <select
-                        name="alumni_id"
-                        value={formData.alumni_id}
-                        onChange={handleInputChange}
-                        required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="">Select an alumni</option>
-                        {alumniList.map((alumni) => (
-                          <option key={alumni.id} value={alumni.id}>
-                            {alumni.first_name} {alumni.last_name} - {alumni.email}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Job Title *
@@ -397,7 +606,7 @@ const Employment = () => {
                         value={formData.job_title}
                         onChange={handleInputChange}
                         required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                         placeholder="e.g. Senior Software Engineer"
                       />
                     </div>
@@ -412,7 +621,7 @@ const Employment = () => {
                         value={formData.company}
                         onChange={handleInputChange}
                         required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                         placeholder="Company name"
                       />
                     </div>
@@ -427,7 +636,7 @@ const Employment = () => {
                         value={formData.location}
                         onChange={handleInputChange}
                         required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
                         placeholder="e.g. Makati City"
                       />
                     </div>
@@ -505,6 +714,28 @@ const Employment = () => {
                         rows="4"
                       />
                     </div>
+
+                    <div className="sm:col-span-2 pt-4 border-t border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Posted By (Optional)
+                      </label>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Select an alumni if posting on behalf of an alumni employer. Leave blank if posting for the school/organization.
+                      </p>
+                      <select
+                        name="alumni_id"
+                        value={formData.alumni_id}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">School/Organization (No specific alumni)</option>
+                        {alumniList.map((alumni) => (
+                          <option key={alumni.id} value={alumni.id}>
+                            {alumni.first_name} {alumni.last_name} - {alumni.email}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   {error && (
@@ -528,9 +759,93 @@ const Employment = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 disabled:bg-blue-400"
                     >
                       {loading ? 'Saving...' : (editingId ? 'Update Job' : 'Post Job')}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Application Modal */}
+        {showApplicationModal && selectedJob && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div className="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-xl bg-white">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl">
+                <h3 className="text-2xl font-semibold text-gray-900">
+                  Apply for {selectedJob.job_title}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  at {selectedJob.company}
+                </p>
+              </div>
+              
+              <div className="mt-6">
+                <form onSubmit={handleSubmitApplication} className="space-y-6">
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-blue-700">
+                          Your profile information, qualifications, and employment history will be shared with the employer when you submit this application.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Cover Letter (Optional)
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Introduce yourself and explain why you're interested in this position
+                    </p>
+                    <textarea
+                      value={coverLetter}
+                      onChange={(e) => setCoverLetter(e.target.value)}
+                      className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+                      placeholder="Dear Hiring Manager,&#10;&#10;I am writing to express my interest in the position..."
+                      rows="8"
+                    />
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                      What happens next?
+                    </h4>
+                    <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                      <li>Your application will be sent to the employer</li>
+                      <li>The employer will review your profile and qualifications</li>
+                      <li>You'll be contacted if your application is selected</li>
+                    </ul>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowApplicationModal(false);
+                        setSelectedJob(null);
+                        setCoverLetter('');
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      disabled={applicationLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={applicationLoading}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+                    >
+                      {applicationLoading ? 'Submitting...' : 'Submit Application'}
                     </button>
                   </div>
                 </form>

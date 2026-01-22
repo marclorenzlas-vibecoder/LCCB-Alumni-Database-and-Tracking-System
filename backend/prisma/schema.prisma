@@ -68,6 +68,7 @@ model alumni {
   social_link      social_link[]
   job_posting      job_posting[]
   batch_officer    batch_officer[]
+  job_applications job_application[]
 }
 
 model career_entry {
@@ -98,8 +99,35 @@ model job_posting {
   created_at          DateTime? @default(now()) @db.DateTime(0)
   updated_at          DateTime? @default(now()) @db.DateTime(0)
   alumni              alumni?   @relation(fields: [posted_by_alumni_id], references: [id], onDelete: SetNull)
+  job_applications    job_application[]
 
   @@index([posted_by_alumni_id], map: "idx_posted_by")
+}
+
+model job_application {
+  id               Int       @id @default(autoincrement())
+  job_posting_id   Int
+  applicant_id     Int
+  cover_letter     String?   @db.Text
+  resume_url       String?   @db.VarChar(255)
+  status           application_status @default(PENDING)
+  applied_at       DateTime  @default(now()) @db.DateTime(0)
+  reviewed_at      DateTime? @db.DateTime(0)
+  notes            String?   @db.Text
+  job_posting      job_posting @relation(fields: [job_posting_id], references: [id], onDelete: Cascade)
+  applicant        alumni      @relation(fields: [applicant_id], references: [id], onDelete: Cascade, map: "job_application_applicant")
+  
+  @@unique([job_posting_id, applicant_id], map: "unique_job_application")
+  @@index([job_posting_id], map: "idx_job_posting")
+  @@index([applicant_id], map: "idx_applicant")
+}
+
+enum application_status {
+  PENDING
+  REVIEWED
+  SHORTLISTED
+  REJECTED
+  ACCEPTED
 }
 
 model donation {
@@ -202,6 +230,7 @@ enum notification_type {
   ACHIEVEMENT
   ANNOUNCEMENT
   GENERAL
+  JOB_APPLICATION
 }
 
 enum user_role {
