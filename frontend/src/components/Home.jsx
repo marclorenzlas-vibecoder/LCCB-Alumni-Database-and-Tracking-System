@@ -162,7 +162,7 @@ const Home = () => {
       </div>
 
       {/* About Section */}
-      <div className="py-12 bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100">
+      <div className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">ABOUT</h2>
@@ -324,7 +324,7 @@ const Home = () => {
       </div>
 
       {/* Features Section - What We Offer */}
-      <div className="py-12 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+      <div className="py-12 bg-gray">
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">

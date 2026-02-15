@@ -290,7 +290,7 @@ const Navbar = () => {
                 <div className="relative ml-3 flex-shrink-0" ref={userMenuRef}>
                   <button 
                     onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center gap-2 bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg whitespace-nowrap"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 transform hover:scale-105 whitespace-nowrap"
                   >
                     {user?.profile_image ? (
                       <img 
