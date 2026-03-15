@@ -197,7 +197,7 @@ const Navbar = () => {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-3 w-96 bg-white rounded-xl shadow-2xl py-2 z-50 max-h-96 overflow-y-auto border border-gray-100">
+                    <div className="absolute right-0 mt-3 w-96 bg-white rounded-xl shadow-2xl py-2 z-50 max-h-96 overflow-y-auto scrollbar-hide border border-gray-100">
                       <div className="px-5 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
                         <h3 className="text-base font-bold text-gray-900">Notifications</h3>
                         {unreadCount > 0 && (
@@ -336,6 +336,16 @@ const Navbar = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                           </svg>
                           <span className="font-medium group-hover:text-blue-600">Pending Requests</span>
+                        </Link>
+                        <Link
+                          to="/admin/alumni-list"
+                          onClick={() => setShowUserMenu(false)}
+                          className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-3 group"
+                        >
+                          <svg className="w-5 h-5 text-gray-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="font-medium group-hover:text-blue-600">Alumni List</span>
                         </Link>
                         <Link
                           to="/admin/manage-users"

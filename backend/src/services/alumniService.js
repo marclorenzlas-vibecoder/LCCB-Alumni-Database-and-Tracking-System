@@ -19,7 +19,7 @@ async function createAlumniProfile(data) {
     });
 
     // Create the alumni profile
-    const alumni = await prisma.alumniProfile.create({
+    const alumni = await prisma.alumni.create({
       data: {
         userId: user.id,
         firstName: data.firstName,
@@ -27,9 +27,9 @@ async function createAlumniProfile(data) {
         middleName: data.middleName || '',
         graduationYear: data.graduationYear,
         course: data.course,
-        jobTitle: data.jobTitle || '',
+        currentPosition: data.currentPosition || data.jobTitle || '',
         company: data.company || '',
-        address: data.address || '',
+        location: data.location || '',
         skills: data.skills || '[]',
         isPublic: true,
         isVerified: false
@@ -42,7 +42,7 @@ async function createAlumniProfile(data) {
             oauth_picture: true
           }
         },
-        socialLinks: true
+        social_link: true
       }
     });
 
@@ -54,11 +54,11 @@ async function createAlumniProfile(data) {
       middle_name: alumni.middleName || '',
       graduation_year: alumni.graduationYear,
       course: alumni.course,
-      current_position: alumni.jobTitle || '',
+      current_position: alumni.currentPosition || '',
       company: alumni.company || '',
-      location: alumni.address || '',
+      location: alumni.location || '',
       email: alumni.user.email,
-      linkedin: alumni.socialLinks.find(link => link.platform === 'LinkedIn')?.url || '',
+      linkedin: alumni.social_link.find(link => link.platform === 'LinkedIn')?.url || '',
       skills: JSON.parse(alumni.skills || '[]'),
       profile_image: alumni.user.oauth_picture || '',
       bio: alumni.bio || '',
@@ -73,7 +73,7 @@ async function createAlumniProfile(data) {
 
 async function getAllAlumni() {
   try {
-    const alumni = await prisma.alumniProfile.findMany({
+    const alumni = await prisma.alumni.findMany({
       include: {
         user: {
           select: {
@@ -82,10 +82,10 @@ async function getAllAlumni() {
             oauth_picture: true
           }
         },
-        socialLinks: true,
-        careerHistory: {
+        social_link: true,
+        career_entry: {
           where: {
-            isCurrent: true
+            is_current: true
           }
         }
       },
@@ -96,8 +96,8 @@ async function getAllAlumni() {
     });
 
     return alumni.map(alumnus => {
-      const currentJob = alumnus.careerHistory[0];
-      const linkedinProfile = alumnus.socialLinks.find(link => link.platform === 'LinkedIn');
+      const currentJob = alumnus.career_entry[0];
+      const linkedinProfile = alumnus.social_link.find(link => link.platform === 'LinkedIn');
 
       return {
         id: alumnus.id,
@@ -107,9 +107,9 @@ async function getAllAlumni() {
         middle_name: alumnus.middleName || '',
         graduation_year: alumnus.graduationYear,
         course: alumnus.course,
-        current_position: currentJob?.jobTitle || alumnus.jobTitle || '',
+        current_position: currentJob?.jobTitle || alumnus.currentPosition || '',
         company: currentJob?.company || alumnus.company || '',
-        location: alumnus.address || '',
+        location: alumnus.location || '',
         email: alumnus.user.email,
         linkedin: linkedinProfile?.url || '',
         skills: JSON.parse(alumnus.skills || '[]'),
@@ -127,7 +127,7 @@ async function getAllAlumni() {
 
 async function getAlumniById(id) {
   try {
-    const alumnus = await prisma.alumniProfile.findUnique({
+    const alumnus = await prisma.alumni.findUnique({
       where: { id },
       include: {
         user: {
@@ -137,10 +137,10 @@ async function getAlumniById(id) {
             oauth_picture: true
           }
         },
-        socialLinks: true,
-        careerHistory: {
+        social_link: true,
+        career_entry: {
           where: {
-            isCurrent: true
+            is_current: true
           }
         }
       }
@@ -148,8 +148,8 @@ async function getAlumniById(id) {
 
     if (!alumnus) return null;
 
-    const currentJob = alumnus.careerHistory[0];
-    const linkedinProfile = alumnus.socialLinks.find(link => link.platform === 'LinkedIn');
+    const currentJob = alumnus.career_entry[0];
+    const linkedinProfile = alumnus.social_link.find(link => link.platform === 'LinkedIn');
 
     return {
       id: alumnus.id,
@@ -159,9 +159,9 @@ async function getAlumniById(id) {
       middle_name: alumnus.middleName || '',
       graduation_year: alumnus.graduationYear,
       course: alumnus.course,
-      current_position: currentJob?.jobTitle || alumnus.jobTitle || '',
+      current_position: currentJob?.jobTitle || alumnus.currentPosition || '',
       company: currentJob?.company || alumnus.company || '',
-      location: alumnus.address || '',
+      location: alumnus.location || '',
       email: alumnus.user.email,
       linkedin: linkedinProfile?.url || '',
       skills: [], // We'll need to add a skills field to the schema if needed

@@ -8,6 +8,7 @@ const backendUrl = process.env.VITE_BACKEND_URL || 'http://localhost:5001'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: '0.0.0.0', // Allow network access for phone scanning
     port: 3002,
     proxy: {
       '/api': {

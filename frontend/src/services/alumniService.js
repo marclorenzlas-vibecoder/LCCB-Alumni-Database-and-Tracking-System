@@ -27,6 +27,7 @@ class AlumniService {
         
         return {
           id: alumnus.id.toString(),
+          student_id: alumnus.student_id || alumnus.studentId || '',
           firstName: alumnus.first_name || alumnus.firstName || '',
           lastName: alumnus.last_name || alumnus.lastName || '',
           middleName: alumnus.middle_name || alumnus.middleName || '',

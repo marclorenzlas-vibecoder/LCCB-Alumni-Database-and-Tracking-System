@@ -15,6 +15,7 @@ const jobRoutes = require('./routes/jobRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const officerRoutes = require('./routes/officerRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
+const alumniListRoutes = require('./routes/alumniListRoutes');
 const { PrismaClient } = require('@prisma/client');
 const eventStatusService = require('./services/eventStatusService');
 
@@ -33,7 +34,11 @@ const PORT = Number(process.env.PORT) || 5001;
 const prisma = new PrismaClient();
 
 // Restore strict CORS for credentialed requests from frontend (port 3002)
-const allowedOrigins = ['http://localhost:3002', 'http://localhost:5001'];
+const allowedOrigins = [
+  'http://localhost:3002', 
+  'http://localhost:5001',
+  'http://192.168.5.248:3002'  // Allow access from network IP (for phone scanning)
+];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!origin || allowedOrigins.includes(origin)) {
@@ -43,7 +48,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   // Only send credentials header if coming from our frontend
-  if (origin === 'http://localhost:3002') {
+  if (origin === 'http://localhost:3002' || origin === 'http://192.168.5.248:3002') {
     res.header('Access-Control-Allow-Credentials', 'true');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -95,6 +100,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/officers', officerRoutes);
 app.use('/api/applications', applicationRoutes);
+app.use('/api/alumni-list', alumniListRoutes);
 
 // Default route redirects to frontend login
 app.get(['/', '/login', '/Login'], (req, res) => {
@@ -113,8 +119,9 @@ app.use((err, req, res, next) => {
 
 // Start server with auto port-retry
 function startServer(port, attempt = 0, maxAttempts = 10) {
-  const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${port}`);
+    console.log(`Network access: http://192.168.5.248:${port}`);
   });
 
   server.on('error', (err) => {

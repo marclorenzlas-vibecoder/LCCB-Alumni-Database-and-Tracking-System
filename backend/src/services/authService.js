@@ -5,7 +5,10 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function registerUser(userData) {
-  const { username, email, password, level, course, batch, graduationYear } = userData;
+  const { 
+    username, email, password, level, course, batch, graduationYear,
+    firstName, lastName, studentId, contactNumber
+  } = userData;
   
   if (!username || !email || !password) {
     throw new Error('Missing required fields');
@@ -30,11 +33,29 @@ async function registerUser(userData) {
 
     // Create pending registration (NOT in user table yet)
     const hashedPassword = await bcrypt.hash(password, 10);
+    
+    console.log('💾 Creating pending registration with data:', {
+      username, 
+      email,
+      firstName,
+      lastName,
+      studentId,
+      contactNumber,
+      level,
+      course,
+      batch,
+      graduationYear
+    });
+    
     const pendingRegistration = await prisma.pending_registration.create({
       data: {
         email: email,
         username: username,
         password: hashedPassword,
+        first_name: firstName || null,
+        last_name: lastName || null,
+        student_id: studentId || null,
+        contact_number: contactNumber || null,
         level: level || null,
         course: course || null,
         batch: batch ? parseInt(batch) : null,
@@ -42,6 +63,8 @@ async function registerUser(userData) {
         status: 'PENDING'
       }
     });
+    
+    console.log('✅ Pending registration created with ID:', pendingRegistration.id);
 
     // Create notification for teachers/admins (optional - don't let it fail registration)
     try {
@@ -90,12 +113,23 @@ async function registerUser(userData) {
       
       // Create notification for each admin/teacher
       for (const admin of adminUsers) {
+        const verificationDetails = [];
+        if (firstName && lastName) verificationDetails.push(`Name: ${firstName} ${lastName}`);
+        if (studentId) verificationDetails.push(`School ID: ${studentId}`);
+        if (contactNumber) verificationDetails.push(`Contact: ${contactNumber}`);
+        if (level) verificationDetails.push(`Level: ${level}`);
+        if (course) verificationDetails.push(`Course: ${course}`);
+        if (batch) verificationDetails.push(`Batch: ${batch}`);
+        if (graduationYear) verificationDetails.push(`Graduated: ${graduationYear}`);
+        
+        const detailsText = verificationDetails.length > 0 ? ` - ${verificationDetails.join(', ')}` : '';
+        
         await prisma.notification.create({
           data: {
             user_id: admin.id,
             type: 'GENERAL',
-            title: 'New Registration Request',
-            message: `${username} (${email}) has submitted a registration request and is waiting for approval.`,
+            title: 'New Alumni Registration Request',
+            message: `${username} (${email}) has submitted a registration request${detailsText}. Please review and verify their alumni status.`,
             link: '/admin'
           }
         });
@@ -347,6 +381,19 @@ module.exports = {
         where: { status: 'PENDING' },
         orderBy: { created_at: 'desc' }
       });
+      
+      console.log(`📋 Fetched ${pending.length} pending registrations`);
+      if (pending.length > 0) {
+        console.log('Sample data (first record):', {
+          id: pending[0].id,
+          username: pending[0].username,
+          email: pending[0].email,
+          student_id: pending[0].student_id,
+          first_name: pending[0].first_name,
+          last_name: pending[0].last_name
+        });
+      }
+      
       return pending;
     } catch (error) {
       console.error('Error fetching pending registrations:', error);
@@ -369,10 +416,15 @@ module.exports = {
         throw new Error('Registration already processed');
       }
 
-      // Split username into first and last name
-      const nameParts = pending.username.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      // Use provided first and last name, or split username as fallback
+      let firstName = pending.first_name;
+      let lastName = pending.last_name;
+      
+      if (!firstName && !lastName) {
+        const nameParts = pending.username.trim().split(' ');
+        firstName = nameParts[0] || '';
+        lastName = nameParts.slice(1).join(' ') || '';
+      }
 
       // Create user in the user table
       const user = await prisma.user.create({
@@ -387,19 +439,21 @@ module.exports = {
         }
       });
 
-      // Create alumni record
+      // Create alumni record with verification data
       const alumni = await prisma.alumni.create({
         data: {
           user_id: user.id,
+          student_id: pending.student_id, // Transfer School ID from registration
           first_name: firstName,
           last_name: lastName,
           email: pending.email,
+          contact_number: pending.contact_number,
           level: pending.level,
           course: pending.course,
           batch: pending.batch,
           graduation_year: pending.graduation_year || pending.batch,
           is_public: true,
-          is_verified: false
+          is_verified: true // Mark as verified since admin approved it
         }
       });
 

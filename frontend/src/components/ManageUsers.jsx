@@ -125,7 +125,7 @@ const ManageUsers = () => {
         </div>
 
         {/* Users Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-hide">
           <table className="min-w-full bg-white">
             <thead className="bg-gray-100">
               <tr>

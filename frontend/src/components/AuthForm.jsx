@@ -8,6 +8,11 @@ const AuthForm = ({ isLogin, toggleForm }) => {
     username: '',
     email: '',
     password: '',
+    firstName: '',
+    lastName: '',
+    studentId: '',
+    contactNumber: '',
+    level: '',
     course: '',
     batch: '',
     graduation: ''
@@ -47,9 +52,14 @@ const AuthForm = ({ isLogin, toggleForm }) => {
           username: formData.username,
           email: formData.email,
           password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          studentId: formData.studentId,
+          contactNumber: formData.contactNumber,
+          level: formData.level,
           course: formData.course,
           batch: formData.batch,
-          graduation: formData.graduation
+          graduationYear: formData.graduation
         };
 
         const response = await authService.register(registrationData);
@@ -88,9 +98,48 @@ const AuthForm = ({ isLogin, toggleForm }) => {
       <form onSubmit={handleSubmit}>
         {!isLogin && (
           <>
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+              <h3 className="text-sm font-semibold text-blue-900 mb-2">📋 Verification Required</h3>
+              <p className="text-xs text-blue-800">To verify your alumni status, please provide accurate information. Admin will review your registration.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="firstName">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  name="firstName"
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                  placeholder="Your first name"
+                  required={!isLogin}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="lastName">
+                  Last Name <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  name="lastName"
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                  placeholder="Your last name"
+                  required={!isLogin}
+                />
+              </div>
+            </div>
+
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="username">
-                Username
+                Username <span className="text-red-500">*</span>
               </label>
               <input 
                 type="text" 
@@ -99,9 +148,63 @@ const AuthForm = ({ isLogin, toggleForm }) => {
                 value={formData.username}
                 onChange={handleChange}
                 className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-                placeholder="Enter your username"
+                placeholder="Choose a username"
                 required={!isLogin}
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="studentId">
+                  School ID / Student Number <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  name="studentId"
+                  id="studentId"
+                  value={formData.studentId}
+                  onChange={handleChange}
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                  placeholder="e.g., 21-0087-958"
+                  required={!isLogin}
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter your official School ID or Student Number</p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="contactNumber">
+                  Contact Number <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="tel" 
+                  name="contactNumber"
+                  id="contactNumber"
+                  value={formData.contactNumber}
+                  onChange={handleChange}
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                  placeholder="e.g., 09123456789"
+                  required={!isLogin}
+                />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="level">
+                Educational Level <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="level"
+                id="level"
+                value={formData.level}
+                onChange={handleChange}
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                required={!isLogin}
+              >
+                <option value="">Select your level</option>
+                <option value="COLLEGE">College</option>
+                <option value="SENIOR_HIGH_SCHOOL">Senior High School</option>
+                <option value="HIGH_SCHOOL">High School</option>
+              </select>
             </div>
 
             <div className="mb-4">
@@ -138,16 +241,18 @@ const AuthForm = ({ isLogin, toggleForm }) => {
 
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="graduation">
-                Graduation Year
+                Graduation Year <span className="text-red-500">*</span>
               </label>
               <input 
-                type="text" 
+                type="number" 
                 name="graduation"
                 id="graduation"
                 value={formData.graduation}
                 onChange={handleChange}
                 className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-                placeholder="Enter your graduation year"
+                placeholder="e.g., 2020"
+                min="1950"
+                max="2030"
                 required={!isLogin}
               />
             </div>

@@ -8,21 +8,42 @@ const prisma = new PrismaClient();
  * @param {string} message - Notification message
  * @param {string} link - Link to the relevant content (e.g., /events/123)
  * @param {number} eventId - Optional event ID to associate with notification
+ * @param {number} batch - Optional batch number to filter alumni (null = all alumni)
  * @returns {Promise<number>} Number of notifications created
  */
-async function createNotifications({ type, title, message, link, eventId = null }) {
+async function createNotifications({ type, title, message, link, eventId = null, batch = null }) {
   try {
-    // Get all users who have enabled notifications
-    const usersToNotify = await prisma.user.findMany({
-      where: {
-        notification_enabled: true,
-        is_active: true,
-        is_blocked: false
-      },
-      select: {
-        id: true
-      }
-    });
+    // Build query to get users with notifications enabled
+    const userQuery = {
+      notification_enabled: true,
+      is_active: true,
+      is_blocked: false
+    };
+
+    // If batch is specified, filter by batch
+    let usersToNotify;
+    if (batch) {
+      // Get users through their alumni profile with specific batch
+      usersToNotify = await prisma.user.findMany({
+        where: {
+          ...userQuery,
+          alumni: {
+            batch: batch
+          }
+        },
+        select: {
+          id: true
+        }
+      });
+    } else {
+      // Get all users with notifications enabled
+      usersToNotify = await prisma.user.findMany({
+        where: userQuery,
+        select: {
+          id: true
+        }
+      });
+    }
 
     if (usersToNotify.length === 0) {
       console.log('No users to notify');
@@ -44,7 +65,7 @@ async function createNotifications({ type, title, message, link, eventId = null 
       data: notifications
     });
 
-    console.log(`Created ${result.count} notifications for type: ${type}`);
+    console.log(`Created ${result.count} notifications for type: ${type}${batch ? ` (Batch ${batch})` : ' (All alumni)'}`);
     return result.count;
   } catch (error) {
     console.error('Error creating notifications:', error);

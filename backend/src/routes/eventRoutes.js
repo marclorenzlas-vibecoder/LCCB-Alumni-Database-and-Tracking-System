@@ -90,7 +90,7 @@ const runUpload = (req, res, next) => {
 // Create new event
 router.post('/', runUpload, async (req, res) => {
   try {
-    const { name, description, date, location, sendNotification } = req.body;
+    const { name, description, date, location, sendNotification, notifyBatch } = req.body;
 
     if (!name) {
       return res.status(400).json({ 
@@ -116,14 +116,16 @@ router.post('/', runUpload, async (req, res) => {
     // Send notifications if checkbox was checked
     if (shouldNotify) {
       try {
+        const batchToNotify = notifyBatch && notifyBatch !== 'all' ? parseInt(notifyBatch) : null;
         await notificationService.createNotifications({
           type: 'EVENT',
           title: `New Event: ${event.name}`,
           message: `${event.description || 'A new event has been added!'} ${event.date ? `on ${new Date(event.date).toLocaleDateString()}` : ''}`,
           link: `/events/${event.id}`,
-          eventId: event.id
+          eventId: event.id,
+          batch: batchToNotify
         });
-        console.log(`Notifications sent for event: ${event.name}`);
+        console.log(`Notifications sent for event: ${event.name}${batchToNotify ? ` to Batch ${batchToNotify}` : ' to all alumni'}`);
       } catch (notifError) {
         console.error('Error sending notifications:', notifError);
         // Don't fail the event creation if notifications fail

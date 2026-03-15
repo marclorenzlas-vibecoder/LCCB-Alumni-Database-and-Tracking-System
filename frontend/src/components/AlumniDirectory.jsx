@@ -30,10 +30,19 @@ const TableHeader = ({ label, field, sortOrder, onSort }) => {
 
 const levelOptions = [
   { value: '', label: 'All Levels' },
+  { value: 'INTEGRATED_SCHOOL', label: 'Integrated School' },
+  { value: 'NIGHT_HIGH', label: 'Night High' },
+  { value: 'SENIOR_HIGH', label: 'Senior High' },
   { value: 'COLLEGE', label: 'College' },
-  { value: 'HIGH_SCHOOL', label: 'High School' },
-  { value: 'SENIOR_HIGH_SCHOOL', label: 'Senior High School' }
+  { value: 'ETEEAP', label: 'ETEEAP' },
+  { value: 'GRAD_SCHOOL', label: 'Grad School' }
 ];
+
+// Helper function to get display label for level
+const getLevelLabel = (level) => {
+  const option = levelOptions.find(opt => opt.value === level);
+  return option ? option.label : 'Not provided';
+};
 
 const AlumniDirectory = () => {
   // Role
@@ -138,7 +147,7 @@ const AlumniDirectory = () => {
     // Search
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      data = data.filter(a => [a.firstName, a.lastName, a.course, a.email, a.company, a.graduationYear?.toString()].some(v => v && v.toLowerCase().includes(term)));
+      data = data.filter(a => [a.firstName, a.lastName, a.course, a.email, a.company, a.location, a.graduationYear?.toString()].some(v => v && v.toLowerCase().includes(term)));
     }
     // Level filter
     if (selectedLevel) data = data.filter(a => a.level === selectedLevel);
@@ -202,7 +211,19 @@ const AlumniDirectory = () => {
       }
     } catch (error) {
       console.error('Error assigning officer:', error);
-      alert(error.response?.data?.message || 'Failed to assign officer');
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        const errorMsg = error.response?.data?.error || '';
+        if (errorMsg.includes('expired') || errorMsg.includes('Invalid')) {
+          alert('Your session has expired. Please log in again to continue.');
+          window.location.href = '/';
+        } else {
+          alert('Access denied. You need teacher privileges to perform this action.');
+        }
+      } else {
+        alert(error.response?.data?.message || 'Failed to assign officer');
+      }
     }
   };
 
@@ -220,7 +241,20 @@ const AlumniDirectory = () => {
       }
     } catch (error) {
       console.error('Error removing officer:', error);
-      alert('Failed to remove officer');
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        const errorMsg = error.response?.data?.error || '';
+        if (errorMsg.includes('expired') || errorMsg.includes('Invalid')) {
+          alert('Your session has expired. Please log in again to continue.');
+          // Optionally redirect to login
+          window.location.href = '/';
+        } else {
+          alert('Access denied. You need teacher privileges to perform this action.');
+        }
+      } else {
+        alert('Failed to remove officer. Please try again.');
+      }
     }
   };
 
@@ -406,12 +440,16 @@ const AlumniDirectory = () => {
     e.preventDefault();
     if (!viewingAlumni) return;
     try {
-      const payload = { ...newDonation, alumniId: viewingAlumni.id };
+      // Don't send alumniId - it's automatically obtained from authentication token
+      const payload = { ...newDonation };
       const created = await donationService.createDonation(payload);
       setDonations(prev => [...prev, created]);
       setShowDonationModal(false);
       setNewDonation({ amount: '', purpose: '', date: '' });
-    } catch (err) { alert('Failed to add donation'); }
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to add donation';
+      alert(errorMsg);
+    }
   };
 
   // CSV export (teacher only)
@@ -478,7 +516,7 @@ const AlumniDirectory = () => {
       {/* View Profile Modal */}
       {showViewModal && viewingAlumni && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-[100]">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide relative">
             <button
               onClick={() => { setShowViewModal(false); setViewingAlumni(null); }}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2"
@@ -510,8 +548,9 @@ const AlumniDirectory = () => {
                 <div className="bg-gray-50 rounded-lg p-6 md:col-span-2">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" /></svg>Academic Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div><label className="text-sm font-medium text-gray-500">School ID / Student Number</label><p className="text-gray-900 mt-1 font-mono">{viewingAlumni.student_id || 'Not provided'}</p></div>
                     <div><label className="text-sm font-medium text-gray-500">Course</label><p className="text-gray-900 mt-1">{viewingAlumni.course || 'Not provided'}</p></div>
-                    <div><label className="text-sm font-medium text-gray-500">Level</label><p className="text-gray-900 mt-1">{viewingAlumni.level === 'COLLEGE' ? 'College' : viewingAlumni.level === 'HIGH_SCHOOL' ? 'High School' : viewingAlumni.level === 'SENIOR_HIGH_SCHOOL' ? 'Senior High School' : 'Not provided'}</p></div>
+                    <div><label className="text-sm font-medium text-gray-500">Level</label><p className="text-gray-900 mt-1">{getLevelLabel(viewingAlumni.level)}</p></div>
                     <div><label className="text-sm font-medium text-gray-500">Graduation Year</label><p className="text-gray-900 mt-1">{viewingAlumni.graduation_year || viewingAlumni.graduationYear || 'Not provided'}</p></div>
                     <div><label className="text-sm font-medium text-gray-500">Batch</label><p className="text-gray-900 mt-1">{viewingAlumni.batch || 'Not provided'}</p></div>
                   </div>
@@ -578,7 +617,11 @@ const AlumniDirectory = () => {
                 </div>
                 <div className="bg-gray-50 rounded-lg p-6 md:col-span-2">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Professional Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-sm font-medium text-gray-500">Current Position</label><p className="text-gray-900">{(viewingAlumni.current_position || viewingAlumni.currentPosition) || 'Not specified'}</p></div><div><label className="text-sm font-medium text-gray-500">Company</label><p className="text-gray-900">{viewingAlumni.company || 'Not specified'}</p></div></div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className="text-sm font-medium text-gray-500">Current Position</label><p className="text-gray-900">{(viewingAlumni.current_position || viewingAlumni.currentPosition) || 'Not specified'}</p></div>
+                    <div><label className="text-sm font-medium text-gray-500">Company</label><p className="text-gray-900">{viewingAlumni.company || 'Not specified'}</p></div>
+                    <div><label className="text-sm font-medium text-gray-500">Location</label><p className="text-gray-900">{viewingAlumni.location || 'Not specified'}</p></div>
+                  </div>
                 </div>
                 {viewingAlumni.skills && (
                   <div className="bg-gray-50 rounded-lg p-6 md:col-span-2">
@@ -611,7 +654,7 @@ const AlumniDirectory = () => {
       {/* Add Alumni Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-8 relative max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-8 relative max-h-[90vh] overflow-y-auto scrollbar-hide">
             <div className="border-b border-gray-200 pb-4 mb-6"><h3 className="text-2xl font-semibold text-gray-900">Add New Alumni</h3><p className="mt-1 text-sm text-gray-500">Enter the details for the new alumni member</p></div>
             <form onSubmit={handleAddAlumni} className="space-y-6">
               <div className="flex items-start space-x-6">
@@ -623,7 +666,7 @@ const AlumniDirectory = () => {
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label><input type="text" name="contactNumber" value={newAlumni.contactNumber} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Course</label><input type="text" name="course" value={newAlumni.course} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" required /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Graduation Year</label><input type="number" name="graduationYear" value={newAlumni.graduationYear} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="YYYY" required /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Level</label><select name="level" value={newAlumni.level} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"><option value="">Select level</option><option value="COLLEGE">College</option><option value="HIGH_SCHOOL">High School</option><option value="SENIOR_HIGH_SCHOOL">Senior High School</option></select></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Level</label><select name="level" value={newAlumni.level} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"><option value="">Select level</option><option value="INTEGRATED_SCHOOL">Integrated School</option><option value="NIGHT_HIGH">Night High</option><option value="SENIOR_HIGH">Senior High</option><option value="COLLEGE">College</option><option value="ETEEAP">ETEEAP</option><option value="GRAD_SCHOOL">Grad School</option></select></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Batch</label><input type="number" name="batch" value={newAlumni.batch} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="e.g. 2015" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Current Position</label><input type="text" name="currentPosition" value={newAlumni.currentPosition} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Company</label><input type="text" name="company" value={newAlumni.company} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" /></div>
@@ -640,7 +683,7 @@ const AlumniDirectory = () => {
       {/* Edit Alumni Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-4 z-10">
               <h3 className="text-2xl font-semibold text-gray-900">Edit Alumni Profile</h3>
               <p className="mt-1 text-sm text-gray-500">Update the information for this alumni member</p>
@@ -660,7 +703,7 @@ const AlumniDirectory = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Course</label><input type="text" name="course" value={newAlumni.course} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" required /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Graduation Year</label><input type="number" name="graduationYear" value={newAlumni.graduationYear} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="YYYY" required /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Level</label><select name="level" value={newAlumni.level || ''} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"><option value="">Select level</option><option value="COLLEGE">College</option><option value="HIGH_SCHOOL">High School</option><option value="SENIOR_HIGH_SCHOOL">Senior High School</option></select></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Level</label><select name="level" value={newAlumni.level || ''} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"><option value="">Select level</option><option value="INTEGRATED_SCHOOL">Integrated School</option><option value="NIGHT_HIGH">Night High</option><option value="SENIOR_HIGH">Senior High</option><option value="COLLEGE">College</option><option value="ETEEAP">ETEEAP</option><option value="GRAD_SCHOOL">Grad School</option></select></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Batch</label><input type="number" name="batch" value={newAlumni.batch || ''} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="e.g. 2015" /></div>
                 </div>
               </div>
@@ -682,7 +725,7 @@ const AlumniDirectory = () => {
       {/* Achievement Modal */}
       {showAchievementModal && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
             <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Achievement</h3>
             <form onSubmit={handleAddAchievement} className="space-y-4 sm:space-y-5">
               <div>
@@ -727,7 +770,7 @@ const AlumniDirectory = () => {
       {/* Career Modal */}
       {showCareerModal && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
             <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Employment Record</h3>
             <form onSubmit={handleAddCareer} className="space-y-4 sm:space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -806,7 +849,7 @@ const AlumniDirectory = () => {
       {/* Donation Modal */}
       {showDonationModal && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
             <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Donation</h3>
             <form onSubmit={handleAddDonation} className="space-y-4 sm:space-y-5">
               <div>
@@ -889,7 +932,7 @@ const AlumniDirectory = () => {
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-6">
               {batchOfficers.length === 0 ? (
                 <div className="text-center py-12">
                   <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -970,7 +1013,7 @@ const AlumniDirectory = () => {
           <div className="flex-1 min-w-[240px]">
             <div className="relative">
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
-              <input type="text" placeholder="Search by name, course, email, company, or date..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoComplete="off" spellCheck={false} className="w-full pl-10 pr-4 py-2.5 rounded-lg border-0 text-sm bg-white placeholder-gray-400 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-900 shadow-sm" />
+              <input type="text" placeholder="Search by name, course, email, company, location, or date..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoComplete="off" spellCheck={false} className="w-full pl-10 pr-4 py-2.5 rounded-lg border-0 text-sm bg-white placeholder-gray-400 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-900 shadow-sm" />
               <div className="pointer-events-none absolute inset-x-2 bottom-0 h-px bg-gradient-to-r from-transparent via-blue-900 to-transparent" />
             </div>
           </div>
@@ -1024,11 +1067,12 @@ const AlumniDirectory = () => {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto scrollbar-hide">
         <table className="min-w-full divide-y divide-gray-300">
           <thead className="bg-gray-50">
             <tr>
               <TableHeader label="Profile" field="firstName" sortOrder={sortOrder} onSort={handleSort} />
+              <TableHeader label="School ID" field="student_id" sortOrder={sortOrder} onSort={handleSort} />
               <TableHeader label="Course" field="course" sortOrder={sortOrder} onSort={handleSort} />
               <TableHeader label="Email Address" field="email" sortOrder={sortOrder} onSort={handleSort} />
               <TableHeader label="Level" field="level" sortOrder={sortOrder} onSort={handleSort} />
@@ -1062,9 +1106,12 @@ const AlumniDirectory = () => {
                     </div>
                   </div>
                 </td>
+                <td className="px-4 py-4 text-sm text-gray-700">
+                  <span className="font-mono">{a.student_id || 'N/A'}</span>
+                </td>
                 <td className="px-4 py-4 text-sm text-gray-700">{a.course || ''}</td>
                 <td className="px-4 py-4 text-sm text-gray-700">{a.email || ''}</td>
-                <td className="px-4 py-4 text-sm text-gray-700">{a.level === 'COLLEGE' ? 'College' : a.level === 'HIGH_SCHOOL' ? 'High School' : a.level === 'SENIOR_HIGH_SCHOOL' ? 'Senior HS' : ''}</td>
+                <td className="px-4 py-4 text-sm text-gray-700">{getLevelLabel(a.level)}</td>
                 <td className="px-4 py-4 text-sm text-gray-700">{a.batch || ''}</td>
                 <td className="px-4 py-4 text-sm text-gray-700">{a.graduationYear || ''}</td>
                 {isTeacher && (
@@ -1154,13 +1201,27 @@ const AlumniDirectory = () => {
                   >
                     <option value="">Select an alumni</option>
                     {alumni
-                      .filter(a => !officerForm.batch || a.batch === parseInt(officerForm.batch))
+                      .filter(a => {
+                        // Filter by batch
+                        if (officerForm.batch && a.batch !== parseInt(officerForm.batch)) return false;
+                        // Exclude alumni who are already assigned as officers
+                        const isAlreadyOfficer = batchOfficers.some(officer => officer.alumni_id === parseInt(a.id));
+                        return !isAlreadyOfficer;
+                      })
                       .map(a => (
                         <option key={a.id} value={a.id}>
                           {a.firstName} {a.lastName} - Batch {a.batch}
                         </option>
                       ))}
                   </select>
+                  {alumni.filter(a => !officerForm.batch || a.batch === parseInt(officerForm.batch)).length > 0 && 
+                   alumni.filter(a => {
+                     if (officerForm.batch && a.batch !== parseInt(officerForm.batch)) return false;
+                     const isAlreadyOfficer = batchOfficers.some(officer => officer.alumni_id === parseInt(a.id));
+                     return !isAlreadyOfficer;
+                   }).length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">All alumni in this batch are already assigned as officers.</p>
+                  )}
                 </div>
 
                 <div>

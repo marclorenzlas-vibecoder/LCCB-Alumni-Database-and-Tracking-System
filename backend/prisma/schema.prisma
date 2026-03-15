@@ -39,6 +39,7 @@ model achievement {
 model alumni {
   id               Int                @id @default(autoincrement())
   user_id          Int?               @unique(map: "user_id")
+  student_id       String?            @unique(map: "student_id") @db.VarChar(50)
   first_name       String             @db.VarChar(100)
   last_name        String             @db.VarChar(100)
   middle_name      String?            @db.VarChar(100)
@@ -247,9 +248,12 @@ enum approval_status {
 
 // Alumni level classification
 enum alumni_level {
+  INTEGRATED_SCHOOL
+  NIGHT_HIGH
+  SENIOR_HIGH
   COLLEGE
-  HIGH_SCHOOL
-  SENIOR_HIGH_SCHOOL
+  ETEEAP
+  GRAD_SCHOOL
 }
 
 // New teacher table for managing teacher accounts separately from user/alumni
@@ -283,19 +287,25 @@ model notification {
 
 // Pending registrations table - holds registration requests until admin approval
 model pending_registration {
-  id              Int            @id @default(autoincrement())
-  email           String         @unique @db.VarChar(255)
-  password        String         @db.VarChar(255)
-  username        String         @db.VarChar(100)
-  level           alumni_level?
-  course          String?        @db.VarChar(100)
-  batch           Int?
-  graduation_year Int?
-  profile_image   String?        @db.VarChar(255)
-  status          pending_status @default(PENDING)
-  created_at      DateTime       @default(now()) @db.DateTime(0)
-  updated_at      DateTime       @default(now()) @updatedAt @db.DateTime(0)
-  rejected_reason String?        @db.Text
+  id                    Int            @id @default(autoincrement())
+  email                 String         @unique @db.VarChar(255)
+  password              String         @db.VarChar(255)
+  username              String         @db.VarChar(100)
+  first_name            String?        @db.VarChar(100)
+  last_name             String?        @db.VarChar(100)
+  student_id            String?        @db.VarChar(50)
+  contact_number        String?        @db.VarChar(50)
+  level                 alumni_level?
+  course                String?        @db.VarChar(100)
+  batch                 Int?
+  graduation_year       Int?
+  profile_image         String?        @db.VarChar(255)
+  verification_document String?        @db.VarChar(255)
+  additional_info       String?        @db.Text
+  status                pending_status @default(PENDING)
+  created_at            DateTime       @default(now()) @db.DateTime(0)
+  updated_at            DateTime       @default(now()) @updatedAt @db.DateTime(0)
+  rejected_reason       String?        @db.Text
 }
 
 enum pending_status {
@@ -318,4 +328,23 @@ model batch_officer {
   @@unique([alumni_id, batch, position], map: "unique_officer_position")
   @@index([batch], map: "idx_batch")
   @@index([alumni_id], map: "idx_alumni_officer")
+}
+
+model alumni_list {
+  id              Int       @id @default(autoincrement())
+  student_id      String    @unique @db.VarChar(50)
+  first_name      String    @db.VarChar(100)
+  last_name       String    @db.VarChar(100)
+  middle_name     String?   @db.VarChar(100)
+  course          String?   @db.VarChar(100)
+  level           String?   @db.VarChar(50)
+  batch           Int?
+  graduation_year Int?
+  status          String    @default("ACTIVE") @db.VarChar(20) // ACTIVE, GRADUATED
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  updated_at      DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  
+  @@index([student_id], map: "idx_student_id")
+  @@index([batch], map: "idx_alumni_batch")
+  @@index([graduation_year], map: "idx_graduation_year")
 }

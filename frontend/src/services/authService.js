@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5001/api/auth';
+// Determine API URL based on current host
+const isNetworkAccess = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_URL = isNetworkAccess 
+  ? `http://192.168.5.248:5001/api/auth`
+  : 'http://localhost:5001/api/auth';
+
+console.log('Auth Service API URL:', API_URL, '(Network access:', isNetworkAccess, ')');
 
 // Create an axios instance with default config
 const axiosInstance = axios.create({
@@ -15,8 +21,20 @@ export const authService = {
   register: async (userData) => {
     try {
       console.log('Registering user:', userData);
-      const { username, email, password, level, course, batch, graduationYear } = userData;
-      const response = await axiosInstance.post('/register', { username, email, password, level, course, batch, graduationYear });
+      const { username, email, password, level, course, batch, graduationYear, firstName, lastName, studentId, contactNumber } = userData;
+      const response = await axiosInstance.post('/register', { 
+        username, 
+        email, 
+        password, 
+        level, 
+        course, 
+        batch, 
+        graduationYear,
+        firstName,
+        lastName,
+        studentId,
+        contactNumber
+      });
       console.log('Registration response:', response.data);
       return response.data;
     } catch (error) {
@@ -101,6 +119,30 @@ export const authService = {
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
+  },
+
+  isLoggedIn: () => {
+    const user = authService.getCurrentUser();
+    const token = localStorage.getItem('token');
+    return !!(user && token);
+  },
+
+  getRole: () => {
+    const user = authService.getCurrentUser();
+    if (!user) return null;
+    
+    // Check if user has role property
+    if (user.role) {
+      return user.role.toLowerCase();
+    }
+    
+    // Fallback to email-based role detection
+    if (typeof user.email === 'string') {
+      if (user.email.endsWith('@lccbonline.com')) return 'teacher';
+      if (user.email.endsWith('@gmail.com')) return 'alumni';
+    }
+    
+    return null;
   },
 
   // Delete rejected account after user acknowledges

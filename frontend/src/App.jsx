@@ -9,6 +9,7 @@ import AlumniDirectory from './components/AlumniDirectory';
 import AlumniProfile from './components/AlumniProfile';
 import Profile from './components/Profile';
 import AdminDashboard from './components/AdminDashboard';
+import AlumniList from './components/AlumniList';
 import PendingApproval from './components/PendingApproval';
 import Events from './components/Events';
 import EventDetail from './components/EventDetail';
@@ -16,6 +17,7 @@ import Achievements from './components/Achievements';
 import Employment from './components/Employment';
 import JobApplications from './components/JobApplications';
 import Donations from './components/Donations';
+import DonatePage from './components/DonatePage';
 import OAuthCallback from './components/OAuthCallback';
 import TeacherLogin from './components/TeacherLogin';
 import TeacherRegister from './components/TeacherRegister';
@@ -93,6 +95,11 @@ function AppContent() {
               <AdminDashboard />
             </ProtectedRoute>
           } />
+          <Route path="/admin/alumni-list" element={
+            <ProtectedRoute>
+              <AlumniList />
+            </ProtectedRoute>
+          } />
           <Route path="/login" element={<Login />} />
           <Route path="/Login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -138,6 +145,7 @@ function AppContent() {
               <Donations />
             </ProtectedRoute>
           } />
+          <Route path="/donate/:campaignId" element={<DonatePage />} />
           <Route path="/teachers" element={
             <ProtectedRoute>
               <TeacherManagement />

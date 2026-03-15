@@ -525,7 +525,7 @@ const Employment = () => {
                 {job.requirements && (
                   <div className="mt-4">
                     <h4 className="text-sm font-semibold text-gray-900 mb-2">Requirements:</h4>
-                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto scrollbar-hide">
                       <div className="whitespace-pre-wrap">{job.requirements}</div>
                     </div>
                   </div>
@@ -535,7 +535,7 @@ const Employment = () => {
                 {job.description && (
                   <div className="mt-4">
                     <h4 className="text-sm font-semibold text-gray-900 mb-2">Description:</h4>
-                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="text-sm text-gray-600 max-h-[7.5rem] overflow-y-auto scrollbar-hide">
                       <div className="whitespace-pre-wrap">{job.description}</div>
                     </div>
                   </div>
@@ -588,12 +588,7 @@ const Employment = () => {
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">Enter the details for the {editingId ? 'job update' : 'new job posting'}</p>
               </div>
-              <div className="mt-6 overflow-y-auto scrollbar-hide flex-1" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
-                <style jsx>{`
-                  .scrollbar-hide::-webkit-scrollbar {
-                    display: none;
-                  }
-                `}</style>
+              <div className="mt-6 overflow-y-auto scrollbar-hide flex-1">
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>

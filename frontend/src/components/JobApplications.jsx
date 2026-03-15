@@ -286,7 +286,7 @@ const JobApplications = () => {
         {/* Detail Modal */}
         {showDetailModal && selectedApplication && (
           <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-[100]">
-            <div ref={modalRef} className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+            <div ref={modalRef} className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide relative">
               <button
                 onClick={() => {
                   setShowDetailModal(false);
@@ -458,7 +458,7 @@ const JobApplications = () => {
         {/* Cover Letter Modal */}
         {showCoverLetterModal && selectedApplication && selectedApplication.cover_letter && (
           <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-[110]">
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative">
+            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide relative">
               <button
                 onClick={() => setShowCoverLetterModal(false)}
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 z-10"

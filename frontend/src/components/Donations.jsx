@@ -142,7 +142,8 @@ const Donations = () => {
       });
     } catch (err) {
       console.error('Error saving donation:', err);
-      setError(err.response?.data?.error || 'Failed to save campaign');
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to save campaign';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -288,7 +289,7 @@ const Donations = () => {
                   {donation.purpose}
                 </h3>
                 {donation.description && (
-                  <p className="text-gray-600 mb-4 text-sm max-h-[7.5rem] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 leading-relaxed">
+                  <p className="text-gray-600 mb-4 text-sm max-h-[7.5rem] overflow-y-auto scrollbar-hide leading-relaxed">
                     {donation.description}
                   </p>
                 )}
@@ -320,12 +321,13 @@ const Donations = () => {
                       <div className="flex justify-center mb-3">
                         <div className="bg-white p-2 rounded-lg border border-gray-200">
                           <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=Donate to ${encodeURIComponent(donation.purpose)} - LCCB Alumni - 0912-345-6789`}
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`http://192.168.5.248:3002/donate/${donation.id}`)}`}
                             alt={`QR Code for ${donation.purpose}`}
                             className="w-32 h-32"
                           />
                         </div>
                       </div>
+                      <p className="text-center text-xs text-gray-500 mb-3">Scan with your phone to donate</p>
                       <div className="space-y-2 text-xs">
                         <div className="flex items-center justify-center gap-2 text-blue-900">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -358,7 +360,7 @@ const Donations = () => {
                   )}
                   <button 
                     onClick={() => handleShare(donation)}
-                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 text-sm flex items-center justify-center gap-2">
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 text-sm flex items-center justify-center gap-2">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                     </svg>
@@ -379,7 +381,7 @@ const Donations = () => {
         {/* Modal for Adding/Editing Campaign */}
         {showModal && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto scrollbar-hide">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl">
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Campaign' : 'Add New Campaign'}

@@ -253,7 +253,7 @@ const Achievements = () => {
                 <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors duration-300">
                   {achievement.title}
                 </h3>
-                <p className="text-gray-600 mb-4 max-h-[7.5rem] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 leading-relaxed">
+                <p className="text-gray-600 mb-4 max-h-[7.5rem] overflow-y-auto scrollbar-hide leading-relaxed">
                   {achievement.description || 'No description provided'}
                 </p>
                 <div className="border-t pt-4">
@@ -286,7 +286,7 @@ const Achievements = () => {
         {/* Modal for Adding Achievement */}
         {showModal && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto scrollbar-hide">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl">
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Achievement' : 'Add New Achievement'}

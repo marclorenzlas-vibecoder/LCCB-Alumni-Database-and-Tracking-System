@@ -9,6 +9,10 @@ const Register = () => {
     username: '',
     email: '',
     password: '',
+    firstName: '',
+    lastName: '',
+    studentId: '',
+    contactNumber: '',
     level: '',
     course: '',
     batch: '',
@@ -32,8 +36,8 @@ const Register = () => {
 
     try {
       // Validate inputs
-      if (!formData.username || !formData.email || !formData.password || !formData.course || !formData.batch) {
-        setError('Please fill in all required fields');
+      if (!formData.username || !formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.studentId || !formData.contactNumber || !formData.level || !formData.course || !formData.batch) {
+        setError('Please fill in all required fields marked with *');
         return;
       }
 
@@ -51,15 +55,23 @@ const Register = () => {
         return;
       }
 
-      // Validate username format (first and last name)
-      const nameParts = formData.username.trim().split(' ');
-      if (nameParts.length < 2) {
-        setError('Please enter both first and last name');
-        return;
-      }
+      // Log data being sent (for debugging)
+      console.log('📤 Sending registration data:', {
+        username: formData.username,
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        studentId: formData.studentId,
+        contactNumber: formData.contactNumber,
+        level: formData.level,
+        course: formData.course,
+        batch: formData.batch,
+        graduationYear: formData.graduationYear
+      });
 
       // Submit registration
       const response = await authService.register(formData);
+      console.log('✅ Registration response:', response);
       
       // Show success message - no token yet, account is pending
       if (response.status === 'PENDING' || response.message) {
@@ -69,7 +81,7 @@ const Register = () => {
       }
       
       // Clear form
-      setFormData({ username: '', email: '', password: '', level: '', course: '', batch: '', graduationYear: '' });
+      setFormData({ username: '', email: '', password: '', firstName: '', lastName: '', studentId: '', contactNumber: '', level: '', course: '', batch: '', graduationYear: '' });
       
       // Redirect to login page after 4 seconds
       setTimeout(() => {
@@ -96,20 +108,19 @@ const Register = () => {
       <div className="w-full max-w-6xl h-[90vh] max-h-[700px] flex flex-col md:flex-row items-stretch rounded-3xl overflow-hidden shadow-2xl">
         {/* Left Panel - Form */}
         <div className="w-full md:w-1/2 p-6 md:p-8 bg-white flex flex-col overflow-y-auto scrollbar-hide">
-          <style jsx>{`
-            .scrollbar-hide::-webkit-scrollbar {
-              display: none;
-            }
-            .scrollbar-hide {
-              -ms-overflow-style: none;
-              scrollbar-width: none;
-            }
-          `}</style>
           <div className="mb-4">
             <h2 className="text-2xl lg:text-3xl font-bold mb-1 text-gray-900">Welcome to</h2>
             <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">LCCB Alumni</h1>
           </div>
           <p className="text-gray-500 text-xs mb-4">Create your account and join the alumni community.</p>
+        
+        {/* Verification Notice */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="text-xs text-blue-800">
+            <strong>📋 Verification Required:</strong> Please provide accurate information. Admin will verify your alumni status before approval.
+          </p>
+        </div>
+        
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-center" role="alert">
             {error}
@@ -121,9 +132,43 @@ const Register = () => {
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Name Fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="firstName">
+                First Name <span className="text-red-500">*</span>
+              </label>
+              <input 
+                type="text" 
+                name="firstName"
+                id="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                placeholder="First name"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="lastName">
+                Last Name <span className="text-red-500">*</span>
+              </label>
+              <input 
+                type="text" 
+                name="lastName"
+                id="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                placeholder="Last name"
+                required
+              />
+            </div>
+          </div>
+          
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="username">
-              Username
+              Username <span className="text-red-500">*</span>
             </label>
             <input 
               type="text" 
@@ -136,9 +181,44 @@ const Register = () => {
               required
             />
           </div>
+          
+          {/* School ID and Contact */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="studentId">
+                School ID <span className="text-red-500">*</span>
+              </label>
+              <input 
+                type="text" 
+                name="studentId"
+                id="studentId"
+                value={formData.studentId}
+                onChange={handleChange}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                placeholder="e.g., 21-0087-958"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="contactNumber">
+                Contact Number <span className="text-red-500">*</span>
+              </label>
+              <input 
+                type="tel" 
+                name="contactNumber"
+                id="contactNumber"
+                value={formData.contactNumber}
+                onChange={handleChange}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                placeholder="09XXXXXXXXX"
+                required
+              />
+            </div>
+          </div>
+          
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="email">
-              Email
+              Email <span className="text-red-500">*</span>
             </label>
             <input 
               type="email" 
@@ -153,7 +233,7 @@ const Register = () => {
           </div>
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="level">
-              Level
+              Level <span className="text-red-500">*</span>
             </label>
             <select
               name="level"
@@ -171,7 +251,7 @@ const Register = () => {
           </div>
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="course">
-              Course
+              Course <span className="text-red-500">*</span>
             </label>
             <select
               name="course"
@@ -211,7 +291,7 @@ const Register = () => {
           </div>
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="batch">
-              Batch/Year
+              Batch/Year <span className="text-red-500">*</span>
             </label>
             <input 
               type="number" 
@@ -245,7 +325,7 @@ const Register = () => {
           </div>
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="password">
-              Password
+              Password <span className="text-red-500">*</span>
             </label>
             <input 
               type="password" 

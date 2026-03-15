@@ -95,15 +95,6 @@ const Login = () => {
       <div className="w-full max-w-6xl h-[90vh] max-h-[700px] flex flex-col md:flex-row items-stretch rounded-3xl overflow-hidden shadow-2xl">
         {/* Left panel - Form */}
         <div className="w-full md:w-1/2 p-6 md:p-8 lg:p-10 bg-white flex flex-col justify-center overflow-y-auto scrollbar-hide">
-          <style jsx>{`
-            .scrollbar-hide::-webkit-scrollbar {
-              display: none;
-            }
-            .scrollbar-hide {
-              -ms-overflow-style: none;
-              scrollbar-width: none;
-            }
-          `}</style>
           <div className="mb-6">
             <h2 className="text-3xl lg:text-4xl font-bold mb-1 text-gray-900">Welcome to</h2>
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900">LCCB Alumni</h1>

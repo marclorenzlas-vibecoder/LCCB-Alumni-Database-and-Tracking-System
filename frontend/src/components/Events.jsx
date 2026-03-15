@@ -14,7 +14,7 @@ const Events = () => {
   const [loading, setLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [newEvent, setNewEvent] = useState({ name: '', description: '', date: '', location: '', image: null, sendNotification: false });
+  const [newEvent, setNewEvent] = useState({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState({
@@ -64,6 +64,9 @@ const Events = () => {
         if (newEvent.date) fd.append('date', newEvent.date);
         if (newEvent.location) fd.append('location', newEvent.location);
         fd.append('sendNotification', newEvent.sendNotification ? 'true' : 'false');
+        if (newEvent.sendNotification) {
+          fd.append('notifyBatch', newEvent.notifyBatch || 'all');
+        }
         fd.append('image', newEvent.image);
         payload = fd;
       }
@@ -81,7 +84,7 @@ const Events = () => {
       }
       setShowEventModal(false);
       setEditingId(null);
-      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false });
+      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
     } catch (err) {
       console.error('Error saving event:', err);
       const msg = err?.response?.data?.error || 'Failed to save event. Please try again.';
@@ -96,7 +99,9 @@ const Events = () => {
       description: event.description || '',
       date: event.date ? event.date.split('T')[0] : '',
       location: event.location || '',
-      image: null
+      image: null,
+      sendNotification: false,
+      notifyBatch: 'all'
     });
     setShowEventModal(true);
   };
@@ -600,7 +605,7 @@ const Events = () => {
         {/* Add/Edit Event Modal */}
         {showEventModal && (
           <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Event' : 'Add New Event'}
@@ -685,24 +690,58 @@ const Events = () => {
                 </div>
 
                 {/* Send Notification Checkbox */}
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      type="checkbox"
-                      id="sendNotification"
-                      checked={newEvent.sendNotification}
-                      onChange={(e) => setNewEvent(prev => ({ ...prev, sendNotification: e.target.checked }))}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                    />
+                <div className="space-y-3">
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        type="checkbox"
+                        id="sendNotification"
+                        checked={newEvent.sendNotification}
+                        onChange={(e) => setNewEvent(prev => ({ ...prev, sendNotification: e.target.checked }))}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                    </div>
+                    <div className="ml-3">
+                      <label htmlFor="sendNotification" className="text-sm font-medium text-gray-900 cursor-pointer">
+                        Send notification to alumni
+                      </label>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Notify alumni who have enabled notifications about this new event
+                      </p>
+                    </div>
                   </div>
-                  <div className="ml-3">
-                    <label htmlFor="sendNotification" className="text-sm font-medium text-gray-900 cursor-pointer">
-                      Send notification to all alumni
-                    </label>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Notify all alumni who have enabled notifications about this new event
-                    </p>
-                  </div>
+
+                  {/* Batch Selector - Only show when notification is enabled */}
+                  {newEvent.sendNotification && (
+                    <div className="ml-7 pl-3 border-l-2 border-blue-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Batch to Notify
+                      </label>
+                      <select
+                        value={newEvent.notifyBatch}
+                        onChange={(e) => setNewEvent(prev => ({ ...prev, notifyBatch: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="all">All Alumni</option>
+                        <option value="2015">Batch 2015</option>
+                        <option value="2016">Batch 2016</option>
+                        <option value="2017">Batch 2017</option>
+                        <option value="2018">Batch 2018</option>
+                        <option value="2019">Batch 2019</option>
+                        <option value="2020">Batch 2020</option>
+                        <option value="2021">Batch 2021</option>
+                        <option value="2022">Batch 2022</option>
+                        <option value="2023">Batch 2023</option>
+                        <option value="2024">Batch 2024</option>
+                        <option value="2025">Batch 2025</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {newEvent.notifyBatch === 'all' 
+                          ? 'All alumni with notifications enabled will be notified' 
+                          : `Only Batch ${newEvent.notifyBatch} alumni will be notified`}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
@@ -711,7 +750,7 @@ const Events = () => {
                     onClick={() => {
                       setShowEventModal(false);
                       setEditingId(null);
-                      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false });
+                      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
                     }}
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                   >

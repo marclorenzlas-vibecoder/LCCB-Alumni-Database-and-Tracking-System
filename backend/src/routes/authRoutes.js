@@ -39,7 +39,15 @@ const upload = multer({
 // Register route (Alumni/Students only - Gmail)
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, level, course, batch, graduationYear } = req.body;
+    const { 
+      username, email, password, level, course, batch, graduationYear,
+      firstName, lastName, studentId, contactNumber
+    } = req.body;
+    
+    console.log('📥 Registration request received:', {
+      username, email, firstName, lastName, studentId, contactNumber, level, course, batch, graduationYear
+    });
+    
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Please provide username, email, and password' });
     }
@@ -50,11 +58,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Alumni registration is only available for Gmail accounts. Contact admin for teacher accounts.' });
     }
     
-    const result = await registerUser({ username, email, password, level, course, batch, graduationYear });
+    const result = await registerUser({ 
+      username, email, password, level, course, batch, graduationYear,
+      firstName, lastName, studentId, contactNumber
+    });
+    
+    console.log('✅ Registration successful, pending approval');
     // Returns message and status (no token until approved)
     res.status(201).json(result);
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('❌ Registration error:', error);
     res.status(500).json({ error: error.message || 'Registration failed' });
   }
 });
@@ -171,6 +184,47 @@ router.delete('/teachers/:id', async (req, res) => {
   }
 });
 
+// Verify School ID - Check if it exists in alumni database
+router.get('/verify-student-id/:studentId', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    console.log('🔍 Verifying School ID:', studentId);
+    
+    // Search for alumni with this student_id
+    const alumniRecord = await prisma.alumni.findUnique({
+      where: { student_id: studentId },
+      select: {
+        student_id: true,
+        first_name: true,
+        last_name: true,
+        graduation_year: true,
+        course: true,
+        batch: true,
+        level: true
+      }
+    });
+    
+    if (alumniRecord) {
+      console.log('✅ School ID found in alumni database:', alumniRecord);
+      res.json({
+        verified: true,
+        message: 'School ID found in alumni records',
+        alumni: alumniRecord
+      });
+    } else {
+      console.log('⚠️ School ID not found in alumni database');
+      res.json({
+        verified: false,
+        message: 'School ID not found in alumni records'
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error verifying School ID:', error);
+    res.status(500).json({ error: 'Failed to verify School ID' });
+  }
+});
+
 // Get pending registrations - Admin only
 router.get('/pending-registrations', async (req, res) => {
   try {
@@ -198,12 +252,22 @@ router.post('/approve-registration/:id', async (req, res) => {
 // Reject registration - Admin only
 router.post('/reject-registration/:id', async (req, res) => {
   try {
+    console.log('📥 Reject registration request received:', req.params.id);
+    console.log('Rejection reason:', req.body.reason);
+    
     const { rejectRegistration } = require('../services/authService');
     const { reason } = req.body;
+    
+    if (!reason || !reason.trim()) {
+      console.log('❌ Rejection failed: No reason provided');
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+    
     const result = await rejectRegistration(parseInt(req.params.id), reason);
+    console.log('✅ Registration rejected successfully');
     res.json(result);
   } catch (error) {
-    console.error('Error rejecting registration:', error);
+    console.error('❌ Error rejecting registration:', error);
     res.status(500).json({ error: error.message || 'Failed to reject registration' });
   }
 });
