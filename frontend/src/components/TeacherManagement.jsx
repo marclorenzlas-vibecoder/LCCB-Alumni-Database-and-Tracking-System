@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import ConfirmModal from './ConfirmModal';
+import { API_BASE_URL } from '../config/apiBaseUrl';
+import UserLayout from './UserLayout';
 
 const TeacherManagement = () => {
   const [teachers, setTeachers] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTeacherId, setEditingTeacherId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -30,7 +33,7 @@ const TeacherManagement = () => {
   const fetchTeachers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/auth/teachers', {
+      const response = await fetch(`${API_BASE_URL}/auth/teachers`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -51,6 +54,46 @@ const TeacherManagement = () => {
     return email.endsWith('@lccbonline.com');
   };
 
+  const readResponseError = async (response, fallbackMessage) => {
+    const contentType = response.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const data = await response.json().catch(() => ({}));
+      return data.error || data.message || fallbackMessage;
+    }
+
+    const text = await response.text().catch(() => '');
+    if (text) {
+      const stripped = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (stripped && !stripped.startsWith('<!DOCTYPE')) {
+        return stripped;
+      }
+    }
+
+    return fallbackMessage;
+  };
+
+  const openCreateModal = () => {
+    setEditingTeacherId(null);
+    setFormData({ username: '', email: '', password: '', department: '' });
+    setError('');
+    setSuccess('');
+    setShowAddModal(true);
+  };
+
+  const openEditModal = (teacher) => {
+    setEditingTeacherId(teacher.id);
+    setFormData({
+      username: teacher.username || '',
+      email: teacher.email || '',
+      password: '',
+      department: teacher.department || ''
+    });
+    setError('');
+    setSuccess('');
+    setShowAddModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -63,7 +106,7 @@ const TeacherManagement = () => {
     }
 
     // Validate all fields
-    if (!formData.username || !formData.email || !formData.password) {
+    if (!formData.username || !formData.email || (!editingTeacherId && !formData.password)) {
       setError('Please fill in all required fields');
       return;
     }
@@ -72,22 +115,34 @@ const TeacherManagement = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/auth/register-teacher', {
-        method: 'POST',
+      const url = editingTeacherId
+        ? `${API_BASE_URL}/auth/profile/${editingTeacherId}`
+        : `${API_BASE_URL}/auth/register-teacher`;
+
+      const payload = editingTeacherId
+        ? {
+            username: formData.username,
+            email: formData.email,
+            department: formData.department
+          }
+        : formData;
+
+      const response = await fetch(url, {
+        method: editingTeacherId ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create teacher account');
+        throw new Error(await readResponseError(response, editingTeacherId ? 'Failed to update teacher account' : 'Failed to create teacher account'));
       }
 
-      setSuccess('Teacher account created successfully!');
+      setSuccess(editingTeacherId ? 'Teacher account updated successfully!' : 'Teacher account created successfully!');
       setShowAddModal(false);
+      setEditingTeacherId(null);
       setFormData({ username: '', email: '', password: '', department: '' });
       fetchTeachers();
     } catch (err) {
@@ -106,7 +161,7 @@ const TeacherManagement = () => {
       onConfirm: async () => {
         try {
           const token = localStorage.getItem('token');
-          await fetch(`http://localhost:5001/api/auth/teachers/${id}`, {
+          await fetch(`${API_BASE_URL}/auth/teachers/${id}`, {
             method: 'DELETE',
             headers: {
               'Authorization': `Bearer ${token}`
@@ -123,7 +178,7 @@ const TeacherManagement = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <UserLayout>
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
@@ -135,7 +190,7 @@ const TeacherManagement = () => {
         cancelText="Cancel"
       />
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white shadow sm:rounded-lg">
           {/* Header */}
           <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
@@ -147,8 +202,8 @@ const TeacherManagement = () => {
                 </p>
               </div>
               <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                onClick={openCreateModal}
+                className="app-primary-button"
               >
                 + Add Teacher
               </button>
@@ -175,19 +230,30 @@ const TeacherManagement = () => {
                     <td className="px-3 py-4 text-sm text-gray-600">{teacher.department || 'N/A'}</td>
                     <td className="px-3 py-4 text-sm">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        {teacher.role}
+                        {teacher.role || 'ADMIN'}
                       </span>
                     </td>
                     <td className="px-3 py-4 text-sm">
-                      <button
-                        onClick={() => handleDelete(teacher.id, teacher.username)}
-                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Delete
-                      </button>
+                      <div className="flex flex-nowrap gap-2">
+                        <button
+                          onClick={() => openEditModal(teacher)}
+                          className="inline-flex items-center justify-center rounded-md bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-600"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5h2m-1 0v14m-7-7h14" />
+                          </svg>
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(teacher.id, teacher.username)}
+                          className="inline-flex items-center justify-center rounded-md bg-red-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-600"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -202,8 +268,10 @@ const TeacherManagement = () => {
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <div className="border-b border-gray-200 pb-4 mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Add Teacher Account</h3>
-              <p className="mt-1 text-sm text-gray-500">Create a new teacher account with @lccbonline.com email</p>
+              <h3 className="text-xl font-semibold text-gray-900">{editingTeacherId ? 'Edit Teacher Account' : 'Add Teacher Account'}</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {editingTeacherId ? 'Update the teacher account details below.' : 'Create a new teacher account with @lccbonline.com email'}
+              </p>
             </div>
 
             {error && (
@@ -250,18 +318,20 @@ const TeacherManagement = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
-                  placeholder="Secure password"
-                  required
-                />
-              </div>
+              {!editingTeacherId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+                    placeholder="Secure password"
+                    required
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
@@ -280,26 +350,27 @@ const TeacherManagement = () => {
                   type="button"
                   onClick={() => {
                     setShowAddModal(false);
+                    setEditingTeacherId(null);
                     setError('');
                     setSuccess('');
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="app-secondary-button"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className="app-primary-button disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Creating...' : 'Create Teacher Account'}
+                  {loading ? 'Saving...' : editingTeacherId ? 'Update Teacher Account' : 'Create Teacher Account'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </UserLayout>
   );
 };
 

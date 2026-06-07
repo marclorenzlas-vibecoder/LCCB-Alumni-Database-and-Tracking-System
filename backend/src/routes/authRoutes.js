@@ -6,27 +6,41 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+const { authMiddleware, invalidateUserBlockCache } = require('../middleware/auth');
+const { broadcastUpdate } = require('../services/realtimeService');
+const { tryEnter, leave, getLimiterStatus } = require('../services/activeUserLimiter');
+const {
+  normalizeLevel,
+  parseEducationHistory,
+  getEducationHistoryWithFallback,
+  getEducationHistoryByAlumniIds,
+  replaceEducationHistory
+} = require('../utils/educationHistory');
 
-// Initialize router and prisma
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Configure multer for profile image uploads
+const uploadsDir = path.join(__dirname, '../../uploads/profiles');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/profiles/');
+    cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+const upload = multer({
+  storage,
+  limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
-    const filetypes = /jpeg|jpg|png|gif/;
+    const filetypes = /jpeg|jpg|png|gif|webp/;
     const mimetype = filetypes.test(file.mimetype);
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
     if (mimetype && extname) {
@@ -75,7 +89,8 @@ router.post('/register', async (req, res) => {
 // Login route (Unified for both teachers and alumni)
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : req.body.email;
+    const { password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Please provide email and password' });
     }
@@ -93,6 +108,15 @@ router.post('/login', async (req, res) => {
       // Alumni login
       result = await loginUser(email, password);
     }
+
+    const limiterState = tryEnter({ token: result?.token, user: result?.user });
+    if (!limiterState.allowed) {
+      return res.status(503).json({
+        error: 'Server is full right now. Please try again in a few minutes.',
+        code: 'SERVER_AT_CAPACITY'
+      });
+    }
+
     res.json(result);
   } catch (error) {
     // Check if error message indicates blocked account
@@ -162,11 +186,58 @@ router.get('/teachers', async (req, res) => {
       email: t.email,
       username: t.username,
       department: t.department,
-      createdAt: t.created_at
+      createdAt: t.created_at,
+      role: 'ADMIN'
     })));
   } catch (error) {
     console.error('Error fetching teachers:', error);
     res.status(500).json({ error: 'Failed to fetch teachers' });
+  }
+});
+
+// Update teacher - Admin only
+router.put('/teachers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const department = typeof req.body.department === 'string' ? req.body.department.trim() : null;
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (!username || !email) {
+      return res.status(400).json({ error: 'Username and email are required' });
+    }
+
+    if (!email.endsWith('@lccbonline.com')) {
+      return res.status(400).json({ error: 'Teacher email must use @lccbonline.com domain' });
+    }
+
+    const updateData = {
+      username,
+      email,
+      department: department || null
+    };
+
+    if (password && password.trim()) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    const teacher = await prisma.teacher.update({
+      where: { id: parseInt(id, 10) },
+      data: updateData
+    });
+
+    res.json({
+      id: teacher.id,
+      email: teacher.email,
+      username: teacher.username,
+      department: teacher.department,
+      createdAt: teacher.created_at,
+      role: 'ADMIN'
+    });
+  } catch (error) {
+    console.error('Error updating teacher:', error);
+    res.status(500).json({ error: error.message || 'Failed to update teacher' });
   }
 });
 
@@ -348,7 +419,7 @@ router.get('/google/callback', (req, res, next) => {
       }
 
       console.log('Successfully authenticated user:', user.email);
-      
+
       // Generate JWT token for the OAuth user
       const token = jwt.sign(
         { 
@@ -361,6 +432,13 @@ router.get('/google/callback', (req, res, next) => {
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '24h' }
       );
+
+      const limiterState = tryEnter({ token, user: { id: user.id, role: 'ALUMNI' } });
+      if (!limiterState.allowed) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3002';
+        const redirectUrl = `${frontendUrl}/login?error=server_capacity`;
+        return res.redirect(redirectUrl);
+      }
 
       // Prepare user data for frontend with all required fields
       const userData = {
@@ -383,21 +461,199 @@ router.get('/google/callback', (req, res, next) => {
   })(req, res, next);
 });
 
+// Lightweight session validation for active clients (enforces block status via authMiddleware).
+router.get('/session-status', authMiddleware, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!userId || !Number.isFinite(userId)) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        role: true,
+        profile_image: true,
+        approval_status: true,
+        is_active: true,
+        is_blocked: true
+      }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    if (user.is_blocked) {
+      return res.status(403).json({
+        error: 'Your account has been blocked. Please contact the administrator for assistance.',
+        code: 'ACCOUNT_BLOCKED'
+      });
+    }
+
+    res.json({
+      ok: true,
+      is_blocked: false,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        profile_image: user.profile_image,
+        approval_status: user.approval_status,
+        is_active: user.is_active,
+        is_blocked: user.is_blocked
+      }
+    });
+  } catch (error) {
+    console.error('Session status error:', error);
+    res.status(500).json({ error: 'Failed to validate session' });
+  }
+});
+
+router.post('/logout', authMiddleware, (req, res) => {
+  leave({ token: req.authToken, user: req.user });
+
+  // JWT clients (web/mobile) may not have an express-session object.
+  if (!req.session) {
+    return res.json({ success: true, message: 'Logged out successfully' });
+  }
+
+  req.logout?.((logoutError) => {
+    if (logoutError) {
+      console.error('Passport logout error:', logoutError);
+    }
+
+    req.session.destroy((destroyError) => {
+      if (destroyError) {
+        console.error('Session destroy error:', destroyError);
+      }
+
+      res.json({ success: true, message: 'Logged out successfully' });
+    });
+  });
+});
+
+router.get('/active-users', authMiddleware, (req, res) => {
+  if (!req.user?.role || req.user.role.toUpperCase() !== 'TEACHER') {
+    return res.status(403).json({ error: 'Access denied. Teacher privileges required.' });
+  }
+
+  res.json(getLimiterStatus());
+});
+// Get user profile with alumni data
+router.get('/profile/:id', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    
+    // Check if user is a teacher or regular user
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: userId }
+    });
+    
+    const user = teacher || await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Fetch alumni data if user has one
+    let alumni = null;
+    if (user.id) {
+      alumni = await prisma.alumni.findFirst({
+        where: { 
+          OR: [
+            { user_id: user.id },
+            { email: user.email }
+          ]
+        }
+      });
+
+      if (alumni) {
+        const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [alumni.id]);
+        const history = getEducationHistoryWithFallback(alumni, historyByAlumniId.get(alumni.id) || []);
+        alumni = {
+          ...alumni,
+          education_history: history,
+          educationHistory: history
+        };
+      }
+    }
+    
+    const role = teacher ? 'TEACHER' : (user.role || 'ALUMNI');
+    
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      profile_image: user.profile_image,
+      role: role,
+      approval_status: user.approval_status || 'APPROVED',
+      is_active: typeof user.is_active === 'boolean' ? user.is_active : true,
+      is_blocked: typeof user.is_blocked === 'boolean' ? user.is_blocked : false,
+      alumni: alumni ? {
+        id: alumni.id,
+        studentId: alumni.student_id,
+        student_id: alumni.student_id,
+        firstName: alumni.first_name,
+        first_name: alumni.first_name,
+        middleName: alumni.middle_name,
+        middle_name: alumni.middle_name,
+        lastName: alumni.last_name,
+        last_name: alumni.last_name,
+        level: alumni.level,
+        course: alumni.course,
+        batch: alumni.batch,
+        graduationYear: alumni.graduation_year,
+        graduation_year: alumni.graduation_year,
+        currentPosition: alumni.current_position,
+        current_position: alumni.current_position,
+        company: alumni.company,
+        location: alumni.location,
+        contactNumber: alumni.contact_number,
+        contact_number: alumni.contact_number,
+        skills: alumni.skills,
+        dateOfBirth: alumni.date_of_birth || null,
+        date_of_birth: alumni.date_of_birth || null,
+        educationHistory: alumni.educationHistory || [],
+        education_history: alumni.education_history || []
+      } : null
+    });
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
 // Update user profile (username and profile image)
 router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const { username, email, firstName, lastName, level, course, batch, graduationYear, currentPosition, company, location, skills } = req.body;
+    const { username, email, department, firstName, middleName, lastName, studentId, level, course, batch, graduationYear, currentPosition, company, location, skills, dateOfBirth, date_of_birth } = req.body;
+    const parsedEducationHistory = parseEducationHistory(
+      req.body.educationHistory ?? req.body.education_history
+    );
+    const hasEducationHistoryInput =
+      req.body.educationHistory !== undefined || req.body.education_history !== undefined;
+    const primaryEducation = parsedEducationHistory.length > 0
+      ? parsedEducationHistory[parsedEducationHistory.length - 1]
+      : null;
+    const normalizedUsername = typeof username === 'string' ? username.trim() : '';
+    const normalizedEmail = typeof email === 'string' ? email.trim() : '';
     
     const updateData = {};
-    if (username) updateData.username = username;
-    if (email) updateData.email = email;
+    if (normalizedUsername) updateData.username = normalizedUsername;
+    if (normalizedEmail) updateData.email = normalizedEmail;
     if (req.file) {
       updateData.profile_image = `/uploads/profiles/${req.file.filename}`;
     }
 
     // Check if user is teacher or regular user
-    const emailDomain = email ? email.split('@')[1] : null;
+    const emailDomain = normalizedEmail ? normalizedEmail.split('@')[1] : null;
     
     let updatedUser;
     let updatedAlumni = null;
@@ -405,62 +661,126 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
     
     if (emailDomain === 'lccbonline.com') {
       // Update teacher table
+      const teacherUpdateData = { ...updateData };
+      if (department !== undefined) {
+        teacherUpdateData.department = department && department.trim() ? department.trim() : null;
+      }
+
       updatedUser = await prisma.teacher.update({
         where: { id: userId },
-        data: updateData
+        data: teacherUpdateData
       });
       role = 'TEACHER';
-    } else {
-      // Update user table
-      updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: updateData
-      });
-      role = updatedUser.role || 'ALUMNI';
       
-      // Update alumni information if provided
-      if (firstName || lastName || level || course || batch || graduationYear || currentPosition || company || location || skills || req.file) {
+      // Also sync alumni information for teachers if profile fields, username/email, or image changed
+      if (firstName || lastName || middleName || level || course || batch || graduationYear || currentPosition || company || location || skills || dateOfBirth !== undefined || date_of_birth !== undefined || normalizedUsername || normalizedEmail || req.file || hasEducationHistoryInput) {
         const alumniUpdateData = {};
-        if (firstName) alumniUpdateData.first_name = firstName;
-        if (lastName) alumniUpdateData.last_name = lastName;
-        if (level) alumniUpdateData.level = level;
-        if (course) alumniUpdateData.course = course;
-        if (batch) alumniUpdateData.batch = parseInt(batch);
-        if (graduationYear) alumniUpdateData.graduation_year = parseInt(graduationYear);
-        if (currentPosition) alumniUpdateData.current_position = currentPosition;
-        if (company) alumniUpdateData.company = company;
-        if (location) alumniUpdateData.location = location;
-        if (skills) alumniUpdateData.skills = skills;
-        // Also update profile_image in alumni table when user uploads new image
+        if (firstName && firstName.trim()) alumniUpdateData.first_name = firstName.trim();
+        if (middleName !== undefined) alumniUpdateData.middle_name = middleName && middleName.trim() ? middleName.trim() : null;
+        if (lastName && lastName.trim()) alumniUpdateData.last_name = lastName.trim();
+        if (level !== undefined) alumniUpdateData.level = normalizeLevel(level);
+        else if (hasEducationHistoryInput) alumniUpdateData.level = primaryEducation?.level ?? null;
+        if (course !== undefined) alumniUpdateData.course = course && course.trim() ? course.trim() : null;
+        if (batch !== undefined) {
+          const parsedBatch = parseInt(batch, 10);
+          alumniUpdateData.batch = Number.isNaN(parsedBatch) ? null : parsedBatch;
+        } else if (hasEducationHistoryInput) {
+          alumniUpdateData.batch = primaryEducation?.batch ?? null;
+        }
+        if (graduationYear !== undefined) {
+          const parsedYear = parseInt(graduationYear, 10);
+          alumniUpdateData.graduation_year = Number.isNaN(parsedYear) ? null : parsedYear;
+        } else if (hasEducationHistoryInput) {
+          alumniUpdateData.graduation_year = primaryEducation?.graduationYear ?? null;
+        }
+        if (currentPosition !== undefined) alumniUpdateData.current_position = currentPosition && currentPosition.trim() ? currentPosition.trim() : null;
+        if (company !== undefined) alumniUpdateData.company = company && company.trim() ? company.trim() : null;
+        if (dateOfBirth !== undefined || date_of_birth !== undefined) {
+          const dobValue = dateOfBirth !== undefined ? dateOfBirth : date_of_birth;
+          const parsedDob = dobValue ? new Date(dobValue) : null;
+          alumniUpdateData.date_of_birth = parsedDob instanceof Date && !Number.isNaN(parsedDob.getTime()) ? parsedDob : null;
+        }
+        if (location !== undefined) alumniUpdateData.location = location && location.trim() ? location.trim() : null;
+        if (skills !== undefined) alumniUpdateData.skills = skills && skills.trim() ? skills.trim() : null;
+        if (normalizedEmail) alumniUpdateData.email = normalizedEmail;
+        
+        // If username changed and firstName/lastName were not provided, split username for display
+        if (normalizedUsername && !alumniUpdateData.first_name && !alumniUpdateData.last_name) {
+          const parts = normalizedUsername.split(/\s+/).filter(Boolean);
+          if (parts.length) {
+            alumniUpdateData.first_name = parts[0];
+            if (parts.slice(1).join(' ')) {
+              alumniUpdateData.last_name = parts.slice(1).join(' ');
+            }
+          }
+        }
         if (req.file) {
           alumniUpdateData.profile_image = `/uploads/profiles/${req.file.filename}`;
         }
+
+        const teacherEmail = normalizedEmail || updatedUser.email;
         
-        // Find existing alumni record or create new one
-        const existingAlumni = await prisma.alumni.findUnique({
+        // First, try to find alumni linked to THIS user
+        let existingAlumni = await prisma.alumni.findFirst({
           where: { user_id: userId }
         });
-        
+
+        // If not found by user_id, try to find by email (but only if it has no user_id)
+        if (!existingAlumni) {
+          const alumniByEmail = await prisma.alumni.findFirst({
+            where: { email: teacherEmail }
+          });
+          
+          // Only use the email-based alumni if it's not linked to another user
+          if (alumniByEmail && !alumniByEmail.user_id) {
+            existingAlumni = alumniByEmail;
+          }
+        }
+
         if (existingAlumni) {
+          // Only set user_id if it's not already set
+          const updateData = {
+            ...alumniUpdateData,
+            email: teacherEmail,
+            user_id: null
+          };
+          
           updatedAlumni = await prisma.alumni.update({
-            where: { user_id: userId },
-            data: alumniUpdateData
+            where: { id: existingAlumni.id },
+            data: updateData
           });
         } else {
-          // Create alumni record if it doesn't exist
+          // alumni.first_name and alumni.last_name are required in schema
+          const nameParts = (updatedUser.username || '').trim().split(/\s+/).filter(Boolean);
+          const fallbackFirstName = nameParts[0] || 'Teacher';
+          const fallbackLastName = nameParts.slice(1).join(' ') || 'Account';
+
           updatedAlumni = await prisma.alumni.create({
             data: {
-              user_id: userId,
-              email: email || updatedUser.email,
-              ...alumniUpdateData
+              email: teacherEmail,
+              first_name: alumniUpdateData.first_name || fallbackFirstName,
+              last_name: alumniUpdateData.last_name || fallbackLastName,
+              middle_name: alumniUpdateData.middle_name ?? null,
+              level: alumniUpdateData.level,
+              batch: alumniUpdateData.batch,
+              graduation_year: alumniUpdateData.graduation_year,
+              course: alumniUpdateData.course,
+              current_position: alumniUpdateData.current_position,
+              company: alumniUpdateData.company,
+              location: alumniUpdateData.location,
+              skills: alumniUpdateData.skills,
+              profile_image: alumniUpdateData.profile_image,
+              date_of_birth: alumniUpdateData.date_of_birth ?? null
             }
           });
         }
         
-        // Format alumni data for response
         updatedAlumni = {
           id: updatedAlumni.id,
+          studentId: updatedAlumni.student_id,
+          student_id: updatedAlumni.student_id,
           firstName: updatedAlumni.first_name,
+          middleName: updatedAlumni.middle_name,
           lastName: updatedAlumni.last_name,
           level: updatedAlumni.level,
           course: updatedAlumni.course,
@@ -470,9 +790,152 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
           current_position: updatedAlumni.current_position,
           company: updatedAlumni.company,
           location: updatedAlumni.location,
+          dateOfBirth: updatedAlumni.date_of_birth || null,
+          date_of_birth: updatedAlumni.date_of_birth || null,
           skills: updatedAlumni.skills
         };
       }
+    } else {
+      // Update user table
+      updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: updateData
+      });
+      role = updatedUser.role || 'ALUMNI';
+      
+      // Sync alumni information when any profile, username/email, or image changed
+      if (firstName || lastName || middleName || studentId !== undefined || level || course || batch || graduationYear || currentPosition || company || location || skills || normalizedUsername || normalizedEmail || req.file || hasEducationHistoryInput) {
+        const alumniUpdateData = {};
+        if (firstName && firstName.trim()) alumniUpdateData.first_name = firstName.trim();
+        if (middleName !== undefined) alumniUpdateData.middle_name = middleName && middleName.trim() ? middleName.trim() : null;
+        if (lastName && lastName.trim()) alumniUpdateData.last_name = lastName.trim();
+        if (studentId !== undefined) alumniUpdateData.student_id = studentId && String(studentId).trim() ? String(studentId).trim() : null;
+        if (level !== undefined) alumniUpdateData.level = normalizeLevel(level);
+        else if (hasEducationHistoryInput) alumniUpdateData.level = primaryEducation?.level ?? null;
+        if (course !== undefined) alumniUpdateData.course = course && course.trim() ? course.trim() : null;
+        if (batch !== undefined) {
+          const parsedBatch = parseInt(batch, 10);
+          alumniUpdateData.batch = Number.isNaN(parsedBatch) ? null : parsedBatch;
+        } else if (hasEducationHistoryInput) {
+          alumniUpdateData.batch = primaryEducation?.batch ?? null;
+        }
+        if (graduationYear !== undefined) {
+          const parsedYear = parseInt(graduationYear, 10);
+          alumniUpdateData.graduation_year = Number.isNaN(parsedYear) ? null : parsedYear;
+        } else if (hasEducationHistoryInput) {
+          alumniUpdateData.graduation_year = primaryEducation?.graduationYear ?? null;
+        }
+        if (currentPosition !== undefined) alumniUpdateData.current_position = currentPosition && currentPosition.trim() ? currentPosition.trim() : null;
+        if (company !== undefined) alumniUpdateData.company = company && company.trim() ? company.trim() : null;
+        if (dateOfBirth !== undefined || date_of_birth !== undefined) {
+          const dobValue = dateOfBirth !== undefined ? dateOfBirth : date_of_birth;
+          const parsedDob = dobValue ? new Date(dobValue) : null;
+          alumniUpdateData.date_of_birth = parsedDob instanceof Date && !Number.isNaN(parsedDob.getTime()) ? parsedDob : null;
+        }
+        if (location !== undefined) alumniUpdateData.location = location && location.trim() ? location.trim() : null;
+        if (skills !== undefined) alumniUpdateData.skills = skills && skills.trim() ? skills.trim() : null;
+        if (normalizedEmail) alumniUpdateData.email = normalizedEmail;
+        
+        // If username changed and firstName/lastName were not provided, split username for display
+        if (normalizedUsername && !alumniUpdateData.first_name && !alumniUpdateData.last_name) {
+          const parts = normalizedUsername.split(/\s+/).filter(Boolean);
+          if (parts.length) {
+            alumniUpdateData.first_name = parts[0];
+            if (parts.slice(1).join(' ')) {
+              alumniUpdateData.last_name = parts.slice(1).join(' ');
+            }
+          }
+        }
+        // Also update profile_image in alumni table when user uploads new image
+        if (req.file) {
+          alumniUpdateData.profile_image = `/uploads/profiles/${req.file.filename}`;
+        }
+        
+        // Find existing alumni record by user_id or email (user_id is preferred but may not exist)
+        let existingAlumni = await prisma.alumni.findUnique({
+          where: { user_id: userId }
+        });
+        
+        // If not found by user_id, try looking up by email
+        if (!existingAlumni && (normalizedEmail || updatedUser.email)) {
+          const lookupEmail = normalizedEmail || updatedUser.email;
+          existingAlumni = await prisma.alumni.findFirst({
+            where: { email: lookupEmail }
+          });
+        }
+        
+        if (existingAlumni) {
+          // Update existing alumni record
+          const updatePayload = {
+            ...alumniUpdateData
+          };
+
+          if (!existingAlumni.user_id) {
+            updatePayload.user_id = userId;
+          }
+
+          updatedAlumni = await prisma.alumni.update({
+            where: { id: existingAlumni.id },
+            data: updatePayload
+          });
+        } else {
+          // Create alumni record if it doesn't exist
+          updatedAlumni = await prisma.alumni.create({
+            data: {
+              user_id: userId,
+              email: normalizedEmail || updatedUser.email,
+              ...alumniUpdateData
+            }
+          });
+        }
+        updatedAlumni = {
+          id: updatedAlumni.id,
+          studentId: updatedAlumni.student_id,
+          student_id: updatedAlumni.student_id,
+          firstName: updatedAlumni.first_name,
+          middleName: updatedAlumni.middle_name,
+          lastName: updatedAlumni.last_name,
+          level: updatedAlumni.level,
+          course: updatedAlumni.course,
+          batch: updatedAlumni.batch,
+          graduationYear: updatedAlumni.graduation_year,
+          currentPosition: updatedAlumni.current_position,
+          current_position: updatedAlumni.current_position,
+          company: updatedAlumni.company,
+          location: updatedAlumni.location,
+          dateOfBirth: updatedAlumni.date_of_birth || null,
+          date_of_birth: updatedAlumni.date_of_birth || null,
+          skills: updatedAlumni.skills
+        };
+      }
+    }
+
+    if (updatedAlumni?.id && hasEducationHistoryInput && parsedEducationHistory.length > 0) {
+      await replaceEducationHistory(prisma, updatedAlumni.id, parsedEducationHistory);
+    }
+
+    if (updatedAlumni?.id) {
+      const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [updatedAlumni.id]);
+      const history = getEducationHistoryWithFallback(updatedAlumni, historyByAlumniId.get(updatedAlumni.id) || []);
+      updatedAlumni = {
+        ...updatedAlumni,
+        educationHistory: history,
+        education_history: history
+      };
+    }
+
+    broadcastUpdate('profile.updated', {
+      userId: updatedUser.id,
+      alumniId: updatedAlumni?.id || null,
+      username: updatedUser.username,
+      email: updatedUser.email
+    });
+
+    if (updatedAlumni?.id) {
+      broadcastUpdate('alumni.updated', {
+        alumniId: updatedAlumni.id,
+        userId: updatedUser.id
+      });
     }
 
     res.json({
@@ -482,7 +945,9 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
         username: updatedUser.username,
         email: updatedUser.email,
         profile_image: updatedUser.profile_image,
-        role: role
+        role: role,
+        approval_status: updatedUser.approval_status || 'APPROVED',
+        is_active: typeof updatedUser.is_active === 'boolean' ? updatedUser.is_active : true
       },
       alumni: updatedAlumni
     });
@@ -688,10 +1153,20 @@ router.put('/users/:userId/block', async (req, res) => {
       return res.status(403).json({ error: 'Cannot block admin or teacher accounts' });
     }
 
+    const parsedUserId = parseInt(userId, 10);
     const updatedUser = await prisma.user.update({
-      where: { id: parseInt(userId) },
+      where: { id: parsedUserId },
       data: { is_blocked: is_blocked }
     });
+
+    invalidateUserBlockCache(parsedUserId);
+
+    // Notify connected clients to refresh / force logout immediately if needed.
+    broadcastUpdate('user.blocked', {
+      userId: updatedUser.id,
+      is_blocked: Boolean(updatedUser.is_blocked)
+    });
+    broadcastUpdate('profile.updated', { userId: updatedUser.id });
 
     res.json({
       message: `User ${is_blocked ? 'blocked' : 'unblocked'} successfully`,
@@ -736,18 +1211,11 @@ router.put('/notification-preference', async (req, res) => {
 
     res.json({
       message: 'Notification preference updated successfully',
-      user: {
-        id: updatedUser.id,
-        notification_enabled: updatedUser.notification_enabled,
-        notification_prompt_shown: updatedUser.notification_prompt_shown
-      }
+      user: updatedUser
     });
   } catch (error) {
     console.error('Error updating notification preference:', error);
-    res.status(500).json({ 
-      error: 'Failed to update notification preference',
-      details: error.message 
-    });
+    res.status(500).json({ error: 'Failed to update notification preference' });
   }
 });
 

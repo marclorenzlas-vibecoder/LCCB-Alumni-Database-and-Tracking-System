@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
 import achievementService from '../services/achievementService';
 import ConfirmModal from './ConfirmModal';
 import { authService } from '../services/authService';
+import UserLayout from './UserLayout';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
 const Achievements = () => {
   const [achievements, setAchievements] = useState([]);
@@ -28,7 +31,7 @@ const Achievements = () => {
     type: 'danger'
   });
 
-  const categories = ['All', 'Professional', 'Academic', 'Business', 'Community Service'];
+  const categories = ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   // Fetch all achievements on component mount
@@ -39,7 +42,7 @@ const Achievements = () => {
 
   const fetchAlumniList = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/alumni');
+      const response = await fetch(`${API_BASE_URL}/alumni`);
       const data = await response.json();
       setAlumniList(data);
     } catch (err) {
@@ -98,12 +101,12 @@ const Achievements = () => {
         // Update existing achievement
         const updated = await achievementService.updateAchievement(editingId, payload);
         setAchievements(prev => prev.map(a => a.id === editingId ? updated : a));
-        alert('Achievement updated successfully!');
+        toast.success('Achievement updated successfully!');
       } else {
         // Create new achievement
         const newAchievement = await achievementService.createAchievement(payload);
         setAchievements(prev => [...prev, newAchievement]);
-        alert('Achievement added successfully!');
+        toast.success('Achievement added successfully!');
       }
       
       setShowModal(false);
@@ -146,10 +149,10 @@ const Achievements = () => {
           await achievementService.deleteAchievement(id);
           setAchievements(prev => prev.filter(a => a.id !== id));
           setConfirmModal({ ...confirmModal, isOpen: false });
-          alert('Achievement deleted successfully!');
+          toast.success('Achievement deleted successfully!');
         } catch (err) {
           console.error('Error deleting achievement:', err);
-          alert('Failed to delete achievement');
+          toast.error('Failed to delete achievement');
           setConfirmModal({ ...confirmModal, isOpen: false });
         }
       }
@@ -161,7 +164,8 @@ const Achievements = () => {
     : achievements.filter(a => a.category === selectedCategory);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <UserLayout>
+      <div className="min-h-screen bg-gray-50 py-8">
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -174,27 +178,32 @@ const Achievements = () => {
         cancelText="Cancel"
       />
       
-      {/* Header Section */}
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
           <div className="text-center sm:text-left">
             <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl mb-2">
               Alumni Achievements
             </h1>
             <p className="text-lg text-gray-600">
-              Celebrating the outstanding accomplishments of our LCCB alumni across various fields
+              Showcasing real alumni accomplishments, leadership roles, event-hosting potential, and affiliate impact.
+            </p>
+            <p className="mt-2 text-sm text-gray-500 max-w-2xl">
+              Use achievements that highlight actual professional or community success rather than education-only honors. This helps admins quickly identify potential MCs, speakers, partners, and strong talent for events.
             </p>
           </div>
           {isTeacher && (
             <button 
               onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2">
+              className="app-primary-button">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
               </svg>
               Add New Achievement
             </button>
           )}
+        </div>
         </div>
 
         {/* Categories Filter */}
@@ -224,25 +233,31 @@ const Achievements = () => {
           {filteredAchievements.map((achievement) => (
             <div
               key={achievement.id}
-              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all duration-300 group"
+              className="app-card overflow-hidden group flex h-full flex-col p-0"
             >
-              <div className="relative overflow-hidden">
-                {achievement.image && (
+              <div className="relative h-48 overflow-hidden">
+                {achievement.image ? (
                   <img
-                    src={achievement.image.startsWith('/') ? `http://localhost:5001${achievement.image}` : achievement.image}
+                    src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
                     alt={achievement.title}
-                    className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-medium text-slate-500">
+                    No image available
+                  </div>
                 )}
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="px-3 py-1 text-sm font-medium text-blue-900 bg-blue-100 rounded-full">
+                <div className="absolute left-4 top-4 flex items-center gap-2">
+                  <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-blue-900 shadow-sm backdrop-blur">
                     {achievement.category || 'General'}
                   </span>
-                  <span className="text-gray-500 text-sm">
-                    {achievement.date ? new Date(achievement.date).getFullYear() : 'N/A'}
-                  </span>
                 </div>
+                <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
+                  {achievement.date ? new Date(achievement.date).getFullYear() : 'N/A'}
+                </span>
+              </div>
+
+              <div className="flex flex-1 flex-col px-6 pb-6 pt-5">
                 {achievement.alumni && (
                   <p className="text-sm text-gray-600 mb-3">
                     <span className="font-semibold text-gray-800">
@@ -262,23 +277,22 @@ const Achievements = () => {
                   </p>
                 </div>
                 {isTeacher && (
-                  <div className="mt-4 flex gap-2">
+                  <div className="mt-4 flex gap-2 pt-1">
                     <button
                       onClick={() => handleEdit(achievement)}
-                      className="flex-1 bg-white text-blue-900 px-4 py-2 rounded-md border border-blue-400 hover:bg-blue-100 transition-colors duration-200 text-sm font-medium"
+                      className="flex-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(achievement.id)}
-                      className="flex-1 bg-white text-red-600 px-4 py-2 rounded-md border border-red-300 hover:bg-red-50 transition-colors duration-200 text-sm font-medium"
+                      className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium shadow-sm"
                     >
                       Delete
                     </button>
                   </div>
                 )}
               </div>
-            </div>
             </div>
           ))}
         </div>
@@ -291,7 +305,7 @@ const Achievements = () => {
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Achievement' : 'Add New Achievement'}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">Enter the details for the {editingId ? 'achievement update' : 'new achievement'}</p>
+                <p className="mt-1 text-sm text-gray-500">Use a strong alumni accomplishment such as leadership, public service, event hosting, or affiliate impact. Avoid education-only honors like cum laude awards.</p>
               </div>
               <div className="mt-6">
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -305,7 +319,7 @@ const Achievements = () => {
                         value={formData.alumni_id}
                         onChange={handleInputChange}
                         required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
+                        className="app-select"
                       >
                         <option value="">Select an alumni</option>
                         {alumniList.map((alumni) => (
@@ -317,7 +331,7 @@ const Achievements = () => {
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Title *
+                        Achievement / Role *
                       </label>
                       <input
                         type="text"
@@ -325,8 +339,8 @@ const Achievements = () => {
                         value={formData.title}
                         onChange={handleInputChange}
                         required
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
-                        placeholder="Achievement title"
+                        className="app-input"
+                        placeholder="e.g. Chief of Staff, White House Military Office"
                         autoComplete="off"
                         spellCheck={false}
                       />
@@ -339,7 +353,7 @@ const Achievements = () => {
                         name="description"
                         value={formData.description}
                         onChange={handleInputChange}
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900 resize-none"
+                        className="app-textarea"
                         placeholder="Achievement description"
                         rows="4"
                       />
@@ -353,7 +367,7 @@ const Achievements = () => {
                         name="date"
                         value={formData.date}
                         onChange={handleInputChange}
-                        className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
+                        className="app-input"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -385,14 +399,14 @@ const Achievements = () => {
                         setEditingId(null);
                         setError('');
                       }}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        className="app-secondary-button"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 disabled:bg-blue-400"
+                        className="app-primary-button disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {loading ? 'Saving...' : (editingId ? 'Update Achievement' : 'Add Achievement')}
                     </button>
@@ -403,7 +417,8 @@ const Achievements = () => {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 

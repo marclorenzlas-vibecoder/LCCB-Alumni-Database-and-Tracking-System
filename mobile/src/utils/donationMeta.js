@@ -1,0 +1,50 @@
+const META_START = '[[DONATION_META]]';
+const META_END = '[[/DONATION_META]]';
+
+export const extractDonationMeta = (rawDescription = '') => {
+  if (!rawDescription || typeof rawDescription !== 'string') {
+    return { cleanDescription: '', meta: {} };
+  }
+
+  const startIndex = rawDescription.indexOf(META_START);
+  const endIndex = rawDescription.indexOf(META_END);
+
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    return { cleanDescription: rawDescription.trim(), meta: {} };
+  }
+
+  const metaRaw = rawDescription.slice(startIndex + META_START.length, endIndex).trim();
+
+  let meta = {};
+  try {
+    meta = JSON.parse(metaRaw);
+  } catch {
+    meta = {};
+  }
+
+  const withoutMeta = `${rawDescription.slice(0, startIndex)}${rawDescription.slice(endIndex + META_END.length)}`;
+
+  return {
+    cleanDescription: withoutMeta.trim(),
+    meta: meta && typeof meta === 'object' ? meta : {}
+  };
+};
+
+export const withDonationMeta = (cleanDescription = '', meta = {}) => {
+  const normalizedMeta = {
+    qrCodeUrl: typeof meta.qrCodeUrl === 'string' ? meta.qrCodeUrl.trim() : '',
+    qrImagePath: typeof meta.qrImagePath === 'string' ? meta.qrImagePath.trim() : '',
+    paymentNumber: typeof meta.paymentNumber === 'string' ? meta.paymentNumber.trim() : '',
+    paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : ''
+  };
+
+  const hasMeta = Boolean(
+    normalizedMeta.qrCodeUrl || normalizedMeta.qrImagePath || normalizedMeta.paymentNumber || normalizedMeta.paymentMethods
+  );
+
+  const base = (cleanDescription || '').trim();
+  if (!hasMeta) return base;
+
+  const encoded = JSON.stringify(normalizedMeta);
+  return base ? `${base}\n\n${META_START}${encoded}${META_END}` : `${META_START}${encoded}${META_END}`;
+};

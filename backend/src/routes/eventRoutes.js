@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const notificationService = require('../services/notificationService');
+const { authenticateToken } = require('../middleware/auth');
 
 // ensure uploads/events exists
 const eventsDir = path.join(__dirname, '../../uploads/events');
@@ -386,22 +387,53 @@ router.get('/:id/gallery', async (req, res) => {
 });
 
 // Add photos to event gallery (admin/teacher only)
-router.post('/:id/gallery', galleryUpload.array('images', 20), async (req, res) => {
+router.post('/:id/gallery', authenticateToken, galleryUpload.array('images', 20), async (req, res) => {
   try {
     const { id } = req.params;
+    const eventId = Number(id);
+
+    if (!req.user || !req.user.role) {
+      return res.status(403).json({ error: 'Authentication required' });
+    }
+
+    const role = String(req.user.role).toUpperCase();
+    if (!['ALUMNI', 'TEACHER', 'ADMIN'].includes(role)) {
+      return res.status(403).json({ error: 'Only alumni and staff can upload gallery photos' });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, date: true, status: true }
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const eventDate = event.date ? new Date(event.date) : null;
+    if (eventDate) eventDate.setHours(0, 0, 0, 0);
+    const isPreviousEvent = event.status === 'PREVIOUS' || (eventDate && eventDate < today);
+
+    if (!isPreviousEvent) {
+      return res.status(400).json({ error: 'Photos can only be uploaded to previous events' });
+    }
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No images uploaded' });
     }
 
+    const uploadedBy = role === 'ALUMNI' && req.user.id ? Number(req.user.id) : null;
+
     const galleryPhotos = await Promise.all(
       req.files.map(file => 
         prisma.event_gallery.create({
           data: {
-            event_id: Number(id),
+            event_id: eventId,
             image: `/uploads/events/gallery/${file.filename}`,
             caption: null,
-            uploaded_by: null  // Set to null to avoid foreign key constraint error
+            uploaded_by: uploadedBy
           }
         })
       )
@@ -414,17 +446,30 @@ router.post('/:id/gallery', galleryUpload.array('images', 20), async (req, res) 
   }
 });
 
-// Delete gallery photo (admin/teacher only)
-router.delete('/:eventId/gallery/:photoId', async (req, res) => {
+// Delete gallery photo (staff or uploader owner)
+router.delete('/:eventId/gallery/:photoId', authenticateToken, async (req, res) => {
   try {
     const { eventId, photoId } = req.params;
-    
+
+    if (!req.user || !req.user.role) {
+      return res.status(403).json({ error: 'Authentication required' });
+    }
+
     const photo = await prisma.event_gallery.findUnique({
       where: { id: Number(photoId) }
     });
 
     if (!photo || photo.event_id !== Number(eventId)) {
       return res.status(404).json({ error: 'Photo not found' });
+    }
+
+    const role = String(req.user.role).toUpperCase();
+    const isStaff = role === 'TEACHER' || role === 'ADMIN';
+    const requesterId = Number(req.user.id || 0);
+    const isOwner = role === 'ALUMNI' && requesterId > 0 && Number(photo.uploaded_by || 0) === requesterId;
+
+    if (!isStaff && !isOwner) {
+      return res.status(403).json({ error: 'You can only delete photos you uploaded' });
     }
 
     // Delete from database

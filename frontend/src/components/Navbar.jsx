@@ -1,7 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import AlumniLogo from '../assets/alumnilogo2.png';
 import { authService } from '../services/authService';
+import ConfirmModal from './ConfirmModal';
+import BirthdayGreetingComposer from './BirthdayGreetingComposer';
+import BirthdayGreetingReceiptModal from './BirthdayGreetingReceiptModal';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import { realtimeClient } from '../services/realtimeClient';
+import { toast } from 'react-toastify';
+
+const getNotificationImageSrc = (notification) => {
+  const imagePath = notification?.sender_profile_image;
+  if (!imagePath) return '';
+  return imagePath.startsWith('http') ? imagePath : `${IMAGE_BASE_URL}${imagePath}`;
+};
+
+const getNotificationInitial = (notification) => {
+  const name = String(notification?.sender_name || notification?.title || 'U').trim();
+  return name.charAt(0).toUpperCase() || 'U';
+};
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -9,25 +27,152 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [birthdayGreetingComposer, setBirthdayGreetingComposer] = useState({
+    isOpen: false,
+    birthdayAlumniId: null,
+    birthdayAlumniName: '',
+    message: ''
+  });
+  const [birthdayGreetingPopup, setBirthdayGreetingPopup] = useState({
+    isOpen: false,
+    senderName: 'Someone',
+    message: ''
+  });
+  const [birthdayCelebrationPopup, setBirthdayCelebrationPopup] = useState({
+    isOpen: false,
+    celebrantName: 'Alumni'
+  });
+  const [graffitiBurst, setGraffitiBurst] = useState([]);
+  const [sendingBirthdayGreeting, setSendingBirthdayGreeting] = useState(false);
+  const [greetingSendSuccess, setGreetingSendSuccess] = useState(false);
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const [user, setUser] = useState(authService.getCurrentUser());
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('cachedNotifications');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const unreadCount = Array.isArray(notifications) ? notifications.filter(n => !n.is_read).length : 0;
   const notificationRef = useRef(null);
   const userMenuRef = useRef(null);
+
+  const syncUserFromStorage = useCallback(() => {
+    setUser(authService.getCurrentUser());
+  }, []);
+
+  const createGraffitiBurst = useCallback(() => {
+    const colors = ['#ff4fd8', '#ffd84d', '#36d7ff', '#7c5cff', '#ff7a59', '#8bff6a'];
+    return Array.from({ length: 24 }, (_, index) => {
+      const angle = (index / 24) * Math.PI * 2;
+      const distance = 70 + (index % 5) * 18;
+      const size = 10 + (index % 4) * 6;
+      const travelX = `${Math.cos(angle) * (180 + (index % 6) * 22)}px`;
+      const travelY = `${Math.sin(angle) * (160 + (index % 5) * 18)}px`;
+      return {
+        id: `${Date.now()}-${index}`,
+        left: `calc(50% + ${Math.cos(angle) * distance}px)`,
+        top: `calc(42% + ${Math.sin(angle) * distance}px)`,
+        size,
+        color: colors[index % colors.length],
+        delay: `${index * 28}ms`,
+        rotate: `${(index % 8) * 18}deg`,
+        travelX,
+        travelY
+      };
+    });
+  }, []);
+
+  const isBirthdayNotification = (notification) => {
+    const title = String(notification?.title || '').toLowerCase();
+    const message = String(notification?.message || '').toLowerCase();
+    const type = String(notification?.type || '').toUpperCase();
+
+    // Exclude personal greeting receipts like "X sent you a birthday greeting"
+    if (title.includes('sent you a birthday greeting')) return false;
+
+    // Only treat announcement-style birthday notices (created by the birthday worker)
+    // as composer-open triggers. Greeting notifications (type GENERAL) should not
+    // open the composer when clicked.
+    if (type === 'ANNOUNCEMENT') {
+      return title.includes('birthday') || message.includes('birthday');
+    }
+
+    // Also allow direct "Happy Birthday, Name!" or "Birthday today: Name" titles
+    return /^happy birthday,|^birthday today:/i.test(title);
+  };
+
+  const getBirthdayAlumniIdFromNotification = (notification) => {
+    const link = String(notification?.link || '');
+    const match = link.match(/\/alumni\/profile\/(\d+)/i);
+    return match ? Number(match[1]) : null;
+  };
+
+  const getBirthdayAlumniNameFromNotification = (notification) => {
+    const title = String(notification?.title || '');
+    return title
+      .replace(/^happy birthday,\s*/i, '')
+      .replace(/^birthday today:\s*/i, '')
+      .replace(/\s*sent you a birthday greeting.*$/i, '')
+      .replace(/!$/, '')
+      .trim();
+  };
+
+  const isBirthdayGreetingReceipt = (notification) => {
+    const title = String(notification?.title || '').toLowerCase();
+    return title.includes('sent you a birthday greeting');
+  };
+
+  const getSenderNameFromGreetingTitle = (notification) => {
+    const title = String(notification?.title || '');
+    const match = title.match(/^(.*?)\s+sent you a birthday greeting/i);
+    return match?.[1]?.trim() || 'Someone';
+  };
+
+  const getCurrentUserBirthdayName = () => {
+    const currentUser = authService.getCurrentUser();
+    const firstName = String(currentUser?.alumni?.firstName || currentUser?.alumni?.first_name || '').trim();
+    const lastName = String(currentUser?.alumni?.lastName || currentUser?.alumni?.last_name || '').trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    return fullName || String(currentUser?.username || '').trim();
+  };
+
+  const isOwnBirthdayNotification = (notification) => {
+    const title = String(notification?.title || '');
+    const notificationName = title
+      .replace(/^happy birthday,\s*/i, '')
+      .replace(/^birthday today:\s*/i, '')
+      .replace(/!$/, '')
+      .trim();
+
+    const currentUserName = getCurrentUserBirthdayName();
+    if (!currentUserName || !notificationName) return false;
+
+    return notificationName.toLowerCase() === currentUserName.toLowerCase();
+  };
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
     if (user && token) {
       try {
-        const response = await fetch('http://localhost:5001/api/notifications', {
+        const response = await fetch(`${API_BASE_URL}/notifications`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        setNotifications(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        const role = String(user?.role || authService.getRole?.() || '').toUpperCase();
+        const visible =
+          role === 'ADMIN'
+            ? list
+            : list.filter((n) => String(n.type || '').toUpperCase() !== 'DONATION');
+        setNotifications(visible);
+        try { sessionStorage.setItem('cachedNotifications', JSON.stringify(visible)); } catch {}
       } catch (error) {
         console.error('Error fetching notifications:', error);
-        setNotifications([]);
+        // keep cached notifications when network fails
       }
     }
   }, [user, token]);
@@ -39,36 +184,116 @@ const Navbar = () => {
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
-  // Expose fetchNotifications globally for instant updates
   useEffect(() => {
-    window.refreshNotifications = fetchNotifications;
-    return () => { delete window.refreshNotifications; };
-  }, [fetchNotifications]);
+    const handleOpenBirthdayGreeting = (event) => {
+      const { id, name } = event.detail || {};
+      if (!id) return;
+      setGreetingSendSuccess(false);
+      setBirthdayGreetingComposer({
+        isOpen: true,
+        birthdayAlumniId: id,
+        birthdayAlumniName: name || 'Alumni',
+        message: `Happy Birthday, ${name || 'Alumni'}! Wishing you a wonderful day.`,
+      });
+    };
 
-  // Mark notification as read and navigate
+    window.addEventListener('open-birthday-greeting', handleOpenBirthdayGreeting);
+    return () => window.removeEventListener('open-birthday-greeting', handleOpenBirthdayGreeting);
+  }, []);
+
+  useEffect(() => {
+    if (!birthdayCelebrationPopup.isOpen) {
+      setGraffitiBurst([]);
+      return;
+    }
+
+    const burst = createGraffitiBurst();
+    setGraffitiBurst(burst);
+
+    const timeout = setTimeout(() => {
+      setGraffitiBurst([]);
+    }, 1800);
+
+    return () => clearTimeout(timeout);
+  }, [birthdayCelebrationPopup.isOpen, createGraffitiBurst]);
+
   const handleNotificationClick = async (notification) => {
     try {
-      console.log('Notification clicked:', notification);
-      console.log('Notification link:', notification.link);
-      
-      // Mark as read
-      await fetch(`http://localhost:5001/api/notifications/${notification.id}/read`, {
+      // Mark as read on server
+      await fetch(`${API_BASE_URL}/notifications/${notification.id}/read`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       // Update local state
-      setNotifications(notifications.map(n => 
-        n.id === notification.id ? { ...n, is_read: true } : n
-      ));
-      
-      // Navigate to the link if provided
+      const updated = notifications.map(n => n.id === notification.id ? { ...n, is_read: true } : n);
+      setNotifications(updated);
+      try { sessionStorage.setItem('cachedNotifications', JSON.stringify(updated)); } catch {}
+
+      // Greeting receipt (someone sent you a greeting)
+      if (isBirthdayGreetingReceipt(notification)) {
+        const senderName = getSenderNameFromGreetingTitle(notification);
+        const message = String(notification?.message || '').trim();
+
+        setBirthdayGreetingPopup({ isOpen: true, senderName, message: message || `${senderName} wished you a happy birthday!` });
+        setShowNotifications(false);
+        return;
+      }
+
+      // Own birthday celebration
+      if (isOwnBirthdayNotification(notification)) {
+        const celebrantName = getCurrentUserBirthdayName() || getBirthdayAlumniNameFromNotification(notification) || 'Alumni';
+        setBirthdayCelebrationPopup({ isOpen: true, celebrantName });
+        setShowNotifications(false);
+        return;
+      }
+
+      // Announcement-type birthday (open composer)
+      if (isBirthdayNotification(notification)) {
+        let birthdayAlumniId = getBirthdayAlumniIdFromNotification(notification);
+        let birthdayAlumniName = getBirthdayAlumniNameFromNotification(notification) || 'Alumni';
+
+        if (!birthdayAlumniId) {
+          try {
+            const resp = await fetch(`${API_BASE_URL}/alumni`);
+            if (resp.ok) {
+              const list = await resp.json();
+              const found = list.find((a) => {
+                const full = `${a.first_name || ''} ${a.last_name || ''}`.trim();
+                return full.toLowerCase() === birthdayAlumniName.toLowerCase() || full.toLowerCase().includes(birthdayAlumniName.toLowerCase());
+              });
+              if (found) {
+                birthdayAlumniId = found.id;
+                birthdayAlumniName = `${found.first_name} ${found.last_name}`.trim();
+              }
+            }
+          } catch (err) {
+            console.error('Error resolving alumni by name for greeting composer:', err);
+          }
+        }
+
+        if (!birthdayAlumniId) {
+          toast.error('Unable to open greeting composer for this birthday notification.');
+          setShowNotifications(false);
+          return;
+        }
+
+        setBirthdayGreetingComposer({
+          isOpen: true,
+          birthdayAlumniId,
+          birthdayAlumniName,
+          message: `Happy Birthday, ${birthdayAlumniName}! Wishing you a wonderful day.`
+        });
+        setShowNotifications(false);
+        return;
+      }
+
+      // Default: navigate to link if present
       if (notification.link) {
         setShowNotifications(false);
-        console.log('Navigating to:', notification.link);
         navigate(notification.link);
       }
     } catch (error) {
@@ -78,8 +303,41 @@ const Navbar = () => {
 
   // Update user state when location changes (e.g., after profile update)
   useEffect(() => {
-    setUser(authService.getCurrentUser());
+    syncUserFromStorage();
   }, [location]);
+
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      syncUserFromStorage();
+      fetchNotifications();
+    };
+
+    const handleNotificationCreated = (payload) => {
+      const type = String(
+        payload?.type || payload?.notification?.type || ''
+      ).toUpperCase();
+      const role = String(authService.getRole?.() || user?.role || '').toUpperCase();
+      if (type === 'DONATION' && role !== 'ADMIN') return;
+      fetchNotifications();
+    };
+
+    const handleStorageChange = (event) => {
+      if (event.key === 'user' || event.key === 'token') {
+        syncUserFromStorage();
+        fetchNotifications();
+      }
+    };
+
+    window.addEventListener('auth-user-updated', handleProfileUpdated);
+    window.addEventListener('storage', handleStorageChange);
+    const unsubscribeNotification = realtimeClient.subscribe('notification.created', handleNotificationCreated);
+
+    return () => {
+      window.removeEventListener('auth-user-updated', handleProfileUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+      unsubscribeNotification();
+    };
+  }, [fetchNotifications, syncUserFromStorage, user?.role]);
 
   // Close notification dropdown when clicking outside
   useEffect(() => {
@@ -115,11 +373,72 @@ const Navbar = () => {
     };
   }, [showUserMenu]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await authService.logout();
     navigate('/login', { replace: true });
-    window.location.reload();
+  };
+
+  const birthdayHeading = 'Happy Birthday,';
+  const birthdayHeadingLetters = birthdayHeading.split('');
+
+  const handleSendBirthdayGreeting = async (event) => {
+    event.preventDefault();
+
+    if (!birthdayGreetingComposer.birthdayAlumniId) {
+      toast.error('Unable to determine recipient for the greeting.');
+      return;
+    }
+
+    const messageToSend = birthdayGreetingComposer.message && birthdayGreetingComposer.message.trim()
+      ? birthdayGreetingComposer.message.trim()
+      : `Happy Birthday, ${birthdayGreetingComposer.birthdayAlumniName}! Wishing you a wonderful day.`;
+
+    try {
+      setSendingBirthdayGreeting(true);
+      const response = await fetch(`${API_BASE_URL}/notifications/birthday-greetings`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          birthdayAlumniId: birthdayGreetingComposer.birthdayAlumniId,
+          greetingText: messageToSend
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+          const serverMsg = data?.error || data?.message || null;
+          const text = serverMsg || `Server returned ${response.status}`;
+          console.error('Birthday greeting failed:', response.status, data);
+          throw new Error(text);
+      }
+
+      setGreetingSendSuccess(true);
+      toast.success(`Greeting sent to ${birthdayGreetingComposer.birthdayAlumniName}!`);
+      fetchNotifications();
+      window.setTimeout(() => {
+        setGreetingSendSuccess(false);
+        setBirthdayGreetingComposer({
+          isOpen: false,
+          birthdayAlumniId: null,
+          birthdayAlumniName: '',
+          message: ''
+        });
+      }, 1800);
+    } catch (error) {
+      toast.error(error.message || 'Failed to send birthday greeting');
+    } finally {
+      setSendingBirthdayGreeting(false);
+    }
+  };
+
+  const openLogoutConfirm = () => {
+    setShowUserMenu(false);
+    setIsMobileMenuOpen(false);
+    setConfirmLogoutOpen(true);
   };
 
   const navItems = [
@@ -133,23 +452,177 @@ const Navbar = () => {
 
   return (
     <nav className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 text-white shadow-xl sticky top-0 z-50 backdrop-blur-sm bg-opacity-95">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      {birthdayCelebrationPopup.isOpen && createPortal(
+        <div className="fixed inset-0 z-[122] overflow-hidden bg-slate-950/90 backdrop-blur-md">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.16),_transparent_32%),radial-gradient(circle_at_bottom,_rgba(251,191,36,0.12),_transparent_40%)]"></div>
+
+          <div className="absolute inset-0 pointer-events-none">
+            {Array.from({ length: 18 }).map((_, index) => {
+              const left = (index * 13) % 100;
+              const size = 5 + (index % 3) * 3;
+              const delay = (index % 6) * 220;
+              const duration = 10000 + (index % 5) * 900;
+              const colors = ['bg-pink-400', 'bg-amber-300', 'bg-sky-400', 'bg-violet-400'];
+
+              return (
+                <span
+                  key={index}
+                  className={`absolute rounded-full ${colors[index % colors.length]} shadow-lg`}
+                  style={{
+                    left: `${left}%`,
+                    top: `${-8 - (index % 5) * 7}%`,
+                    width: `${size}px`,
+                    height: `${size}px`,
+                    opacity: 0.82,
+                    animation: `confetti-fall ${duration}ms linear infinite`,
+                    animationDelay: `${delay}ms`
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center px-4 py-8 sm:px-6">
+            <div className="relative w-full max-w-3xl overflow-visible bg-transparent">
+              <button
+                type="button"
+                onClick={() => setBirthdayCelebrationPopup({ isOpen: false, celebrantName: 'Alumni' })}
+                className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white"
+                aria-label="Close celebration"
+              >
+                <span className="text-xl leading-none">×</span>
+              </button>
+
+              <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.10),_transparent_35%),radial-gradient(circle_at_bottom,_rgba(56,189,248,0.10),_transparent_40%)] opacity-70"></div>
+
+              <div className="pointer-events-none absolute inset-0 overflow-visible">
+                {graffitiBurst.map((particle) => (
+                  <span
+                    key={particle.id}
+                    className="absolute graffiti-burst"
+                    style={{
+                      left: particle.left,
+                      top: particle.top,
+                      width: `${particle.size}px`,
+                      height: `${particle.size}px`,
+                      background: particle.color,
+                      boxShadow: `0 0 18px ${particle.color}, 0 0 36px ${particle.color}`,
+                      animationDelay: particle.delay,
+                      '--graffiti-rotate': particle.rotate,
+                      '--graffiti-color': particle.color,
+                      '--graffiti-x': particle.travelX,
+                      '--graffiti-y': particle.travelY
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div className="relative px-6 py-10 text-center sm:px-10 lg:px-16 lg:py-14">
+                <div className="mx-auto max-w-2xl space-y-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.44em] text-white/70">Celebration time</p>
+
+                  <div className="space-y-3">
+                    <h3 className="text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl drop-shadow-[0_4px_24px_rgba(0,0,0,0.35)]" aria-label="Happy Birthday,">
+                      {birthdayHeadingLetters.map((letter, index) =>
+                        letter === ' ' ? (
+                          <span key={`space-${index}`} className="inline-block w-[0.35em]">&nbsp;</span>
+                        ) : (
+                          <span
+                            key={`${letter}-${index}`}
+                            className="letter-reveal"
+                            style={{ animationDelay: `${index * 0.08}s` }}
+                          >
+                            {letter}
+                          </span>
+                        )
+                      )}
+                    </h3>
+                    <h4 className="bg-gradient-to-r from-amber-200 via-yellow-200 to-pink-200 bg-clip-text text-4xl font-black leading-tight text-transparent sm:text-5xl lg:text-6xl drop-shadow-[0_8px_30px_rgba(251,191,36,0.28)]">
+                      {birthdayCelebrationPopup.celebrantName}!
+                    </h4>
+                  </div>
+
+                  <div className="mx-auto h-px w-40 bg-gradient-to-r from-transparent via-white/65 to-transparent"></div>
+
+                  <p className="mx-auto max-w-xl text-base leading-8 text-white/95 sm:text-lg">
+                    Wishing you a bright day filled with joy, good company, and a little sparkle.
+                  </p>
+
+                  <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-[11px] uppercase tracking-[0.32em] text-white/80">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse"></span>
+                    <span>Celebrate</span>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-sky-300 animate-pulse" style={{ animationDelay: '220ms' }}></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <ConfirmModal
+        isOpen={confirmLogoutOpen}
+        onClose={() => setConfirmLogoutOpen(false)}
+        onConfirm={async () => {
+          setConfirmLogoutOpen(false);
+          await handleLogout();
+        }}
+        title="Log Out"
+        message="Are you sure you want to log out?"
+        confirmText="Log Out"
+        cancelText="Cancel"
+        type="danger"
+      />
+
+      <BirthdayGreetingComposer
+        isOpen={birthdayGreetingComposer.isOpen}
+        onClose={() => {
+          setGreetingSendSuccess(false);
+          setBirthdayGreetingComposer({
+            isOpen: false,
+            birthdayAlumniId: null,
+            birthdayAlumniName: '',
+            message: ''
+          });
+        }}
+        recipientId={birthdayGreetingComposer.birthdayAlumniId}
+        recipientName={birthdayGreetingComposer.birthdayAlumniName}
+        message={birthdayGreetingComposer.message}
+        onMessageChange={(value) =>
+          setBirthdayGreetingComposer((prev) => ({ ...prev, message: value }))
+        }
+        authToken={token}
+        onSubmit={handleSendBirthdayGreeting}
+        sending={sendingBirthdayGreeting}
+        sendSuccess={greetingSendSuccess}
+      />
+
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <BirthdayGreetingReceiptModal
+          isOpen={birthdayGreetingPopup.isOpen}
+          senderName={birthdayGreetingPopup.senderName}
+          message={birthdayGreetingPopup.message}
+          recipientName={getCurrentUserBirthdayName()}
+          onClose={() => setBirthdayGreetingPopup({ isOpen: false, senderName: 'Someone', message: '' })}
+        />
+
         <div className="flex justify-between items-center h-20">
           {/* Logo/Brand Section */}
           <Link to="/home" className="flex items-center space-x-3 group flex-shrink-0">
             <div className="relative inline-flex items-center justify-center">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full blur opacity-75 group-hover:opacity-100 transition-opacity duration-300"></div>
-              <div className="relative inline-flex items-center justify-center rounded-full bg-white p-1.5 shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:scale-105">
+              <div className="relative inline-flex items-center justify-center rounded-full overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:scale-105">
                 <img 
                   src={AlumniLogo}
-                  alt="LCCB Alumni Logo" 
-                  className="h-11 w-11 object-contain rounded-full"
+                  alt="LCC Alumni Association Inc. Logo" 
+                  className="h-11 w-11 object-cover block rounded-full scale-[1.05] transform"
                 />
               </div>
             </div>
-            <div className="whitespace-nowrap">
-              <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">LCCB Alumni</h1>
-              <p className="text-xs text-blue-200 -mt-0.5 font-medium">Connecting Excellence</p>
+            <div className="whitespace-nowrap flex flex-col justify-center">
+              <h1 className="text-lg font-black tracking-wider leading-none text-white uppercase">LCCB Alumni</h1>
+              <p className="text-[9px] font-bold tracking-[0.22em] text-blue-200 uppercase mt-1">Connecting Excellence</p>
             </div>
           </Link>
 
@@ -161,7 +634,7 @@ const Navbar = () => {
                 <Link 
                   key={item.path}
                   to={item.path} 
-                  className={`relative group px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 flex items-center gap-1.5 ${
+                  className={`relative group px-3 py-2.5 rounded-none text-sm font-medium transition-all duration-300 flex items-center gap-1.5 ${
                     isActive 
                       ? 'bg-white bg-opacity-20 text-white shadow-md' 
                       : 'text-blue-50 hover:text-white hover:bg-white hover:bg-opacity-15'
@@ -184,7 +657,7 @@ const Navbar = () => {
                 <div className="relative ml-3 flex-shrink-0" ref={notificationRef}>
                   <button
                     onClick={() => setShowNotifications(!showNotifications)}
-                    className="relative p-2.5 text-white hover:bg-white hover:bg-opacity-20 rounded-full transition-all duration-300 transform hover:scale-110"
+                    className="relative p-2.5 text-white hover:bg-white hover:bg-opacity-20 rounded-none transition-all duration-300 transform hover:scale-110"
                   >
                     <svg className={`w-6 h-6 ${unreadCount > 0 ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -197,63 +670,107 @@ const Navbar = () => {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-3 w-96 bg-white rounded-xl shadow-2xl py-2 z-50 max-h-96 overflow-y-auto scrollbar-hide border border-gray-100">
-                      <div className="px-5 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                        <h3 className="text-base font-bold text-gray-900">Notifications</h3>
+                    <div className="dropdown-menu-panel absolute right-0 mt-3 w-[420px] bg-white rounded-2xl shadow-2xl z-50 max-h-[520px] flex flex-col border border-gray-100/80 overflow-hidden">
+                      {/* Sticky header */}
+                      <div className="px-5 py-3.5 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 flex items-center justify-between flex-shrink-0">
+                        <div>
+                          <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            Notifications
+                          </h3>
+                          {unreadCount > 0 && (
+                            <p className="text-[11px] text-gray-500 mt-0.5">{unreadCount} unread</p>
+                          )}
+                        </div>
                         {unreadCount > 0 && (
-                          <p className="text-xs text-gray-600 mt-0.5">{unreadCount} unread notification{unreadCount > 1 ? 's' : ''}</p>
+                          <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white shadow-sm">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
                         )}
                       </div>
-                      {notifications.length > 0 ? (
-                        notifications.map((notif) => (
-                          <div
-                            key={notif.id}
-                            className={`px-5 py-3.5 hover:bg-gray-50 cursor-pointer border-b border-gray-50 transition-all duration-200 ${
-                              !notif.is_read ? 'bg-blue-50 hover:bg-blue-100' : ''
-                            }`}
-                            onClick={() => handleNotificationClick(notif)}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-2.5 h-2.5 rounded-full mt-2 flex-shrink-0 ${!notif.is_read ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`}></div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{notif.title}</p>
-                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{notif.message}</p>
-                                <p className="text-xs text-gray-400 mt-1.5">{new Date(notif.created_at).toLocaleString()}</p>
+
+                      {/* Scrollable list */}
+                      <div className="overflow-y-auto flex-1 scrollbar-hide">
+                        {notifications.length > 0 ? (
+                          notifications.map((notif) => (
+                            <div
+                              key={notif.id}
+                              className={`px-4 py-3.5 cursor-pointer border-b border-gray-50 transition-all duration-200 group ${
+                                !notif.is_read
+                                  ? 'bg-blue-50/60 hover:bg-blue-100/70'
+                                  : 'hover:bg-gray-50'
+                              }`}
+                              onClick={() => handleNotificationClick(notif)}
+                            >
+                              <div className="flex items-start gap-3">
+                                {/* Avatar / Icon */}
+                                <div className="relative mt-0.5 flex-shrink-0">
+                                  {getNotificationImageSrc(notif) ? (
+                                    <img
+                                      src={getNotificationImageSrc(notif)}
+                                      alt={notif.sender_name || 'Sender'}
+                                      className="h-10 w-10 rounded-full border border-gray-200 object-cover shadow-sm"
+                                    />
+                                  ) : (
+                                    <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm ${
+                                      (notif.type || '').toLowerCase().includes('event')
+                                        ? 'bg-gradient-to-br from-purple-500 to-indigo-600'
+                                        : (notif.type || '').toLowerCase().includes('donat')
+                                        ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                                        : (notif.type || '').toLowerCase().includes('birthday')
+                                        ? 'bg-gradient-to-br from-amber-400 to-orange-500'
+                                        : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                                    }`}>
+                                      {getNotificationInitial(notif)}
+                                    </div>
+                                  )}
+                                  <span className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${!notif.is_read ? 'bg-blue-500' : 'bg-gray-300'}`} />
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-[13px] leading-snug ${!notif.is_read ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'} group-hover:text-blue-900 transition-colors line-clamp-1`}>{notif.title}</p>
+                                  <p className="text-[12px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
+                                  <p className="text-[11px] text-gray-400 mt-1 font-medium">{new Date(notif.created_at).toLocaleString()}</p>
+                                </div>
                               </div>
                             </div>
+                          ))
+                        ) : (
+                          <div className="px-5 py-16 text-center">
+                            <div className="mx-auto w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                              <svg className="w-7 h-7 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                              </svg>
+                            </div>
+                            <p className="text-sm text-gray-500 font-semibold">All caught up!</p>
+                            <p className="text-xs text-gray-400 mt-1">We'll notify you when something arrives</p>
                           </div>
-                        ))
-                      ) : (
-                        <div className="px-5 py-12 text-center">
-                          <svg className="w-16 h-16 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                          </svg>
-                          <p className="text-sm text-gray-500 font-medium">No notifications yet</p>
-                          <p className="text-xs text-gray-400 mt-1">We'll notify you when something arrives</p>
-                        </div>
-                      )}
+                        )}
+                      </div>
+
+                      {/* Sticky footer */}
                       {notifications.length > 0 && (
-                        <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 flex justify-between items-center gap-3">
+                        <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/80 flex justify-between items-center gap-3 flex-shrink-0">
                           {unreadCount > 0 && (
                             <button 
                               onClick={async () => {
                                 try {
-                                  // Mark all as read
-                                  await fetch('http://localhost:5001/api/notifications/read-all', {
+                                  await fetch(`${API_BASE_URL}/notifications/read-all`, {
                                     method: 'PUT',
                                     headers: {
                                       'Authorization': `Bearer ${token}`,
                                       'Content-Type': 'application/json'
                                     }
                                   });
-                                  
-                                  // Update local state
                                   setNotifications(notifications.map(n => ({ ...n, is_read: true })));
                                 } catch (error) {
                                   console.error('Error marking all as read:', error);
                                 }
                               }}
-                              className="text-sm text-blue-600 hover:text-blue-700 font-semibold hover:underline transition-all"
+                              className="text-xs text-blue-600 hover:text-blue-800 font-semibold transition-colors"
                             >
                               Mark all read
                             </button>
@@ -261,22 +778,19 @@ const Navbar = () => {
                           <button 
                             onClick={async () => {
                               try {
-                                // Clear all notifications
-                                await fetch('http://localhost:5001/api/notifications', {
+                                await fetch(`${API_BASE_URL}/notifications`, {
                                   method: 'DELETE',
                                   headers: {
                                     'Authorization': `Bearer ${token}`,
                                     'Content-Type': 'application/json'
                                   }
                                 });
-                                
-                                // Update local state
                                 setNotifications([]);
                               } catch (error) {
                                 console.error('Error clearing notifications:', error);
                               }
                             }}
-                            className="text-sm text-red-600 hover:text-red-700 font-semibold hover:underline transition-all"
+                            className="text-xs text-red-500 hover:text-red-700 font-semibold transition-colors ml-auto"
                           >
                             Clear all
                           </button>
@@ -287,89 +801,101 @@ const Navbar = () => {
                 </div>
 
                 {/* User Profile Dropdown */}
-                <div className="relative ml-3 flex-shrink-0" ref={userMenuRef}>
+                <div className="relative ml-6 lg:ml-8 xl:ml-10 translate-x-2 lg:translate-x-3 flex-shrink-0" ref={userMenuRef}>
                   <button 
                     onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 transform hover:scale-105 whitespace-nowrap"
+                    className="app-navbar-menu-button whitespace-nowrap"
                   >
                     {user?.profile_image ? (
                       <img 
-                        src={`http://localhost:5001${user.profile_image}`} 
+                        src={`${IMAGE_BASE_URL}${user.profile_image}`} 
                         alt={user?.username || 'User'} 
-                        className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm"
+                        className="h-7 w-7 rounded-none object-cover border border-white shadow-sm"
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-none bg-blue-700 text-xs font-bold text-white shadow-sm">
                         {user?.username?.charAt(0).toUpperCase() || 'U'}
                       </div>
                     )}
-                    <span className="hidden lg:inline text-white">{user?.username || 'User'}</span>
-                    <svg className={`w-4 h-4 transition-transform duration-300 ${showUserMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <span className="hidden lg:inline text-xs text-white">{user?.username || 'User'}</span>
+                    <svg className={`h-3.5 w-3.5 transition-transform duration-300 ${showUserMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                 
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-3 w-56 bg-white rounded-xl shadow-2xl py-2 z-50 border border-gray-100">
-                    <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-                      <p className="text-sm font-bold text-gray-900 truncate">{user?.username}</p>
-                      <p className="text-xs text-gray-600 mt-0.5 capitalize">{user?.role?.toLowerCase() || 'User'}</p>
+                  <div className="dropdown-menu-panel app-navbar-dropdown absolute right-0 mt-3 w-56 z-50">
+                    <div className="app-navbar-dropdown-header border-b border-gray-100">
+                      <div className="flex items-center gap-2.5">
+                        <div className="app-navbar-dropdown-icon overflow-hidden bg-white">
+                          {user?.profile_image ? (
+                            <img
+                              src={`${IMAGE_BASE_URL}${user.profile_image}`}
+                              alt={user?.username || 'User'}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-[10px] font-bold text-blue-700">{user?.username?.charAt(0).toUpperCase() || 'U'}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-gray-900">{user?.username}</p>
+                          <span className="mt-1 inline-flex rounded-none bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
+                            {user?.role?.toLowerCase() || 'User'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                     <Link
-                      to="/profile"
+                      to="/settings"
                       onClick={() => setShowUserMenu(false)}
-                      className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-3 group"
+                      className="dropdown-menu-item app-navbar-dropdown-item group hover:bg-blue-50"
                     >
-                      <svg className="w-5 h-5 text-gray-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                      <span className="font-medium group-hover:text-blue-600">My Profile</span>
+                      <span className="app-navbar-dropdown-icon group-hover:bg-blue-100">
+                        <svg className="h-4 w-4 text-inherit transition-colors group-hover:text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 4a7.952 7.952 0 00-.34-2.3l2.11-1.65-2-3.46-2.49 1a8.13 8.13 0 00-3.97-2.3L14 0h-4l-.25 2.29a8.13 8.13 0 00-3.97 2.3l-2.49-1-2 3.46 2.11 1.65a8.35 8.35 0 000 4.6L1.29 14.95l2 3.46 2.49-1a8.13 8.13 0 003.97 2.3L10 24h4l.25-2.29a8.13 8.13 0 003.97-2.3l2.49 1 2-3.46-2.11-1.65c.22-.74.34-1.5.34-2.3z" />
+                        </svg>
+                      </span>
+                      <span className="font-medium group-hover:text-blue-600">Settings</span>
                     </Link>
-                    {user?.role === 'TEACHER' && (
+                    {['teacher', 'admin'].includes(authService.getRole()) && (
                       <>
                         <Link
-                          to="/admin/dashboard"
+                          to="/pending-approval"
                           onClick={() => setShowUserMenu(false)}
-                          className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-3 group"
+                          className="dropdown-menu-item app-navbar-dropdown-item group hover:bg-blue-50"
                         >
-                          <svg className="w-5 h-5 text-gray-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                          </svg>
+                          <span className="app-navbar-dropdown-icon group-hover:bg-blue-100">
+                            <svg className="h-4 w-4 text-inherit transition-colors group-hover:text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                          </span>
                           <span className="font-medium group-hover:text-blue-600">Pending Requests</span>
                         </Link>
                         <Link
-                          to="/admin/alumni-list"
+                          to="/manage-users"
                           onClick={() => setShowUserMenu(false)}
-                          className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-3 group"
+                          className="dropdown-menu-item app-navbar-dropdown-item group hover:bg-blue-50"
                         >
-                          <svg className="w-5 h-5 text-gray-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span className="font-medium group-hover:text-blue-600">Alumni List</span>
-                        </Link>
-                        <Link
-                          to="/admin/manage-users"
-                          onClick={() => setShowUserMenu(false)}
-                          className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-3 group"
-                        >
-                          <svg className="w-5 h-5 text-gray-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
+                          <span className="app-navbar-dropdown-icon group-hover:bg-blue-100">
+                            <svg className="h-4 w-4 text-inherit transition-colors group-hover:text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                          </span>
                           <span className="font-medium group-hover:text-blue-600">Manage Users</span>
                         </Link>
                       </>
                     )}
                     <div className="border-t border-gray-100 my-1"></div>
                     <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        handleLogout();
-                      }}
-                      className="w-full text-left block px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-3 group"
+                      onClick={openLogoutConfirm}
+                      className="dropdown-menu-item app-navbar-dropdown-item w-full text-left group hover:bg-red-50"
                     >
-                      <svg className="w-5 h-5 group-hover:text-red-700 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
+                      <span className="app-navbar-dropdown-icon bg-red-50 text-red-600 ring-red-100 group-hover:bg-red-100 group-hover:text-red-700">
+                        <svg className="h-4 w-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                      </span>
                       <span className="font-semibold group-hover:text-red-700">Logout</span>
                     </button>
                   </div>
@@ -379,7 +905,7 @@ const Navbar = () => {
             ) : (
               <Link 
                 to="/login" 
-                className="ml-3 px-5 py-2.5 rounded-full bg-white text-blue-600 hover:bg-blue-50 text-sm font-bold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="ml-3 flex flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-none bg-white px-5 py-2.5 text-sm font-bold text-blue-600 shadow-lg transition-all duration-300 hover:bg-blue-50 hover:shadow-xl hover:scale-105"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
@@ -394,7 +920,7 @@ const Navbar = () => {
             {token && (
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 text-white hover:bg-white hover:bg-opacity-20 rounded-full transition-all"
+                className="relative p-2 text-white hover:bg-white hover:bg-opacity-20 rounded-none transition-all"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -408,7 +934,7 @@ const Navbar = () => {
             )}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="inline-flex items-center justify-center p-2.5 rounded-lg text-white hover:text-blue-200 hover:bg-white hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white transition-all"
+              className="inline-flex items-center justify-center rounded-none p-2.5 text-white hover:bg-white hover:bg-opacity-20 hover:text-blue-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white transition-all"
             >
               <span className="sr-only">Open main menu</span>
               {!isMobileMenuOpen ? (
@@ -433,7 +959,7 @@ const Navbar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`block px-4 py-3 rounded-lg text-base font-semibold transition-all duration-200 flex items-center gap-3 ${
+                  className={`block px-4 py-3 rounded-none text-base font-semibold transition-all duration-200 flex items-center gap-3 ${
                     isActive 
                       ? 'bg-white bg-opacity-25 text-white shadow-md' 
                       : 'text-blue-50 hover:text-white hover:bg-white hover:bg-opacity-15'
@@ -452,21 +978,18 @@ const Navbar = () => {
               <>
                 <div className="border-t border-white border-opacity-20 my-2 pt-2">
                   <Link
-                    to="/profile"
-                    className="text-white hover:bg-white hover:bg-opacity-15 block px-4 py-3 rounded-lg text-base font-semibold transition-all flex items-center gap-3"
+                    to="/settings"
+                    className="text-white hover:bg-white hover:bg-opacity-15 block px-4 py-3 rounded-none text-base font-semibold transition-all flex items-center gap-3"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 4a7.952 7.952 0 00-.34-2.3l2.11-1.65-2-3.46-2.49 1a8.13 8.13 0 00-3.97-2.3L14 0h-4l-.25 2.29a8.13 8.13 0 00-3.97 2.3l-2.49-1-2 3.46 2.11 1.65a8.35 8.35 0 000 4.6L1.29 14.95l2 3.46 2.49-1a8.13 8.13 0 003.97 2.3L10 24h4l.25-2.29a8.13 8.13 0 003.97-2.3l2.49 1 2-3.46-2.11-1.65c.22-.74.34-1.5.34-2.3z" />
                     </svg>
-                    My Profile
+                    Settings
                   </Link>
                   <button
-                    onClick={() => {
-                      handleLogout();
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="w-full text-left text-red-300 hover:text-white hover:bg-red-500 hover:bg-opacity-30 px-4 py-3 rounded-lg text-base font-semibold transition-all flex items-center gap-3"
+                    onClick={openLogoutConfirm}
+                    className="w-full text-left text-red-300 hover:text-white hover:bg-red-500 hover:bg-opacity-30 px-4 py-3 rounded-none text-base font-semibold transition-all flex items-center gap-3"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -479,7 +1002,7 @@ const Navbar = () => {
               <div className="border-t border-white border-opacity-20 my-2 pt-2">
                 <Link
                   to="/login"
-                  className="text-white bg-white bg-opacity-20 hover:bg-opacity-30 block px-4 py-3 rounded-lg text-base font-bold transition-all flex items-center gap-3 shadow-md"
+                  className="text-white bg-white bg-opacity-20 hover:bg-opacity-30 block px-4 py-3 rounded-none text-base font-bold transition-all flex items-center gap-3 shadow-md"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -16,8 +16,12 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const officerRoutes = require('./routes/officerRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const alumniListRoutes = require('./routes/alumniListRoutes');
+const statsRoutes = require('./routes/statsRoutes');
+const configRoutes = require('./routes/configRoutes');
 const { PrismaClient } = require('@prisma/client');
 const eventStatusService = require('./services/eventStatusService');
+const birthdayNotificationService = require('./services/birthdayNotificationService');
+const { initRealtime } = require('./services/realtimeService');
 
 // Load environment variables
 dotenv.config();
@@ -33,12 +37,27 @@ const app = express();
 const PORT = Number(process.env.PORT) || 5001;
 const prisma = new PrismaClient();
 
-// Restore strict CORS for credentialed requests from frontend (port 3002)
-const allowedOrigins = [
-  'http://localhost:3002', 
-  'http://localhost:5001',
-  'http://192.168.5.248:3002'  // Allow access from network IP (for phone scanning)
-];
+// Restore strict CORS for credentialed requests from frontend
+// Support both development (localhost) and production (custom domain)
+const parseAllowedOrigins = () => {
+  const envOrigins = process.env.ALLOWED_ORIGINS || '';
+  const defaultOrigins = [
+    'http://localhost:3002', 
+    'http://localhost:5001',
+    'http://192.168.5.248:3002'  // Allow access from network IP (for phone scanning)
+  ];
+  
+  if (envOrigins.trim()) {
+    // Parse comma-separated origins from env var
+    return [...defaultOrigins, ...envOrigins.split(',').map(o => o.trim())];
+  }
+  
+  return defaultOrigins;
+};
+
+const allowedOrigins = parseAllowedOrigins();
+console.log('CORS Allowed Origins:', allowedOrigins);
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!origin || allowedOrigins.includes(origin)) {
@@ -47,8 +66,8 @@ app.use((req, res, next) => {
   }
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  // Only send credentials header if coming from our frontend
-  if (origin === 'http://localhost:3002' || origin === 'http://192.168.5.248:3002') {
+  // Only send credentials header if coming from an allowed frontend origin
+  if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Credentials', 'true');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -65,21 +84,28 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Serve public static files (like teacher registration page)
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: true,
-  cookie: {
-    secure: false, // Set to true in production with HTTPS
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax',
-    path: '/',
-    domain: 'localhost'
-  },
-  name: 'alumni_session'
-}));
+// Session configuration - supports both development and production
+const getSessionConfig = () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const cookieDomain = process.env.COOKIE_DOMAIN || 'localhost';
+  
+  return {
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+      secure: isProduction, // Use HTTPS in production
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: isProduction ? 'strict' : 'lax',
+      path: '/',
+      domain: cookieDomain === 'localhost' ? undefined : cookieDomain // Don't set domain for localhost
+    },
+    name: 'alumni_session'
+  };
+};
+
+app.use(session(getSessionConfig()));
 
 // Initialize Passport and restore authentication state from session
 app.use(passport.initialize());
@@ -101,6 +127,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/officers', officerRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/alumni-list', alumniListRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/config', configRoutes);
 
 // Default route redirects to frontend login
 app.get(['/', '/login', '/Login'], (req, res) => {
@@ -122,6 +150,8 @@ function startServer(port, attempt = 0, maxAttempts = 10) {
   const server = app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${port}`);
     console.log(`Network access: http://192.168.5.248:${port}`);
+    initRealtime(server);
+    console.log(`Realtime WebSocket available at ws://0.0.0.0:${port}/realtime`);
   });
 
   server.on('error', (err) => {
@@ -150,6 +180,7 @@ async function main() {
     
     // Start event status checker
     eventStatusService.startEventStatusChecker();
+    birthdayNotificationService.startBirthdayNotificationChecker();
     
     startServer(PORT);
   } catch (error) {

@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import loginBackground from '../assets/loginbackground2.png';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { groupSectionDefinitions, levelOptions as sharedLevelOptions } from '../config/groupSections';
+import FilterMenu from './FilterMenu';
+import { toast } from 'react-toastify';
+
+
 
 const Register = () => {
   const navigate = useNavigate();
@@ -18,8 +23,6 @@ const Register = () => {
     batch: '',
     graduationYear: ''
   });
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -29,29 +32,62 @@ const Register = () => {
     }));
   };
 
+  // FilterMenu state for custom selects
+  const [showLevelMenu, setShowLevelMenu] = useState(false);
+  const levelMenuRef = useRef(null);
+  const [showCourseMenu, setShowCourseMenu] = useState(false);
+  const courseMenuRef = useRef(null);
+
+  const getLevelLabel = (val) => {
+    if (!val) return 'Select Level';
+    const opt = sharedLevelOptions.find(o => o.value === val);
+    return opt ? opt.label : 'Select Level';
+  };
+
+  const getCourseLabel = (val) => {
+    if (!val) return 'Select Course';
+    for (const sec of groupSectionDefinitions) {
+      const it = sec.items.find(i => i.value === val);
+      if (it) return it.label;
+    }
+    return val;
+  };
+
+  const registerCourseSections = groupSectionDefinitions.map((section) => {
+    if (section.key !== 'SENIOR_HIGH') {
+      return section;
+    }
+
+    return {
+      ...section,
+      items: section.items.map((item) => {
+        const { description, ...rest } = item;
+        return rest;
+      })
+    };
+  });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
-    setSuccess(null);
 
     try {
       // Validate inputs
-      if (!formData.username || !formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.studentId || !formData.contactNumber || !formData.level || !formData.course || !formData.batch) {
-        setError('Please fill in all required fields marked with *');
+      if (!formData.username || !formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.contactNumber || !formData.level || !formData.course || !formData.batch) {
+        toast.error('Please fill in all required fields marked with *');
         return;
       }
 
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
-        setError('Please enter a valid email address');
+        toast.error('Please enter a valid email address');
         return;
       }
 
       // Check email domain - only allow gmail.com for self-registration
       const emailDomain = formData.email.split('@')[1];
       if (emailDomain !== 'gmail.com') {
-        setError('Alumni registration is only available for Gmail accounts. Teachers should contact admin for @lccbonline.com accounts.');
+        toast.error('Alumni registration is only available for Gmail accounts. Teachers should contact admin for @lccbonline.com accounts.');
         return;
       }
 
@@ -75,9 +111,11 @@ const Register = () => {
       
       // Show success message - no token yet, account is pending
       if (response.status === 'PENDING' || response.message) {
-        setSuccess(response.message || 'Registration submitted! Your account is pending admin approval. You will be notified once approved.');
+        console.log('TOAST: Register submitted - ready to show toast');
+        toast.success(response.message || 'Registration submitted! Your account is pending admin approval. You will be notified once approved.');
       } else {
-        setSuccess('Registration successful! Your account is pending admin approval. You will be notified once approved.');
+        console.log('TOAST: Register success - ready to show toast');
+        toast.success('Registration successful! Your account is pending admin approval. You will be notified once approved.');
       }
       
       // Clear form
@@ -92,27 +130,33 @@ const Register = () => {
       console.error('Registration error:', err);
       // Handle registration error
       if (typeof err === 'object' && err.error) {
-        setError(err.error);
+        toast.error(err.error);
       } else if (err.message) {
-        setError(err.message);
+        toast.error(err.message);
       } else if (err.response?.data?.message) {
-        setError(err.response.data.message);
+        toast.error(err.response.data.message);
       } else {
-        setError('Registration failed. Please try again.');
+        toast.error('Registration failed. Please try again.');
       }
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-white flex items-center justify-center px-4 py-4">
-      <div className="w-full max-w-6xl h-[90vh] max-h-[700px] flex flex-col md:flex-row items-stretch rounded-3xl overflow-hidden shadow-2xl">
+    <div className="min-h-screen w-full bg-slate-50 overflow-hidden flex items-stretch justify-stretch">
+      <div className="w-full min-h-screen md:h-screen flex flex-col md:flex-row items-stretch overflow-hidden bg-white">
         {/* Left Panel - Form */}
-        <div className="w-full md:w-1/2 p-6 md:p-8 bg-white flex flex-col overflow-y-auto scrollbar-hide">
+          <div className="w-full md:w-1/2 md:h-screen p-6 md:p-10 bg-white flex flex-col overflow-y-auto scrollbar-hide md:min-h-0">
           <div className="mb-4">
-            <h2 className="text-2xl lg:text-3xl font-bold mb-1 text-gray-900">Welcome to</h2>
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">LCCB Alumni</h1>
+            <h1 className="mt-3 text-3xl lg:text-4xl font-extrabold leading-tight text-slate-900">
+              Welcome to
+              <span className="block bg-gradient-to-r from-blue-900 to-cyan-600 bg-clip-text text-transparent">
+                LCCB Alumni
+              </span>
+            </h1>
+            <p className="mt-2 text-sm text-slate-500 max-w-md">
+              Create your account to reconnect with classmates and unlock events, achievements, and career opportunities.
+            </p>
           </div>
-          <p className="text-gray-500 text-xs mb-4">Create your account and join the alumni community.</p>
         
         {/* Verification Notice */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
@@ -120,46 +164,35 @@ const Register = () => {
             <strong>📋 Verification Required:</strong> Please provide accurate information. Admin will verify your alumni status before approval.
           </p>
         </div>
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-center" role="alert">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 text-center" role="alert">
-            {success}
-          </div>
-        )}
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Name Fields */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="firstName">
-                First Name <span className="text-red-500">*</span>
+                First Name
               </label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 name="firstName"
                 id="firstName"
                 value={formData.firstName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
                 placeholder="First name"
                 required
               />
             </div>
             <div>
               <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="lastName">
-                Last Name <span className="text-red-500">*</span>
+                Last Name
               </label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 name="lastName"
                 id="lastName"
                 value={formData.lastName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
                 placeholder="Last name"
                 required
               />
@@ -168,7 +201,7 @@ const Register = () => {
           
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="username">
-              Username <span className="text-red-500">*</span>
+              Username
             </label>
             <input 
               type="text" 
@@ -186,7 +219,7 @@ const Register = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="studentId">
-                School ID <span className="text-red-500">*</span>
+                   School ID <span className="text-gray-500 text-xs">(Optional)</span>
               </label>
               <input 
                 type="text" 
@@ -196,7 +229,6 @@ const Register = () => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
                 placeholder="e.g., 21-0087-958"
-                required
               />
             </div>
             <div>
@@ -231,97 +263,84 @@ const Register = () => {
               required
             />
           </div>
-          <div>
-            <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="level">
-              Level <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="level"
-              id="level"
-              value={formData.level}
-              onChange={handleChange}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm focus:outline-none focus:border-cyan-400 focus:bg-white transition"
-              required
-            >
-              <option value="">Select Level</option>
-              <option value="COLLEGE">College</option>
-              <option value="SENIOR_HIGH_SCHOOL">Senior High School</option>
-              <option value="HIGH_SCHOOL">High School</option>
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="batch">
+                Batch/Year <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                name="batch"
+                id="batch"
+                value={formData.batch}
+                onChange={handleChange}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
+                placeholder="e.g., 2024"
+                min="1990"
+                max="2030"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="level">
+                Level <span className="text-red-500">*</span>
+              </label>
+              <FilterMenu
+                menuRef={levelMenuRef}
+                isOpen={showLevelMenu}
+                setIsOpen={setShowLevelMenu}
+                buttonLabel="Select Level"
+                selectedLabel={getLevelLabel(formData.level)}
+                selectedValue={formData.level}
+                icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5zm0 8l7.5-4.167V15L12 20l-7.5-5.167V6.833L12 11zm0 2.25L7.5 12v2.5L12 17l4.5-2.5V12L12 13.25z" /></svg>}
+                sections={[{ key: 'levels', title: 'Levels', items: sharedLevelOptions.filter(o => o.value).map(o => ({ value: o.value, label: o.label })) }]}
+                onSelect={(v) => {
+                  setFormData(prev => ({ ...prev, level: prev.level === v ? '' : v }));
+                  setShowLevelMenu(false);
+                }}
+                panelTitle="Select Level"
+                panelWidthClass="w-full"
+                alignClass="right-0"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="course">
-              Course <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="course"
-              id="course"
-              value={formData.course}
-              onChange={handleChange}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm focus:outline-none focus:border-cyan-400 focus:bg-white transition"
-              required
-            >
-              <option value="">Select Course</option>
-              <optgroup label="College Programs">
-                <option value="BSIT">BS Information Technology</option>
-                <option value="BSCS">BS Computer Science</option>
-                <option value="BSBA">BS Business Administration</option>
-                <option value="BSA">BS Accountancy</option>
-                <option value="BSED">BS Education</option>
-                <option value="BEED">Bachelor of Elementary Education</option>
-                <option value="BSN">BS Nursing</option>
-                <option value="BSHM">BS Hospitality Management</option>
-                <option value="BSTM">BS Tourism Management</option>
-                <option value="BSPSYCH">BS Psychology</option>
-                <option value="AB-COMM">AB Communication</option>
-                <option value="AB-POLSCI">AB Political Science</option>
-              </optgroup>
-              <optgroup label="Senior High School Tracks">
-                <option value="ABM">Accountancy, Business and Management (ABM)</option>
-                <option value="STEM">Science, Technology, Engineering and Mathematics (STEM)</option>
-                <option value="HUMSS">Humanities and Social Sciences (HUMSS)</option>
-                <option value="GAS">General Academic Strand (GAS)</option>
-                <option value="TVL-HE">TVL - Home Economics</option>
-                <option value="TVL-ICT">TVL - Information and Communications Technology</option>
-              </optgroup>
-              <optgroup label="High School">
-                <option value="HS">High School</option>
-              </optgroup>
-            </select>
-          </div>
-          <div>
-            <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="batch">
-              Batch/Year <span className="text-red-500">*</span>
-            </label>
-            <input 
-              type="number" 
-              name="batch"
-              id="batch"
-              value={formData.batch}
-              onChange={handleChange}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
-              placeholder="e.g., 2024"
-              min="1990"
-              max="2030"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="graduationYear">
-              Graduation Year
-            </label>
-            <input 
-              type="number" 
-              name="graduationYear"
-              id="graduationYear"
-              value={formData.graduationYear}
-              onChange={handleChange}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
-              placeholder="e.g., 2025"
-              min="1990"
-              max="2030"
-              required
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="graduationYear">
+                Graduation Year
+              </label>
+              <input
+                type="number"
+                name="graduationYear"
+                id="graduationYear"
+                value={formData.graduationYear}
+                onChange={handleChange}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
+                placeholder="e.g., 2025"
+                min="1990"
+                max="2030"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="course">
+                Course <span className="text-red-500">*</span>
+              </label>
+              <FilterMenu
+                menuRef={courseMenuRef}
+                isOpen={showCourseMenu}
+                setIsOpen={setShowCourseMenu}
+                buttonLabel="Select Course"
+                selectedLabel={getCourseLabel(formData.course)}
+                selectedValue={formData.course}
+                icon={<svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3h12v2H4V3zM4 7h12v2H4V7zM4 11h12v2H4v-2z"/></svg>}
+                sections={registerCourseSections}
+                onSelect={(v) => { setFormData(prev => ({ ...prev, course: prev.course === v ? '' : v })); setShowCourseMenu(false); }}
+                panelTitle="All Groups"
+                panelWidthClass="w-full"
+                alignClass="right-0"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1" htmlFor="password">
@@ -359,7 +378,7 @@ const Register = () => {
 
         {/* Right panel - Background Image */}
         <div 
-          className="hidden md:flex md:w-1/2 p-8 lg:p-12 items-center justify-center relative overflow-hidden bg-cover bg-center"
+          className="hidden md:sticky md:top-0 md:flex md:w-1/2 md:h-screen md:self-start p-10 lg:p-14 items-center justify-center relative overflow-hidden bg-cover bg-center"
           style={{ backgroundImage: `url(${loginBackground})` }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-700/85 via-blue-900/80 to-teal-800/85"></div>

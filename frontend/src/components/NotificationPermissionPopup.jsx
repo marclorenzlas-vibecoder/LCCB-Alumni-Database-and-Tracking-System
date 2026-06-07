@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 import { authService } from '../services/authService';
 
 const NotificationPermissionPopup = () => {
@@ -12,7 +13,8 @@ const NotificationPermissionPopup = () => {
     const hasBeenPrompted = localStorage.getItem(`notification_prompt_shown_${user?.id}`);
     
     // Only show for alumni, not teachers/admins
-    if (!hasBeenPrompted && user && token && user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+    const role = (user?.role || '').toUpperCase();
+    if (!hasBeenPrompted && user && token && role !== 'TEACHER' && role !== 'ADMIN') {
       // Show popup immediately for alumni
       setShowPopup(true);
     }
@@ -20,7 +22,7 @@ const NotificationPermissionPopup = () => {
 
   const handleAllow = async () => {
     try {
-      const response = await fetch(`http://localhost:5001/api/auth/notification-preference`, {
+      const response = await fetch(`${API_BASE_URL}/auth/notification-preference`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -56,7 +58,7 @@ const NotificationPermissionPopup = () => {
 
   const handleBlock = async () => {
     try {
-      const response = await fetch(`http://localhost:5001/api/auth/notification-preference`, {
+      const response = await fetch(`${API_BASE_URL}/auth/notification-preference`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

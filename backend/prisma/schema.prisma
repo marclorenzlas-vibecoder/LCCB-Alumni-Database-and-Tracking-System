@@ -43,6 +43,7 @@ model alumni {
   first_name       String             @db.VarChar(100)
   last_name        String             @db.VarChar(100)
   middle_name      String?            @db.VarChar(100)
+  date_of_birth    DateTime?          @db.Date
   email            String?            @db.VarChar(255)
   contact_number   String?            @db.VarChar(50)
   // Educational level: College, High School, Senior High School
@@ -59,8 +60,9 @@ model alumni {
   bio              String?            @db.Text
   is_public        Boolean?           @default(true)
   is_verified      Boolean?           @default(false)
+  status           String?            @default("LIVING") @db.VarChar(20)
   created_at       DateTime?          @default(now()) @db.DateTime(0)
-  updated_at       DateTime?          @default(now()) @db.DateTime(0)
+  updated_at       DateTime?          @default(now()) @updatedAt @db.DateTime(0)
   achievement      achievement[]
   user             user?              @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "alumni_ibfk_1")
   career_entry     career_entry[]
@@ -70,6 +72,28 @@ model alumni {
   job_posting      job_posting[]
   batch_officer    batch_officer[]
   job_applications job_application[]
+  deceased_reports deceased_report[] @relation("deceased_alumni")
+  reports_submitted deceased_report[] @relation("reported_by_alumni")
+}
+
+model deceased_report {
+  id                    Int       @id @default(autoincrement())
+  alumni_id             Int
+  reported_by_alumni_id Int?
+  reason                String?   @db.Text
+  evidence_file         String?   @db.VarChar(255)
+  evidence_link         String?   @db.VarChar(512)
+  status                String    @default("PENDING") @db.VarChar(20)
+  admin_notes           String?   @db.Text
+  created_at            DateTime  @default(now()) @db.DateTime(0)
+  updated_at            DateTime  @default(now()) @updatedAt @db.DateTime(0)
+
+  alumni                alumni    @relation("deceased_alumni", fields: [alumni_id], references: [id], onDelete: Cascade)
+  reported_by           alumni?   @relation("reported_by_alumni", fields: [reported_by_alumni_id], references: [id], onDelete: SetNull)
+
+  @@index([alumni_id])
+  @@index([reported_by_alumni_id])
+  @@index([status])
 }
 
 model career_entry {
@@ -232,6 +256,7 @@ enum notification_type {
   ANNOUNCEMENT
   GENERAL
   JOB_APPLICATION
+  DONATION
 }
 
 enum user_role {
@@ -276,6 +301,8 @@ model notification {
   title      String    @db.VarChar(255)
   message    String    @db.Text
   link       String?   @db.VarChar(255)
+  sender_name String?  @db.VarChar(255)
+  sender_profile_image String? @db.VarChar(255)
   is_read    Boolean   @default(false)
   created_at DateTime  @default(now()) @db.DateTime(0)
   user       user      @relation(fields: [user_id], references: [id], onDelete: Cascade)

@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 
-const API_URL = 'http://localhost:5001/api/careers';
-const JOB_API_URL = 'http://localhost:5001/api/jobs';
+const API_URL = `${API_BASE_URL}/careers`;
+const JOB_API_URL = `${API_BASE_URL}/jobs`;
 
 const careerService = {
   // Get all career entries

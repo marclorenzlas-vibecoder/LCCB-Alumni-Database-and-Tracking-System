@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { broadcastUpdate } = require('./realtimeService');
 const prisma = new PrismaClient();
 
 /**
@@ -11,7 +12,7 @@ const prisma = new PrismaClient();
  * @param {number} batch - Optional batch number to filter alumni (null = all alumni)
  * @returns {Promise<number>} Number of notifications created
  */
-async function createNotifications({ type, title, message, link, eventId = null, batch = null }) {
+async function createNotifications({ type, title, message, link, eventId = null, batch = null, senderName = null, senderProfileImage = null, amountLabel = null, campaignName = null, donationKind = null }) {
   try {
     // Build query to get users with notifications enabled
     const userQuery = {
@@ -58,6 +59,8 @@ async function createNotifications({ type, title, message, link, eventId = null,
       title: title,
       message: message,
       link: link,
+      sender_name: senderName,
+      sender_profile_image: senderProfileImage,
       is_read: false
     }));
 
@@ -66,6 +69,19 @@ async function createNotifications({ type, title, message, link, eventId = null,
     });
 
     console.log(`Created ${result.count} notifications for type: ${type}${batch ? ` (Batch ${batch})` : ' (All alumni)'}`);
+    broadcastUpdate('notification.created', {
+      type,
+      title,
+      message,
+      link,
+      senderName,
+      senderProfileImage,
+      amountLabel,
+      campaignName,
+      donationKind,
+      count: result.count,
+      batch
+    });
     return result.count;
   } catch (error) {
     console.error('Error creating notifications:', error);
@@ -168,7 +184,7 @@ async function deleteNotification(notificationId) {
  * @param {string} link - Link to the relevant content
  * @returns {Promise<Object>} Created notification
  */
-async function createUserNotification(userId, { type, title, message, link }) {
+async function createUserNotification(userId, { type, title, message, link, senderName = null, senderProfileImage = null }) {
   try {
     console.log(`📬 Creating notification for user ${userId}:`, { type, title, message, link });
     
@@ -192,10 +208,18 @@ async function createUserNotification(userId, { type, title, message, link }) {
         title: title,
         message: message,
         link: link,
+        sender_name: senderName,
+        sender_profile_image: senderProfileImage,
         is_read: false
       }
     });
     console.log(`✅ Notification created successfully:`, notification);
+    broadcastUpdate('notification.created', {
+      userId,
+      senderName,
+      senderProfileImage,
+      notification
+    });
     return notification;
   } catch (error) {
     console.error('❌ Error creating user notification:', error);

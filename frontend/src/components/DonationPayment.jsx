@@ -4,6 +4,8 @@ import gcashLogo from '../assets/gcash.jpeg';
 import paymayaLogo from '../assets/paymaya.jpeg';
 import coinsLogo from '../assets/coins.jpeg';
 import paypalLogo from '../assets/paypal.png';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import { toast } from 'react-toastify';
 
 const DonationPayment = () => {
   const navigate = useNavigate();
@@ -99,17 +101,17 @@ const DonationPayment = () => {
     e.preventDefault();
     
     if (!amount || parseFloat(amount) <= 0) {
-      alert('Please enter a valid donation amount');
+      toast.warning('Please enter a valid donation amount');
       return;
     }
     
     if (!selectedMethod) {
-      alert('Please select a payment method');
+      toast.warning('Please select a payment method');
       return;
     }
 
     // For demo purposes - in production, this would integrate with actual payment gateway
-    alert(`Payment processing for ₱${parseFloat(amount).toLocaleString()} via ${paymentMethods.find(m => m.id === selectedMethod)?.name}. This is a demo - actual payment integration would go here.`);
+    toast.info(`Payment processing for ₱${parseFloat(amount).toLocaleString()} via ${paymentMethods.find(m => m.id === selectedMethod)?.name}. This is a demo - actual payment integration would go here.`);
     
     // Navigate back to donations page
     navigate('/donations');
@@ -149,7 +151,7 @@ const DonationPayment = () => {
               <img
                 src={
                   donation.image 
-                    ? (donation.image.startsWith('/') ? `http://localhost:5001${donation.image}` : donation.image)
+                    ? (donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image)
                     : 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Donation+Campaign'
                 }
                 alt={donation.purpose}

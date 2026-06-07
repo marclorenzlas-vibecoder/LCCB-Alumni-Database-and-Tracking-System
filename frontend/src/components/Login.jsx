@@ -2,85 +2,117 @@
 import loginBackground from '../assets/loginbackground2.png';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { API_BASE_URL } from '../config/apiBaseUrl';
+import { toast } from 'react-toastify';
 
 const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // Redirect to home if already logged in
   useEffect(() => {
     const token = localStorage.getItem('token');
     const user = authService.getCurrentUser();
     if (token && user) {
-      navigate('/home', { replace: true });
+      const role = authService.getRole();
+      navigate(['teacher', 'admin'].includes(role) ? '/dashboard' : '/home', { replace: true });
     }
   }, [navigate]);
 
+  useEffect(() => {
+    try {
+      const msg = sessionStorage.getItem('auth_blocked_message');
+      if (msg) {
+        sessionStorage.removeItem('auth_blocked_message');
+        toast.error(msg);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
-    setSuccess(null);
+    setIsSubmitting(true);
 
     try {
-      if (!email || !password) {
-        setError("Please enter both email and password");
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (!normalizedEmail || !password) {
+        toast.error("Please enter both email and password");
+        setIsSubmitting(false);
         return;
       }
 
       // Validate email domain
-      const emailDomain = email.split('@')[1];
+      const emailDomain = normalizedEmail.split('@')[1];
       
+      let redirectPath = '/home';
+
       if (emailDomain === 'lccbonline.com') {
-        // Teacher login
-        await authService.loginTeacher(email, password);
-        setSuccess("Teacher login successful! Redirecting...");
+        // Teacher or admin login
+        await authService.loginTeacher(normalizedEmail, password);
+        const role = authService.getRole();
+        console.log('TOAST: login (teacher) success - ready to show toast');
+        toast.success("Login successful! Redirecting...");
+        redirectPath = ['teacher', 'admin'].includes(role) ? '/dashboard' : '/home';
       } else if (emailDomain === 'gmail.com') {
         // Alumni/Student login
-        await authService.login(email, password);
+        await authService.login(normalizedEmail, password);
         const user = authService.getCurrentUser();
-        
+
         // Check if user is pending approval
         if (user && (user.approval_status === 'PENDING' || user.approval_status === 'REJECTED')) {
-          setSuccess("Login successful! Checking account status...");
-          setTimeout(() => {
-            window.history.replaceState(null, '', '/pending-approval');
-            navigate('/pending-approval', { replace: true });
-          }, 1500);
+          console.log('TOAST: login (pending) success - ready to show toast');
+          toast.success("Login successful! Checking account status...");
+          await delay(3800);
+          window.history.replaceState(null, '', '/pending-approval');
+          navigate('/pending-approval', { replace: true });
           return;
         }
-        
-        setSuccess("Login successful! Redirecting...");
+
+        console.log('TOAST: login (alumni) success - ready to show toast');
+        toast.success("Login successful! Redirecting...");
       } else {
-        setError("Invalid email domain. Please use @lccbonline.com (teachers) or @gmail.com (alumni)");
+        toast.error("Invalid email domain. Please use @lccbonline.com (teachers) or @gmail.com (alumni)");
+        setIsSubmitting(false);
         return;
       }
 
-      setTimeout(() => {
-        // Clear history and navigate to home
-        window.history.replaceState(null, '', '/home');
-        navigate('/home', { replace: true });
-      }, 1500);
+      await delay(3800);
+      // Clear history and navigate to landing page based on role
+      window.history.replaceState(null, '', redirectPath);
+      navigate(redirectPath, { replace: true });
     } catch (err) {
       console.error("Login error:", err);
       // Extract error message from various formats
       let errorMessage = "Login failed";
+
+      if (err?.code === 'SERVER_AT_CAPACITY') {
+        errorMessage = 'Server is full right now. Please try again in a few minutes.';
+      } else if (typeof err?.error === 'string' && err.error.toLowerCase().includes('at capacity')) {
+        errorMessage = 'Server is full right now. Please try again in a few minutes.';
+      }
       
-      if (err.error) {
+      if (errorMessage === "Login failed" && err.error) {
         errorMessage = err.error;
-      } else if (err.message) {
+      } else if (errorMessage === "Login failed" && err.message) {
         errorMessage = err.message;
       }
       
       // Display the error message (which will include the blocked reason if account is blocked)
-      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleGoogleLogin = () => {
-    const googleAuthUrl = "http://localhost:5001/api/auth/google";
+    const googleAuthUrl = `${API_BASE_URL}/auth/google`;
     // Add state parameter for security
     const state = Math.random().toString(36).substring(7);
     // Store state in sessionStorage for verification
@@ -91,37 +123,30 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-white flex items-center justify-center px-4 py-4">
-      <div className="w-full max-w-6xl h-[90vh] max-h-[700px] flex flex-col md:flex-row items-stretch rounded-3xl overflow-hidden shadow-2xl">
+    <div className="relative min-h-screen w-full bg-slate-50 flex items-stretch justify-stretch">
+      {isSubmitting && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-900" />
+            <div className="text-lg font-semibold text-slate-900">Signing in...</div>
+            <div className="text-sm text-slate-500">Please wait while we connect you to the dashboard.</div>
+          </div>
+        </div>
+      )}
+      <div className="w-full min-h-screen flex flex-col md:flex-row items-stretch overflow-hidden bg-white">
         {/* Left panel - Form */}
-        <div className="w-full md:w-1/2 p-6 md:p-8 lg:p-10 bg-white flex flex-col justify-center overflow-y-auto scrollbar-hide">
+        <div className="w-full md:w-1/2 p-6 md:p-10 lg:p-14 bg-white flex flex-col justify-center overflow-y-auto scrollbar-hide">
           <div className="mb-6">
-            <h2 className="text-3xl lg:text-4xl font-bold mb-1 text-gray-900">Welcome to</h2>
-            <h1 className="text-3xl lg:text-4xl font-bold text-gray-900">LCCB Alumni</h1>
+            <h1 className="mt-3 text-3xl lg:text-4xl font-extrabold leading-tight text-slate-900">
+              Welcome to
+              <span className="block bg-gradient-to-r from-blue-900 to-cyan-600 bg-clip-text text-transparent">
+                LCCB Alumni
+              </span>
+            </h1>
+            <p className="mt-2 text-sm text-slate-500 max-w-md">
+              Sign in to reconnect with your community, manage your profile, and stay updated with alumni opportunities.
+            </p>
           </div>
-          <p className="text-gray-500 text-sm mb-6">Sign in to access your alumni account and connect with your community.</p>
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error.includes('blocked') ? (
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                  <p className="font-semibold text-red-800">Account Blocked</p>
-                  <p className="text-sm">{error}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center">{error}</div>
-            )}
-          </div>
-        )}
-        {success && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 text-center">
-            {success}
-          </div>
-        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-gray-600 text-xs font-medium mb-1.5" htmlFor="email">
@@ -153,9 +178,10 @@ const Login = () => {
           </div>
           <button 
             type="submit" 
-            className="w-full bg-blue-900 hover:bg-blue-800 text-white font-semibold py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 transition-all shadow-lg shadow-blue-900/30"
+            disabled={isSubmitting}
+            className={`w-full ${isSubmitting ? 'bg-slate-400 cursor-not-allowed hover:bg-slate-400' : 'bg-blue-900 hover:bg-blue-800'} text-white font-semibold py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 transition-all shadow-lg shadow-blue-900/30`}
           >
-            Sign In
+            {isSubmitting ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
@@ -196,7 +222,7 @@ const Login = () => {
 
         {/* Right panel - Background Image */}
         <div 
-          className="hidden md:flex md:w-1/2 p-8 lg:p-12 items-center justify-center relative overflow-hidden bg-cover bg-center"
+          className="hidden md:flex md:w-1/2 p-10 lg:p-14 items-center justify-center relative overflow-hidden bg-cover bg-center"
           style={{ backgroundImage: `url(${loginBackground})` }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-700/85 via-blue-900/80 to-teal-800/85"></div>

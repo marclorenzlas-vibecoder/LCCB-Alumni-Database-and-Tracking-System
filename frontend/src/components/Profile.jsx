@@ -1,7 +1,97 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { authService } from '../services/authService';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import { realtimeClient } from '../services/realtimeClient';
+import { toast } from 'react-toastify';
+import UserLayout from './UserLayout';
+import backgroundImage from '../assets/homeimage.jpg';
 
-const API_BASE_URL = 'http://localhost:5001/api/auth';
+const levelLabelMap = {
+  INTEGRATED_SCHOOL: 'Integrated School',
+  NIGHT_HIGH: 'Night High',
+  SENIOR_HIGH: 'Senior High',
+  COLLEGE: 'College',
+  ETEEAP: 'ETEEAP',
+  GRAD_SCHOOL: 'Grad School',
+  SENIOR_HIGH_SCHOOL: 'Senior High School',
+  HIGH_SCHOOL: 'High School'
+};
+
+const formatLevelLabel = (value) => {
+  if (!value) return 'Not set';
+  return levelLabelMap[value] || value;
+};
+
+const formatDateForInput = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+};
+
+const formatDateOfBirth = (value) => {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+  return date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const createEducationEntry = (entry = {}) => ({
+  level: entry.level || '',
+  batch: entry.batch ?? '',
+  graduationYear: entry.graduationYear ?? entry.graduation_year ?? ''
+});
+
+const DEFAULT_BATCH_OPTIONS = Array.from({ length: 60 }, (_, index) => String(new Date().getFullYear() - index));
+
+const normalizeEducationHistory = (alumni = {}) => {
+  const rawHistory = alumni.educationHistory || alumni.education_history;
+  if (Array.isArray(rawHistory) && rawHistory.length > 0) {
+    return rawHistory.map((entry) => createEducationEntry(entry));
+  }
+
+  if (alumni.level || alumni.batch || alumni.graduationYear || alumni.graduation_year) {
+    return [
+      createEducationEntry({
+        level: alumni.level,
+        batch: alumni.batch,
+        graduationYear: alumni.graduationYear || alumni.graduation_year
+      })
+    ];
+  }
+
+  return [createEducationEntry()];
+};
+
+const getPrimaryEducation = (history = []) => {
+  const validEntries = history.filter((entry) => entry.level);
+  return validEntries.length > 0 ? validEntries[validEntries.length - 1] : createEducationEntry();
+};
+
+const readResponseBody = async (response) => {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      return await response.json();
+    } catch (error) {
+      return null;
+    }
+  }
+
+  try {
+    const text = await response.text();
+    return text ? { message: text } : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const PROFILE_UPDATED_EVENT = 'auth-user-updated';
 
 const Profile = () => {
   const [user, setUser] = useState(null);
@@ -11,12 +101,12 @@ const Profile = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
     // Alumni fields
     firstName: '',
+    middleName: '',
     lastName: '',
+    studentId: '',
+    dateOfBirth: '',
     level: '',
     course: '',
     batch: '',
@@ -26,48 +116,165 @@ const Profile = () => {
     location: '',
     skills: ''
   });
-  const [message, setMessage] = useState({ type: '', text: '' });
+
   const [loading, setLoading] = useState(false);
   const [socialLinks, setSocialLinks] = useState([]);
   const [newSocialLink, setNewSocialLink] = useState({ url: '' });
   const [showAddSocialLink, setShowAddSocialLink] = useState(false);
+  const [educationHistory, setEducationHistory] = useState([createEducationEntry()]);
+
+  const refreshProfileFromServer = async (targetUserId) => {
+    if (!targetUserId) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/auth/profile/${targetUserId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) return;
+
+      const serverUser = await response.json();
+      const normalizedAlumni = serverUser.alumni
+        ? {
+            ...serverUser.alumni,
+            firstName: serverUser.alumni.firstName || serverUser.alumni.first_name || '',
+            middleName: serverUser.alumni.middleName || serverUser.alumni.middle_name || '',
+            lastName: serverUser.alumni.lastName || serverUser.alumni.last_name || '',
+            studentId: serverUser.alumni.studentId || serverUser.alumni.student_id || '',
+            student_id: serverUser.alumni.student_id || serverUser.alumni.studentId || '',
+            graduationYear: serverUser.alumni.graduationYear || serverUser.alumni.graduation_year || '',
+            currentPosition: serverUser.alumni.currentPosition || serverUser.alumni.current_position || ''
+          }
+        : null;
+      const normalizedHistory = normalizeEducationHistory(normalizedAlumni || {});
+      const primaryEducation = getPrimaryEducation(normalizedHistory);
+
+      const updatedUser = {
+        ...serverUser,
+        alumni: normalizedAlumni
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      window.dispatchEvent(new CustomEvent(PROFILE_UPDATED_EVENT, { detail: updatedUser }));
+
+      setFormData((prev) => ({
+        ...prev,
+        username: updatedUser.username || '',
+        email: updatedUser.email || '',
+        firstName: normalizedAlumni?.firstName || '',
+        middleName: normalizedAlumni?.middleName || '',
+        lastName: normalizedAlumni?.lastName || '',
+        studentId: normalizedAlumni?.studentId || normalizedAlumni?.student_id || '',
+        dateOfBirth: formatDateForInput(normalizedAlumni?.dateOfBirth || normalizedAlumni?.date_of_birth),
+        level: primaryEducation.level || '',
+        course: normalizedAlumni?.course || '',
+        batch: primaryEducation.batch || '',
+        graduationYear: normalizedAlumni?.graduationYear || '',
+        currentPosition: normalizedAlumni?.currentPosition || '',
+        company: normalizedAlumni?.company || '',
+        location: normalizedAlumni?.location || '',
+        skills: normalizedAlumni?.skills || ''
+      }));
+      setEducationHistory(normalizedHistory);
+
+      if (updatedUser.profile_image) {
+        setProfileImagePreview(`${IMAGE_BASE_URL}${updatedUser.profile_image}`);
+      }
+
+    } catch (error) {
+      console.error('Error refreshing profile from server:', error);
+    }
+  };
+
+  // Batch options aligned with mobile: year-range list + existing values for compatibility.
+  const batches = useMemo(() => {
+    const set = new Set(DEFAULT_BATCH_OPTIONS);
+
+    educationHistory.forEach((entry) => {
+      if (entry?.batch) set.add(String(entry.batch));
+    });
+
+    if (formData.batch) set.add(String(formData.batch));
+
+    return Array.from(set).sort((a, b) => Number(b) - Number(a));
+  }, [educationHistory, formData.batch]);
 
   useEffect(() => {
     const userData = authService.getCurrentUser();
     if (userData) {
+      const userEducationHistory = normalizeEducationHistory(userData.alumni || {});
+      const primaryEducation = getPrimaryEducation(userEducationHistory);
       setUser(userData);
       setFormData({
         username: userData.username || '',
         email: userData.email || '',
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
         // Alumni fields
-        firstName: userData.alumni?.firstName || '',
-        lastName: userData.alumni?.lastName || '',
-        level: userData.alumni?.level || '',
+        firstName: userData.alumni?.firstName || userData.alumni?.first_name || '',
+        middleName: userData.alumni?.middleName || userData.alumni?.middle_name || '',
+        lastName: userData.alumni?.lastName || userData.alumni?.last_name || '',
+        studentId: userData.alumni?.studentId || userData.alumni?.student_id || '',
+        dateOfBirth: formatDateForInput(userData.alumni?.dateOfBirth || userData.alumni?.date_of_birth),
+        level: primaryEducation.level || '',
         course: userData.alumni?.course || '',
-        batch: userData.alumni?.batch || '',
-        graduationYear: userData.alumni?.graduationYear || '',
+        batch: primaryEducation.batch || '',
+        graduationYear: userData.alumni?.graduationYear || userData.alumni?.graduation_year || '',
         currentPosition: userData.alumni?.currentPosition || userData.alumni?.current_position || '',
         company: userData.alumni?.company || '',
         location: userData.alumni?.location || '',
         skills: userData.alumni?.skills || ''
       });
+      setEducationHistory(userEducationHistory);
       if (userData.profile_image) {
-        setProfileImagePreview(`http://localhost:5001${userData.profile_image}`);
+        setProfileImagePreview(`${IMAGE_BASE_URL}${userData.profile_image}`);
       }
-      // Fetch social links
+      // Fetch latest alumni details (including social links) from API
       if (userData.alumni?.id) {
-        fetchSocialLinks(userData.alumni.id);
+        fetchLatestAlumniDetails(userData.alumni.id);
       }
     }
-  }, []);
 
-  const fetchSocialLinks = async (alumniId) => {
+    // Listen for alumni directory updates via localStorage
+    const handleStorageChange = () => {
+      const freshUser = authService.getCurrentUser();
+      if (freshUser && freshUser.alumni?.id === user?.alumni?.id) {
+        fetchLatestAlumniDetails(freshUser.alumni.id);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [user?.alumni?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const onFocus = () => refreshProfileFromServer(user.id);
+    window.addEventListener('focus', onFocus);
+    const unsubProfile = realtimeClient.subscribe('profile.updated', (payload) => {
+      if (!payload?.userId || Number(payload.userId) === Number(user.id)) {
+        refreshProfileFromServer(user.id);
+      }
+    });
+    const unsubAlumni = realtimeClient.subscribe('alumni.updated', (payload) => {
+      if (!user?.alumni?.id) return;
+      if (Number(payload?.alumniId) === Number(user.alumni.id)) {
+        refreshProfileFromServer(user.id);
+      }
+    });
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      unsubProfile();
+      unsubAlumni();
+    };
+  }, [user?.id, user?.alumni?.id]);
+
+  const fetchLatestAlumniDetails = async (alumniId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/alumni/${alumniId}`, {
+      const response = await fetch(`${API_BASE_URL}/alumni/${alumniId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -75,29 +282,84 @@ const Profile = () => {
       if (response.ok) {
         const data = await response.json();
         setSocialLinks(data.social_link || []);
+
+        // Keep profile synced with backend values (city + country location, etc.).
+        const normalizedAlumni = {
+          ...data,
+          firstName: data.firstName || data.first_name || '',
+          middleName: data.middleName || data.middle_name || '',
+          lastName: data.lastName || data.last_name || '',
+          studentId: data.studentId || data.student_id || '',
+          student_id: data.student_id || data.studentId || '',
+          graduationYear: data.graduationYear || data.graduation_year || '',
+          dateOfBirth: formatDateForInput(data.dateOfBirth || data.date_of_birth),
+          currentPosition: data.currentPosition || data.current_position || ''
+        };
+        const normalizedHistory = normalizeEducationHistory(normalizedAlumni);
+        const primaryEducation = getPrimaryEducation(normalizedHistory);
+
+        setUser((prev) => {
+          if (!prev) return prev;
+          const updatedUser = { ...prev, alumni: normalizedAlumni };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          return updatedUser;
+        });
+
+        setFormData((prev) => ({
+          ...prev,
+          firstName: normalizedAlumni.firstName,
+          middleName: normalizedAlumni.middleName,
+          lastName: normalizedAlumni.lastName,
+          studentId: normalizedAlumni.studentId || normalizedAlumni.student_id || '',
+          dateOfBirth: formatDateForInput(normalizedAlumni.dateOfBirth || normalizedAlumni.date_of_birth),
+          level: primaryEducation.level || '',
+          course: normalizedAlumni.course || '',
+          batch: primaryEducation.batch || '',
+          graduationYear: normalizedAlumni.graduationYear || '',
+          currentPosition: normalizedAlumni.currentPosition || '',
+          company: normalizedAlumni.company || '',
+          location: normalizedAlumni.location || '',
+          skills: normalizedAlumni.skills || ''
+        }));
+        setEducationHistory(normalizedHistory);
       }
     } catch (error) {
-      console.error('Error fetching social links:', error);
+      console.error('Error fetching alumni details:', error);
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => {
+      if (name !== 'username') {
+        return {
+          ...prev,
+          [name]: value
+        };
+      }
+
+      const parts = value.trim().split(/\s+/).filter(Boolean);
+      const derivedFirstName = parts[0] || '';
+      const derivedLastName = parts.slice(1).join(' ');
+
+      return {
+        ...prev,
+        username: value,
+        firstName: derivedFirstName,
+        lastName: derivedLastName
+      };
+    });
   };
 
   const handleAddSocialLink = async () => {
     if (!newSocialLink.url) {
-      setMessage({ type: 'error', text: 'Please enter a URL' });
+      toast.error('Please enter a URL');
       return;
     }
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/alumni/${user.alumni.id}/social-links`, {
+      const response = await fetch(`${API_BASE_URL}/alumni/${user.alumni.id}/social-links`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,13 +373,13 @@ const Profile = () => {
         setSocialLinks([...socialLinks, addedLink]);
         setNewSocialLink({ url: '' });
         setShowAddSocialLink(false);
-        setMessage({ type: 'success', text: 'Social link added successfully!' });
+        toast.success('Social link added successfully!');
       } else {
-        setMessage({ type: 'error', text: 'Failed to add social link' });
+        toast.error('Failed to add social link');
       }
     } catch (error) {
       console.error('Error adding social link:', error);
-      setMessage({ type: 'error', text: 'Error adding social link' });
+      toast.error('Error adding social link');
     }
   };
 
@@ -128,7 +390,7 @@ const Profile = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/alumni/${user.alumni.id}/social-links/${linkId}`, {
+      const response = await fetch(`${API_BASE_URL}/alumni/${user.alumni.id}/social-links/${linkId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -137,13 +399,13 @@ const Profile = () => {
 
       if (response.ok) {
         setSocialLinks(socialLinks.filter(link => link.id !== linkId));
-        setMessage({ type: 'success', text: 'Social link deleted successfully!' });
+        toast.success('Social link deleted successfully!');
       } else {
-        setMessage({ type: 'error', text: 'Failed to delete social link' });
+        toast.error('Failed to delete social link');
       }
     } catch (error) {
       console.error('Error deleting social link:', error);
-      setMessage({ type: 'error', text: 'Error deleting social link' });
+      toast.error('Error deleting social link');
     }
   };
 
@@ -162,21 +424,28 @@ const Profile = () => {
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setMessage({ type: '', text: '' });
 
     try {
       const token = localStorage.getItem('token');
       const formDataToSend = new FormData();
+      const cleanedEducationHistory = educationHistory
+        .map((entry) => createEducationEntry(entry))
+        .filter((entry) => entry.level);
+      const primaryEducation = getPrimaryEducation(cleanedEducationHistory);
       formDataToSend.append('username', formData.username);
       formDataToSend.append('email', formData.email);
       
       // Alumni fields
       formDataToSend.append('firstName', formData.firstName);
+      formDataToSend.append('middleName', formData.middleName);
       formDataToSend.append('lastName', formData.lastName);
-      formDataToSend.append('level', formData.level);
+      formDataToSend.append('studentId', formData.studentId || '');
+      formDataToSend.append('dateOfBirth', formData.dateOfBirth || '');
+      formDataToSend.append('level', primaryEducation.level || '');
       formDataToSend.append('course', formData.course);
-      formDataToSend.append('batch', formData.batch);
-      formDataToSend.append('graduationYear', formData.graduationYear);
+      formDataToSend.append('batch', primaryEducation.batch || '');
+      formDataToSend.append('graduationYear', formData.graduationYear || '');
+      formDataToSend.append('educationHistory', JSON.stringify(cleanedEducationHistory));
       formDataToSend.append('currentPosition', formData.currentPosition);
       formDataToSend.append('company', formData.company);
       formDataToSend.append('location', formData.location);
@@ -186,7 +455,7 @@ const Profile = () => {
         formDataToSend.append('profileImage', profileImageFile);
       }
 
-      const response = await fetch(`${API_BASE_URL}/profile/${user.id}`, {
+      const response = await fetch(`${API_BASE_URL}/auth/profile/${user.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -194,94 +463,77 @@ const Profile = () => {
         body: formDataToSend
       });
 
-      const data = await response.json();
+      const data = await readResponseBody(response);
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update profile');
+        throw new Error(data?.error || data?.message || 'Failed to update profile');
       }
 
       // Update user data in localStorage
+      const normalizedAlumni = data.alumni
+        ? {
+            ...data.alumni,
+            firstName: data.alumni.firstName || data.alumni.first_name || '',
+            middleName: data.alumni.middleName || data.alumni.middle_name || '',
+            lastName: data.alumni.lastName || data.alumni.last_name || '',
+            studentId: data.alumni.studentId || data.alumni.student_id || '',
+            student_id: data.alumni.student_id || data.alumni.studentId || '',
+            dateOfBirth: formatDateForInput(data.alumni.dateOfBirth || data.alumni.date_of_birth)
+          }
+        : user.alumni;
+      const normalizedHistory = normalizeEducationHistory(normalizedAlumni || {});
+      const hasReturnedHistory = normalizedHistory.some((entry) => entry.level);
+      const finalEducationHistory = hasReturnedHistory ? normalizedHistory : cleanedEducationHistory;
+
       const updatedUser = {
         ...user,
         username: data.user.username,
         email: data.user.email,
         profile_image: data.user.profile_image,
         role: data.user.role || user.role,
-        alumni: data.alumni || user.alumni
+        approval_status: data.user.approval_status || user.approval_status || 'APPROVED',
+        is_active: typeof data.user.is_active === 'boolean' ? data.user.is_active : (typeof user.is_active === 'boolean' ? user.is_active : true),
+        alumni: {
+          ...(normalizedAlumni || {}),
+          educationHistory: finalEducationHistory,
+          education_history: finalEducationHistory
+        }
       };
       
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
+      setEducationHistory(finalEducationHistory.length > 0 ? finalEducationHistory : [createEducationEntry()]);
       setIsEditing(false);
       setProfileImageFile(null);
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
-      
-      // Trigger storage event to update Navbar
-      window.dispatchEvent(new Event('storage'));
-      
-      // Force a small delay then reload to ensure all components update
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      toast.success('Profile updated successfully!');
     } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Failed to update profile' });
+      toast.error(err.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-
-    // Validate passwords
-    if (formData.newPassword !== formData.confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' });
-      setLoading(false);
-      return;
-    }
-
-    if (formData.newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'Password must be at least 6 characters' });
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/change-password/${user.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword,
-          email: user.email
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to change password');
-      }
-
-      setMessage({ type: 'success', text: 'Password changed successfully!' });
-      setFormData(prev => ({
-        ...prev,
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      }));
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Failed to change password' });
-    } finally {
-      setLoading(false);
-    }
+  const handleEducationHistoryChange = (index, field, value) => {
+    setEducationHistory((prev) => prev.map((entry, i) => {
+      if (i !== index) return entry;
+      return {
+        ...entry,
+        [field]: value
+      };
+    }));
   };
+
+  const addEducationHistoryEntry = () => {
+    setEducationHistory((prev) => [...prev, createEducationEntry()]);
+  };
+
+  const removeEducationHistoryEntry = (index) => {
+    setEducationHistory((prev) => {
+      if (prev.length === 1) return [createEducationEntry()];
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
 
   if (!user) {
     return (
@@ -291,13 +543,16 @@ const Profile = () => {
     );
   }
 
+  const profileAlumni = user.alumni || {};
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <UserLayout>
+      <div className="bg-gray-50 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8 mx-auto">
         {/* Enhanced Header */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-6">
           {/* Gradient Background with Pattern */}
-          <div className="relative bg-gradient-to-br from-blue-800 via-blue-900 to-indigo-900 px-6 py-12 sm:px-8">
+          <div className="relative bg-gradient-to-br from-blue-800 via-blue-900 to-indigo-900 px-6 py-8 sm:px-8">
             {/* Decorative Pattern Overlay */}
             <div className="absolute inset-0 opacity-10">
               <div className="absolute inset-0" style={{
@@ -306,70 +561,126 @@ const Profile = () => {
               }}></div>
             </div>
             
-            {/* Content */}
-            <div className="relative flex flex-col sm:flex-row items-center gap-6">
-              {/* Profile Picture with Enhanced Styling */}
-              <div className="relative group">
+            {/* Content — Single Row Layout */}
+            <div className="relative flex flex-col lg:flex-row items-center gap-5 w-full">
+              {/* Avatar */}
+              <div className="relative group flex-shrink-0">
                 {user.profile_image ? (
                   <div className="relative">
                     <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full opacity-75 blur group-hover:opacity-100 transition duration-300"></div>
                     <img 
-                      src={`http://localhost:5001${user.profile_image}`} 
+                      src={`${IMAGE_BASE_URL}${user.profile_image}`} 
                       alt={user.username || 'User'} 
-                      className="relative w-28 h-28 rounded-full object-cover border-4 border-white shadow-2xl ring-4 ring-blue-400/50"
+                      className="relative w-20 h-20 rounded-full object-cover border-3 border-white shadow-2xl ring-3 ring-blue-400/50"
                     />
                   </div>
                 ) : (
                   <div className="relative">
                     <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full opacity-75 blur"></div>
-                    <div className="relative w-28 h-28 rounded-full bg-white flex items-center justify-center text-blue-600 text-4xl font-bold shadow-2xl ring-4 ring-blue-400/50">
+                    <div className="relative w-20 h-20 rounded-full bg-white flex items-center justify-center text-blue-600 text-3xl font-bold shadow-2xl ring-3 ring-blue-400/50">
                       {user.username?.charAt(0).toUpperCase() || 'U'}
                     </div>
                   </div>
                 )}
                 {/* Status Indicator */}
-                <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-400 rounded-full border-4 border-white shadow-lg"></div>
+                <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-400 rounded-full border-3 border-white shadow-lg"></div>
               </div>
               
               {/* User Information */}
-              <div className="text-white flex-1 text-center sm:text-left">
-                <div className="mb-3">
-                  <h1 className="text-4xl font-bold mb-2 tracking-tight">{user.username || 'User'}</h1>
-                  <div className="flex flex-col sm:flex-row items-center gap-3 text-blue-100">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                      </svg>
-                      <span className="font-medium">{user.email || ''}</span>
-                    </div>
-                  </div>
+              <div className="text-white text-center lg:text-left flex-shrink-0">
+                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{user.username || 'User'}</h1>
+                <div className="flex items-center gap-2 mt-1 text-blue-100 justify-center lg:justify-start">
+                  <svg className="w-4 h-4 text-blue-200" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                  </svg>
+                  <span className="text-sm font-medium">{user.email || ''}</span>
                 </div>
-                
                 {/* Role Badge */}
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full border border-white/30">
-                  <svg className="w-5 h-5 text-blue-200" fill="currentColor" viewBox="0 0 20 20">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 mt-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20">
+                  <svg className="w-3.5 h-3.5 text-blue-200" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                   </svg>
-                  <span className="text-sm font-semibold text-white">
-                    {user.role === 'TEACHER' || user.role === 'teacher' ? 'Teacher' : 'Alumni'}
+                  <span className="text-[11px] font-semibold text-white tracking-wide uppercase">
+                    {(user?.role || '').toUpperCase() === 'TEACHER' ? 'Teacher' : 'Alumni'}
                   </span>
                 </div>
+              </div>
+
+              {/* Divider — visible on lg+ */}
+              <div className="hidden lg:block w-px h-16 bg-white/15 flex-shrink-0"></div>
+
+              {/* Right Side: Inline Alumni Spotlight — pushed to the right */}
+              <div className="hidden lg:flex ml-auto bg-white/[0.07] backdrop-blur-md rounded-xl border border-white/10 px-5 py-3.5 text-white items-center gap-5 flex-shrink-0">
+                {/* Spotlight Label */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">
+                    {(user?.role || '').toUpperCase() === 'TEACHER' ? 'Faculty' : 'Spotlight'}
+                  </span>
+                </div>
+
+                {/* Academic / Faculty Info */}
+                {(user?.role || '').toUpperCase() === 'TEACHER' ? (
+                  <div className="flex items-center gap-6 flex-1 min-w-0">
+                    <div className="min-w-0">
+                      <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Department</span>
+                      <p className="text-sm font-semibold text-white truncate">{user.department || 'LCCB Faculty'}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Role</span>
+                      <p className="text-sm font-semibold text-white">Academic Staff</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-6 flex-1 min-w-0 flex-wrap xl:flex-nowrap">
+                    {/* Academic Record */}
+                    <div className="min-w-0">
+                      <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Academic Record</span>
+                      <p className="text-sm font-semibold text-white truncate">
+                        {user.alumni?.course || 'BSIT'} — {user.alumni?.level === 'COLLEGE' ? 'College' : user.alumni?.level === 'SENIOR_HIGH' ? 'Senior High' : 'High School'}
+                      </p>
+                    </div>
+
+                    {/* Class Year */}
+                    <div className="flex-shrink-0">
+                      <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Class</span>
+                      <p className="text-sm font-semibold text-white">
+                        {user.alumni?.graduationYear || user.alumni?.graduation_year || user.alumni?.batch || '—'}
+                      </p>
+                    </div>
+
+                    {/* Divider dot */}
+                    <div className="hidden xl:block w-1 h-1 rounded-full bg-white/20 flex-shrink-0"></div>
+
+                    {/* Current Profession */}
+                    {(user.alumni?.currentPosition || user.alumni?.current_position) ? (
+                      <div className="min-w-0">
+                        <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Profession</span>
+                        <p className="text-sm font-semibold text-white truncate">
+                          {user.alumni?.currentPosition || user.alumni?.current_position}
+                          {user.alumni?.company && (
+                            <span className="text-blue-200 font-normal text-xs ml-1">at {user.alumni.company}</span>
+                          )}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="min-w-0">
+                        <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Status</span>
+                        <p className="text-xs text-blue-200 italic">Not listed</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Messages */}
-        {message.text && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            message.type === 'success' 
-              ? 'bg-green-50 border border-green-200 text-green-700' 
-              : 'bg-red-50 border border-red-200 text-red-700'
-          }`}>
-            {message.text}
-          </div>
-        )}
+
 
         {/* Profile Information */}
         <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8 mb-6">
@@ -440,7 +751,7 @@ const Profile = () => {
               <div className="pt-4 mt-6 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Alumni Information</h3>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       First Name
@@ -449,6 +760,19 @@ const Profile = () => {
                       type="text"
                       name="firstName"
                       value={formData.firstName}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Middle Name
+                    </label>
+                    <input
+                      type="text"
+                      name="middleName"
+                      value={formData.middleName}
                       onChange={handleChange}
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
                     />
@@ -469,20 +793,30 @@ const Profile = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Level
+                      School ID / Student Number
                     </label>
-                    <select
-                      name="level"
-                      value={formData.level}
+                    <input
+                      type="text"
+                      name="studentId"
+                      value={formData.studentId}
                       onChange={handleChange}
+                      placeholder="Optional"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                    >
-                      <option value="">Select Level</option>
-                      <option value="COLLEGE">College</option>
-                      <option value="SENIOR_HIGH_SCHOOL">Senior High School</option>
-                      <option value="HIGH_SCHOOL">High School</option>
-                    </select>
+                    />
                   </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Date of Birth
+                        </label>
+                        <input
+                          type="date"
+                          name="dateOfBirth"
+                          value={formData.dateOfBirth}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                        />
+                      </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -500,21 +834,6 @@ const Profile = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Batch
-                    </label>
-                    <input
-                      type="number"
-                      name="batch"
-                      value={formData.batch}
-                      onChange={handleChange}
-                      min="1990"
-                      max="2030"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Graduation Year
                     </label>
                     <input
@@ -524,6 +843,7 @@ const Profile = () => {
                       onChange={handleChange}
                       min="1990"
                       max="2030"
+                      placeholder="e.g., 2026"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
                     />
                   </div>
@@ -571,6 +891,64 @@ const Profile = () => {
                   </div>
                 </div>
 
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-base font-semibold text-gray-900">Education History</h4>
+                    <button
+                      type="button"
+                      onClick={addEducationHistoryEntry}
+                      className="app-secondary-button px-3 py-1.5 text-sm"
+                    >
+                      + Add Level & Batch
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {educationHistory.map((entry, index) => (
+                      <div key={`edu-${index}`} className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
+                          <select
+                            value={entry.level}
+                            onChange={(e) => handleEducationHistoryChange(index, 'level', e.target.value)}
+                            className="app-select"
+                          >
+                            <option value="">Select Level</option>
+                            <option value="INTEGRATED_SCHOOL">Integrated School</option>
+                            <option value="NIGHT_HIGH">Night High</option>
+                            <option value="SENIOR_HIGH">Senior High</option>
+                            <option value="COLLEGE">College</option>
+                            <option value="ETEEAP">ETEEAP</option>
+                            <option value="GRAD_SCHOOL">Grad School</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Batch</label>
+                          <select
+                            value={entry.batch}
+                            onChange={(e) => handleEducationHistoryChange(index, 'batch', e.target.value)}
+                            className="app-select"
+                          >
+                            <option value="">Select Batch</option>
+                            {batches.map((batch) => (
+                              <option key={`batch-option-${batch}`} value={batch}>{batch}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-end justify-between gap-3">
+                          <div className="text-xs text-gray-500">Select the level and matching batch for this entry.</div>
+                          <button
+                            type="button"
+                            onClick={() => removeEducationHistoryEntry(index)}
+                            className="text-xs text-red-600 hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Skills
@@ -594,7 +972,7 @@ const Profile = () => {
                     <button
                       type="button"
                       onClick={() => setShowAddSocialLink(!showAddSocialLink)}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      className="app-secondary-button px-3 py-1.5 text-sm"
                     >
                       {showAddSocialLink ? 'Cancel' : '+ Add Link'}
                     </button>
@@ -615,7 +993,7 @@ const Profile = () => {
                       <button
                         type="button"
                         onClick={handleAddSocialLink}
-                        className="mt-3 px-4 py-2 text-sm bg-blue-900 text-white rounded-lg hover:bg-blue-800"
+                        className="mt-3 app-primary-button-sm"
                       >
                         Add Link
                       </button>
@@ -657,27 +1035,30 @@ const Profile = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-6 py-2.5 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors font-medium disabled:opacity-50"
+                  className="app-primary-button disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Saving...' : 'Save Changes'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
+                    const resetEducationHistory = normalizeEducationHistory(user.alumni || {});
+                    const primaryEducation = getPrimaryEducation(resetEducationHistory);
                     setIsEditing(false);
+                    setEducationHistory(resetEducationHistory);
                     setFormData({
                       username: user.username || '',
                       email: user.email || '',
-                      currentPassword: '',
-                      newPassword: '',
-                      confirmPassword: '',
                       // Reset alumni fields
-                      firstName: user.alumni?.firstName || '',
-                      lastName: user.alumni?.lastName || '',
-                      level: user.alumni?.level || '',
+                      firstName: user.alumni?.firstName || user.alumni?.first_name || '',
+                      middleName: user.alumni?.middleName || user.alumni?.middle_name || '',
+                      lastName: user.alumni?.lastName || user.alumni?.last_name || '',
+                      studentId: user.alumni?.studentId || user.alumni?.student_id || '',
+                      dateOfBirth: formatDateForInput(user.alumni?.dateOfBirth || user.alumni?.date_of_birth),
+                      level: primaryEducation.level || '',
                       course: user.alumni?.course || '',
-                      batch: user.alumni?.batch || '',
-                      graduationYear: user.alumni?.graduationYear || '',
+                      batch: primaryEducation.batch || '',
+                      graduationYear: user.alumni?.graduationYear || user.alumni?.graduation_year || '',
                       currentPosition: user.alumni?.currentPosition || user.alumni?.current_position || '',
                       company: user.alumni?.company || '',
                       location: user.alumni?.location || '',
@@ -703,7 +1084,7 @@ const Profile = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500 mb-1">Role</label>
-                  <p className="text-lg text-gray-900 uppercase">{user.role === 'TEACHER' || user.role === 'teacher' ? 'TEACHER' : 'ALUMNI'}</p>
+                  <p className="text-lg text-gray-900 uppercase">{(user?.role || '').toUpperCase() === 'TEACHER' ? 'TEACHER' : 'ALUMNI'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500 mb-1">Account Status</label>
@@ -714,121 +1095,78 @@ const Profile = () => {
               </div>
 
               {/* Alumni Information Display */}
-              {user.alumni && (
-                <div className="pt-6 mt-6 border-t border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Alumni Information</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">First Name</label>
-                      <p className="text-lg text-gray-900">{user.alumni.firstName || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Last Name</label>
-                      <p className="text-lg text-gray-900">{user.alumni.lastName || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Level</label>
-                      <p className="text-lg text-gray-900">
-                        {user.alumni.level === 'COLLEGE' && 'College'}
-                        {user.alumni.level === 'SENIOR_HIGH_SCHOOL' && 'Senior High School'}
-                        {user.alumni.level === 'HIGH_SCHOOL' && 'High School'}
-                        {!user.alumni.level && 'Not set'}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Course</label>
-                      <p className="text-lg text-gray-900">{user.alumni.course || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Batch</label>
-                      <p className="text-lg text-gray-900">{user.alumni.batch || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Graduation Year</label>
-                      <p className="text-lg text-gray-900">{user.alumni.graduationYear || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Current Position</label>
-                      <p className="text-lg text-gray-900">{user.alumni.currentPosition || user.alumni.current_position || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Company</label>
-                      <p className="text-lg text-gray-900">{user.alumni.company || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Location</label>
-                      <p className="text-lg text-gray-900">{user.alumni.location || 'Not set'}</p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Skills</label>
-                      <p className="text-gray-900">{user.alumni.skills || 'Not set'}</p>
+              <div className="pt-6 mt-6 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Alumni Information</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">First Name</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.firstName || profileAlumni.first_name || formData.firstName || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Middle Name</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.middleName || profileAlumni.middle_name || formData.middleName || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Last Name</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.lastName || profileAlumni.last_name || formData.lastName || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">School ID / Student Number</label>
+                    <p className="text-lg text-gray-900 font-mono">{profileAlumni.studentId || profileAlumni.student_id || formData.studentId || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Date of Birth</label>
+                    <p className="text-lg text-gray-900">{formatDateOfBirth(profileAlumni.dateOfBirth || profileAlumni.date_of_birth || formData.dateOfBirth)}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Course</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.course || formData.course || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Graduation Year</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.graduationYear || profileAlumni.graduation_year || formData.graduationYear || 'Not set'}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-500 mb-2">Education History</label>
+                    <div className="space-y-2">
+                      {normalizeEducationHistory(profileAlumni).filter((entry) => entry.level).length > 0 ? (
+                        normalizeEducationHistory(profileAlumni)
+                          .filter((entry) => entry.level)
+                          .map((entry, index) => (
+                            <div key={`education-readonly-${index}`} className="rounded-lg border border-gray-200 px-3 py-2 bg-gray-50 text-sm text-gray-900">
+                              {formatLevelLabel(entry.level)}
+                              {entry.batch ? `, Batch ${entry.batch}` : ''}
+                            </div>
+                          ))
+                      ) : (
+                        <p className="text-gray-900">Not set</p>
+                      )}
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Current Position</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.currentPosition || profileAlumni.current_position || formData.currentPosition || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Company</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.company || formData.company || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Location</label>
+                    <p className="text-lg text-gray-900">{profileAlumni.location || formData.location || 'Not set'}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Skills</label>
+                    <p className="text-gray-900">{profileAlumni.skills || formData.skills || 'Not set'}</p>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
-
-        {/* Change Password */}
-        <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Change Password</h2>
-          <form onSubmit={handleChangePassword} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Current Password
-              </label>
-              <input
-                type="password"
-                name="currentPassword"
-                value={formData.currentPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                placeholder="Enter current password"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                New Password
-              </label>
-              <input
-                type="password"
-                name="newPassword"
-                value={formData.newPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                placeholder="Enter new password"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                placeholder="Confirm new password"
-              />
-            </div>
-
-            <div className="pt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-6 py-2.5 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors font-medium disabled:opacity-50"
-              >
-                {loading ? 'Updating...' : 'Update Password'}
-              </button>
-            </div>
-          </form>
-        </div>
       </div>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 
