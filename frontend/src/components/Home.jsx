@@ -116,7 +116,7 @@ const Home = () => {
           alt=""
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover object-center"
-          fetchPriority="high"
+          fetchpriority="high"
           decoding="async"
         />
         <div className="home-hero__overlay absolute inset-0" aria-hidden="true" />

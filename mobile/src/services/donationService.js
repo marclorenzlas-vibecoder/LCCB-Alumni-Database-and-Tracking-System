@@ -33,5 +33,10 @@ export const donationService = {
   async deleteDonation(donationId) {
     const response = await apiClient.delete(`/donations/${donationId}`);
     return response.data;
+  },
+
+  async contributeToDonation(donationId, payload) {
+    const response = await apiClient.post(`/donations/${donationId}/contribute`, payload);
+    return response.data;
   }
 };

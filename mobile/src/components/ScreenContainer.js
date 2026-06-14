@@ -1,38 +1,46 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 
-export default function ScreenContainer({ children, scroll = true, refreshControl = null }) {
+export default function ScreenContainer({ children, scroll = true, refreshControl = null, noTopPadding = false }) {
+  const insets = useSafeAreaInsets();
   const Wrapper = scroll ? ScrollView : View;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={[styles.safe, { paddingBottom: insets.bottom }]}>
       <Wrapper
-        contentContainerStyle={scroll ? styles.scrollContent : undefined}
+        contentContainerStyle={scroll ? (noTopPadding ? styles.scrollContentNoTop : styles.scrollContent) : undefined}
         style={!scroll ? styles.fill : undefined}
         refreshControl={scroll ? refreshControl : undefined}
       >
         {children}
       </Wrapper>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.bg
+    backgroundColor: '#ffffff'
   },
   fill: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
+    paddingTop: 16,
     paddingBottom: theme.spacing.lg
   },
   scrollContent: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: 40,
+    paddingTop: 16,
+    paddingBottom: 0,
+    gap: 24
+  },
+  scrollContentNoTop: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: 0,
+    paddingBottom: 0,
     gap: 24
   }
 });

@@ -12,7 +12,10 @@ export const jobService = {
   },
 
   async applyToJob(payload) {
-    const response = await apiClient.post('/applications', payload);
+    const isFormData = payload instanceof FormData;
+    const response = await apiClient.post('/applications', payload, isFormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : undefined);
     return response.data;
   },
 

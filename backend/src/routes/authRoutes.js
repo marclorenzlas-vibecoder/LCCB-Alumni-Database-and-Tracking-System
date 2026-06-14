@@ -465,8 +465,65 @@ router.get('/google/callback', (req, res, next) => {
 router.get('/session-status', authMiddleware, async (req, res) => {
   try {
     const userId = Number(req.user?.id);
+    const tokenRole = String(req.user?.role || '').toUpperCase();
+
     if (!userId || !Number.isFinite(userId)) {
       return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        profile_image: true
+      }
+    });
+
+    if (teacher) {
+      return res.json({
+        ok: true,
+        is_blocked: false,
+        user: {
+          id: teacher.id,
+          email: teacher.email,
+          username: teacher.username,
+          role: tokenRole === 'ADMIN' ? 'ADMIN' : 'TEACHER',
+          profile_image: teacher.profile_image,
+          approval_status: 'APPROVED',
+          is_active: true,
+          is_blocked: false
+        }
+      });
+    }
+
+    const pendingUser = await prisma.pending_registration.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        profile_image: true,
+        status: true
+      }
+    });
+
+    if (pendingUser) {
+      return res.json({
+        ok: true,
+        is_blocked: false,
+        user: {
+          id: pendingUser.id,
+          email: pendingUser.email,
+          username: pendingUser.username,
+          role: 'ALUMNI',
+          profile_image: pendingUser.profile_image,
+          approval_status: pendingUser.status || 'PENDING',
+          is_active: pendingUser.status === 'APPROVED',
+          is_blocked: false
+        }
+      });
     }
 
     const user = await prisma.user.findUnique({

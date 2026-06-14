@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../../components/ScreenContainer';
 import LoadingState from '../../components/LoadingState';
@@ -16,6 +17,11 @@ export default function JobApplicationScreen({ route, navigation, user }) {
   const [loading, setLoading] = useState(true);
   const [coverLetter, setCoverLetter] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const [contactMethod, setContactMethod] = useState('email');
+  const [contactEmail, setContactEmail] = useState(user?.email || '');
+  const [contactNumber, setContactNumber] = useState(user?.alumni?.contact_number || user?.contact_number || '');
+  const [resumeFiles, setResumeFiles] = useState([]);
 
   const loadJob = useCallback(async () => {
     try {
@@ -49,19 +55,79 @@ export default function JobApplicationScreen({ route, navigation, user }) {
     }, [loadJob])
   );
 
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        multiple: true,
+        copyToCacheDirectory: true
+      });
+
+      if (result.canceled) return;
+
+      const newFiles = (result.assets || []).map((asset) => ({
+        name: asset.name,
+        size: asset.size,
+        uri: asset.uri,
+        mimeType: asset.mimeType
+      }));
+
+      setResumeFiles((prev) => [...prev, ...newFiles]);
+    } catch (err) {
+      console.error('Document picker error:', err);
+    }
+  };
+
+  const removeFile = (index) => {
+    setResumeFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async () => {
     if (!coverLetter.trim()) {
       Alert.alert('Missing Cover Letter', 'Please provide a cover letter before submitting.');
       return;
     }
 
+    const trimmedEmail = String(contactEmail || '').trim();
+    const trimmedNumber = String(contactNumber || '').trim();
+
+    if (contactMethod === 'email' && !trimmedEmail) {
+      Alert.alert('Missing Contact', 'Please provide a contact email.');
+      return;
+    }
+
+    if (contactMethod === 'phone' && !trimmedNumber) {
+      Alert.alert('Missing Contact', 'Please provide a contact number.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await jobService.applyToJob({
+      const payload = {
         job_posting_id: Number(jobId),
         applicant_id: alumniId,
-        cover_letter: coverLetter.trim()
-      });
+        cover_letter: coverLetter.trim(),
+        contact_method: contactMethod,
+        contact_email: trimmedEmail,
+        contact_number: trimmedNumber
+      };
+
+      if (resumeFiles.length > 0) {
+        const formData = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          formData.append(key, value);
+        });
+        resumeFiles.forEach((file) => {
+          formData.append('resume', {
+            uri: file.uri,
+            name: file.name,
+            type: file.mimeType || 'application/pdf'
+          });
+        });
+        await jobService.applyToJob(formData);
+      } else {
+        await jobService.applyToJob(payload);
+      }
 
       Alert.alert('Success', 'Your application has been submitted successfully!', [
         {
@@ -103,245 +169,446 @@ export default function JobApplicationScreen({ route, navigation, user }) {
 
   return (
     <ScreenContainer>
-      {/* Job Header */}
-      <View style={styles.jobHeader}>
-        <Text style={styles.jobTitle}>Apply for {job.job_title}</Text>
-        <Text style={styles.companyName}>at {job.company || 'Company'}</Text>
-      </View>
-
-      {/* Info Alert */}
-      <View style={styles.infoBox}>
-        <View style={styles.infoIcon}>
-          <Ionicons name="information-circle" size={20} color="#0284c7" />
-        </View>
-        <Text style={styles.infoText}>
-          Your profile information, qualifications, and employment history will be shared with the employer once you submit this application.
-        </Text>
-      </View>
-
-      {/* Cover Letter Section */}
-      <View style={styles.formSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Cover Letter</Text>
-          <Text style={styles.required}>(Required)</Text>
-        </View>
-        <Text style={styles.sectionSubtitle}>
-          Introduce yourself and explain why you're interested in the position. This field is required.
-        </Text>
-        
-        <TextInput
-          style={styles.textarea}
-          multiline
-          numberOfLines={8}
-          placeholder="Dear Hiring Manager,
-
-I am writing to express my interest in the position..."
-          placeholderTextColor="#cbd5e1"
-          value={coverLetter}
-          onChangeText={setCoverLetter}
-          textAlignVertical="top"
-        />
-      </View>
-
-      <View style={styles.resumeReminderBox}>
-        <Text style={styles.resumeReminderTitle}>Resume Reminder</Text>
-        <Text style={styles.resumeReminderText}>
-          After submitting your application, please send your CV or resume straight to zora@gmail.com.
-        </Text>
-      </View>
-
-      {/* What Happens Next */}
-      <View style={styles.formSection}>
-        <Text style={styles.sectionTitle}>What happens next?</Text>
-        
-        <View style={styles.bulletList}>
-          <View style={styles.bulletItem}>
-            <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-            <Text style={styles.bulletText}>Your application will be sent to the employer</Text>
-          </View>
-          
-          <View style={styles.bulletItem}>
-            <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-            <Text style={styles.bulletText}>The employer will review your profile and qualifications</Text>
-          </View>
-          
-          <View style={styles.bulletItem}>
-            <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-            <Text style={styles.bulletText}>You'll be contacted if your application is selected</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Job Summary */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.jobTitle}>{job.job_title}</Text>
+          <Text style={styles.companyName}>{job.company || 'Company'}</Text>
+          <View style={styles.metaRow}>
+            {job.location ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="location-outline" size={13} color="#475569" />
+                <Text style={styles.metaChipText}>{job.location}</Text>
+              </View>
+            ) : null}
+            {job.job_type ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="briefcase-outline" size={13} color="#475569" />
+                <Text style={styles.metaChipText}>{job.job_type}</Text>
+              </View>
+            ) : null}
+            {job.salary_range ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="cash-outline" size={13} color="#475569" />
+                <Text style={styles.metaChipText}>{job.salary_range}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
-      </View>
 
-      {/* Action Buttons */}
-      <View style={styles.buttonGroup}>
-        <Pressable
-          style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
-          disabled={submitting}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          <Text style={styles.submitButtonText}>
-            {submitting ? 'Submitting...' : 'Submit Application'}
+        {/* Info */}
+        <View style={styles.infoBar}>
+          <Ionicons name="information-circle-outline" size={16} color="#475569" />
+          <Text style={styles.infoText}>
+            Your profile info, qualifications, and employment history will be shared with the employer.
           </Text>
-        </Pressable>
-      </View>
+        </View>
+
+        {/* Cover Letter */}
+        <View style={styles.section}>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionTitle}>Cover Letter</Text>
+            <Text style={styles.requiredBadge}>Required</Text>
+          </View>
+          <Text style={styles.sectionHint}>Introduce yourself and explain why you are interested in this position.</Text>
+          <TextInput
+            style={styles.textarea}
+            multiline
+            numberOfLines={8}
+            placeholder="Dear Hiring Manager,&#10;&#10;I am writing to express my interest in the position..."
+            placeholderTextColor="#cbd5e1"
+            value={coverLetter}
+            onChangeText={setCoverLetter}
+            textAlignVertical="top"
+          />
+        </View>
+
+        {/* Resume */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Resume / CV</Text>
+          <Text style={styles.sectionHint}>Attach your resume so employers can review your background.</Text>
+
+          <Pressable style={styles.uploadBtn} onPress={pickDocument}>
+            <Ionicons name="cloud-upload-outline" size={18} color="#2563eb" />
+            <Text style={styles.uploadBtnText}>Choose Files</Text>
+          </Pressable>
+
+          {resumeFiles.length > 0 && (
+            <View style={styles.fileList}>
+              {resumeFiles.map((file, idx) => (
+                <View key={idx} style={styles.fileChip}>
+                  <Ionicons name="document-text-outline" size={14} color="#475569" />
+                  <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+                  <Text style={styles.fileSize}>{Math.round(file.size / 1024)} KB</Text>
+                  <Pressable onPress={() => removeFile(idx)} hitSlop={8}>
+                    <Ionicons name="close-circle" size={16} color="#94a3b8" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.fileHint}>PDF, DOC, or DOCX. Leave blank to use your profile documents.</Text>
+        </View>
+
+        {/* Contact */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferred Contact Method</Text>
+          <Text style={styles.sectionHint}>Choose how the employer can reach you.</Text>
+
+          <View style={styles.toggleRow}>
+            <Pressable
+              style={[styles.toggleBtn, contactMethod === 'email' && styles.toggleActive]}
+              onPress={() => setContactMethod('email')}
+            >
+              <Ionicons name="mail-outline" size={15} color={contactMethod === 'email' ? '#ffffff' : '#64748b'} />
+              <Text style={[styles.toggleLabel, contactMethod === 'email' && styles.toggleLabelActive]}>Email</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.toggleBtn, contactMethod === 'phone' && styles.toggleActive]}
+              onPress={() => setContactMethod('phone')}
+            >
+              <Ionicons name="call-outline" size={15} color={contactMethod === 'phone' ? '#ffffff' : '#64748b'} />
+              <Text style={[styles.toggleLabel, contactMethod === 'phone' && styles.toggleLabelActive]}>Phone</Text>
+            </Pressable>
+          </View>
+
+          {contactMethod === 'email' ? (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email Address</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="your.email@example.com"
+                placeholderTextColor="#94a3b8"
+                value={contactEmail}
+                onChangeText={setContactEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+          ) : (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="+63 9XX XXX XXXX"
+                placeholderTextColor="#94a3b8"
+                value={contactNumber}
+                onChangeText={setContactNumber}
+                keyboardType="phone-pad"
+              />
+            </View>
+          )}
+        </View>
+
+        {/* What Happens Next */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>What happens next?</Text>
+          <View style={styles.steps}>
+            <View style={styles.step}>
+              <View style={[styles.stepDot, { backgroundColor: '#2563eb' }]}>
+                <Text style={styles.stepNum}>1</Text>
+              </View>
+              <Text style={styles.stepText}>Your application will be sent to the employer</Text>
+            </View>
+            <View style={styles.step}>
+              <View style={[styles.stepDot, { backgroundColor: '#2563eb' }]}>
+                <Text style={styles.stepNum}>2</Text>
+              </View>
+              <Text style={styles.stepText}>The employer will review your profile and qualifications</Text>
+            </View>
+            <View style={styles.step}>
+              <View style={[styles.stepDot, { backgroundColor: '#2563eb' }]}>
+                <Text style={styles.stepNum}>3</Text>
+              </View>
+              <Text style={styles.stepText}>You'll be contacted if your application is selected</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Actions */}
+        <View style={styles.actions}>
+          <Pressable
+            style={styles.cancelBtn}
+            onPress={() => navigation.goBack()}
+            disabled={submitting}
+          >
+            <Text style={styles.cancelBtnText}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <Text style={styles.submitBtnText}>Submitting...</Text>
+            ) : (
+              <>
+                <Ionicons name="send-outline" size={15} color="#ffffff" />
+                <Text style={styles.submitBtnText}>Submit Application</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  jobHeader: {
-    marginBottom: 24,
+  scrollContent: {
+    paddingBottom: 48
+  },
+  summaryCard: {
+    marginBottom: 16,
     gap: 4
   },
   jobTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: '#0f172a',
-    lineHeight: 32
+    lineHeight: 28
   },
   companyName: {
-    fontSize: 16,
-    color: '#475569',
+    fontSize: 15,
+    color: '#64748b',
     fontWeight: '500'
   },
-  infoBox: {
-    backgroundColor: '#f0f9ff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#bae6fd',
-    padding: 14,
-    marginBottom: 24,
+  metaRow: {
     flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start'
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8
   },
-  infoIcon: {
-    marginTop: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#cffafe',
+  metaChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
+    gap: 4,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4
+  },
+  metaChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569'
+  },
+  infoBar: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
-    color: '#0369a1',
-    lineHeight: 21,
-    fontWeight: '500'
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 19
   },
-  formSection: {
-    marginBottom: 24,
-    gap: 10
+  section: {
+    marginBottom: 24
   },
-  sectionHeader: {
+  sectionRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0f172a'
   },
-  required: {
-    fontSize: 12,
+  requiredBadge: {
+    fontSize: 10,
+    fontWeight: '700',
     color: '#dc2626',
-    fontWeight: '500'
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    overflow: 'hidden'
   },
-  sectionSubtitle: {
+  sectionHint: {
     fontSize: 13,
-    color: '#64748b',
-    lineHeight: 20
+    color: '#94a3b8',
+    marginBottom: 10
   },
   textarea: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    padding: 14,
-    backgroundColor: '#f8fafc',
+    padding: 12,
+    backgroundColor: '#ffffff',
     fontSize: 14,
     color: '#0f172a',
-    minHeight: 160,
-    lineHeight: 20,
-    fontFamily: 'System'
-  },
-  resumeReminderBox: {
-    backgroundColor: '#fffbeb',
-    borderWidth: 1,
-    borderColor: '#fcd34d',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 24,
-    gap: 4
-  },
-  resumeReminderTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#92400e'
-  },
-  resumeReminderText: {
-    fontSize: 13,
-    color: '#92400e',
+    minHeight: 150,
     lineHeight: 20
   },
-  bulletList: {
-    gap: 12
-  },
-  bulletItem: {
+  uploadBtn: {
     flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start'
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe',
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    paddingVertical: 14,
+    backgroundColor: '#eff6ff'
   },
-  bulletText: {
-    flex: 1,
+  uploadBtnText: {
     fontSize: 14,
-    color: '#334155',
-    lineHeight: 22,
-    marginTop: 2
+    fontWeight: '600',
+    color: '#2563eb'
   },
-  buttonGroup: {
+  fileList: {
+    marginTop: 8,
+    gap: 6
+  },
+  fileChip: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-    marginBottom: 48
-  },
-  cancelButton: {
-    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 8,
-    paddingVertical: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  fileName: {
+    flex: 1,
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500'
+  },
+  fileSize: {
+    fontSize: 11,
+    color: '#94a3b8'
+  },
+  fileHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 6
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    padding: 3,
+    gap: 3,
+    marginBottom: 12
+  },
+  toggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 8,
+    paddingVertical: 10
+  },
+  toggleActive: {
+    backgroundColor: '#2563eb'
+  },
+  toggleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  toggleLabelActive: {
+    color: '#ffffff'
+  },
+  inputGroup: {
+    gap: 4
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    backgroundColor: '#ffffff',
+    fontSize: 14,
+    color: '#0f172a'
+  },
+  steps: {
+    marginTop: 8,
+    gap: 12
+  },
+  step: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10
+  },
+  stepDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1
+  },
+  stepNum: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff'
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 19,
+    paddingTop: 2
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8
+  },
+  cancelBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 13,
     alignItems: 'center',
     backgroundColor: '#ffffff'
   },
-  cancelButtonText: {
-    fontSize: 15,
+  cancelBtnText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#475569'
+    color: '#64748b'
   },
-  submitButton: {
-    flex: 1,
-    backgroundColor: '#1e3a8a',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center'
+  submitBtn: {
+    flex: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 13
   },
-  submitButtonDisabled: {
+  submitBtnDisabled: {
     opacity: 0.6
   },
-  submitButtonText: {
-    fontSize: 15,
+  submitBtnText: {
+    fontSize: 14,
     fontWeight: '700',
     color: '#ffffff'
   },
@@ -353,14 +620,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24
   },
   errorTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#dc2626'
   },
   backButton: {
-    backgroundColor: '#1e3a8a',
-    borderRadius: 8,
-    paddingVertical: 12,
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 11,
     paddingHorizontal: 24
   },
   backButtonText: {

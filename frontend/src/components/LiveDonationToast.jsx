@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { realtimeClient } from '../services/realtimeClient';
 import { authService } from '../services/authService';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import {
+  areNotificationsEnabled,
+  NOTIFICATION_PREFERENCE_EVENT
+} from '../utils/notificationPreferences';
 const getInitials = (name) => {
   const parts = String(name || 'A')
     .trim()
@@ -54,6 +58,7 @@ const buildDonationCopy = ({ amountLabel, campaignName, donationKind, title, mes
 
 const LiveDonationToast = () => {
   const [toasts, setToasts] = useState([]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   const formatRelativeTime = (timestamp) => {
     const diffMs = Date.now() - timestamp;
@@ -71,11 +76,52 @@ const LiveDonationToast = () => {
   };
 
   useEffect(() => {
+    const user = authService.getCurrentUser();
+    const userId = user?.id;
+    if (!userId) return undefined;
+
+    const syncPreference = () => {
+      setNotificationsEnabled(areNotificationsEnabled(userId));
+    };
+
+    syncPreference();
+
+    const onPreferenceChange = (event) => {
+      if (!event?.detail || event.detail.userId === userId) {
+        syncPreference();
+      }
+    };
+
+    const onStorageChange = (event) => {
+      if (!event.key || event.key === `notifications_enabled_${userId}`) {
+        syncPreference();
+      }
+    };
+
+    window.addEventListener(NOTIFICATION_PREFERENCE_EVENT, onPreferenceChange);
+    window.addEventListener('storage', onStorageChange);
+
+    return () => {
+      window.removeEventListener(NOTIFICATION_PREFERENCE_EVENT, onPreferenceChange);
+      window.removeEventListener('storage', onStorageChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!notificationsEnabled) {
+      setToasts([]);
+    }
+  }, [notificationsEnabled]);
+
+  useEffect(() => {
     const role = authService.getRole?.() || null;
-    if (!role || role.toUpperCase() !== 'ALUMNI') return;
+    if (!role || role.toUpperCase() !== 'ALUMNI') return undefined;
 
     const handler = (payload) => {
       try {
+        const user = authService.getCurrentUser();
+        if (!user?.id || !areNotificationsEnabled(user.id)) return;
+
         const type =
           payload?.type ||
           payload?.notification?.type ||
@@ -139,7 +185,7 @@ const LiveDonationToast = () => {
     };
   }, []);
 
-  if (!toasts.length) return null;
+  if (!notificationsEnabled || !toasts.length) return null;
 
   return (
     <div

@@ -37,9 +37,9 @@ const parseDonationActivitiesFromDonation = (donation) => {
     ? description
       .split(/\n\s*\n(?=Donation for:)/i)
       .filter((block) => block.includes('Donor:'))
-    : [description];
+    : [];
 
-  return blocks.map((block, index) => {
+  const entries = blocks.map((block, index) => {
     const donorName = extractLineValue(block, 'Donor')
       || [donation?.alumni?.first_name, donation?.alumni?.last_name].filter(Boolean).join(' ').trim()
       || 'Alumnus';
@@ -55,16 +55,18 @@ const parseDonationActivitiesFromDonation = (donation) => {
     return {
       id: `donation-${donation?.id || 'x'}-${index}`,
       title: `${donorName} donated ${amountLabel || 'a donation'} to ${purpose}`,
-      message: block || donation?.description || purpose,
+      message: block,
       link: `/donate/${donation?.id}`,
       senderName: donorName,
       senderProfileImage: donation?.alumni?.profile_image || null,
       amountLabel,
       campaignName: purpose,
-      donationKind: inferDonationKind(block || donation?.description || ''),
+      donationKind: inferDonationKind(block),
       createdAt
     };
   });
+
+  return entries;
 };
 
 const buildActivitiesFromDonations = (donations = []) => {
@@ -83,10 +85,16 @@ const donationService = {
     return response.data;
   },
 
+  // Get a single donation by ID
+  getDonationById: async (id) => {
+    const response = await axios.get(`${API_URL}/${id}`);
+    return response.data;
+  },
+
   // Get recent donation activity for admin dashboard
   getRecentDonationActivity: async () => {
-    const donationsResponse = await axios.get(API_URL);
-    return buildActivitiesFromDonations(Array.isArray(donationsResponse.data) ? donationsResponse.data : []);
+    const response = await axios.get(`${API_URL}/recent`, getAuthHeaders());
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   // Get all donations for an alumni

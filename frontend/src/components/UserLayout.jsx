@@ -1,84 +1,88 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import AlumniLogo from '../assets/alumnilogo2.png';
-import Navbar from './Navbar';
-import ConfirmModal from './ConfirmModal';
-import { authService } from '../services/authService';
-import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import AlumniLogo from "../assets/alumnilogo2.png";
+import Navbar from "./Navbar";
+import ConfirmModal from "./ConfirmModal";
+import { authService } from "../services/authService";
+import { IMAGE_BASE_URL } from "../config/apiBaseUrl";
 
 const topNavItems = [
   {
-    path: '/settings',
-    label: 'Settings',
-    icon: 'M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 4a7.952 7.952 0 00-.34-2.3l2.11-1.65-2-3.46-2.49 1a8.13 8.13 0 00-3.97-2.3L14 0h-4l-.25 2.29a8.13 8.13 0 00-3.97 2.3l-2.49-1-2 3.46 2.11 1.65a8.35 8.35 0 000 4.6L1.29 14.95l2 3.46 2.49-1a8.13 8.13 0 003.97 2.3L10 24h4l.25-2.29a8.13 8.13 0 003.97-2.3l2.49 1 2-3.46-2.11-1.65c.22-.74.34-1.5.34-2.3z',
+    path: "/settings",
+    label: "Settings",
+    icon: "M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 4a7.952 7.952 0 00-.34-2.3l2.11-1.65-2-3.46-2.49 1a8.13 8.13 0 00-3.97-2.3L14 0h-4l-.25 2.29a8.13 8.13 0 00-3.97 2.3l-2.49-1-2 3.46 2.11 1.65a8.35 8.35 0 000 4.6L1.29 14.95l2 3.46 2.49-1a8.13 8.13 0 003.97 2.3L10 24h4l.25-2.29a8.13 8.13 0 003.97-2.3l2.49 1 2-3.46-2.11-1.65c.22-.74.34-1.5.34-2.3z",
   },
   {
-    path: '/notifications',
-    label: 'Notifications',
-    icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
+    path: "/notifications",
+    label: "Notifications",
+    icon: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9",
   },
 ];
 
 const mainNavItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: 'M4 6h7M4 10h7M4 14h7M4 18h7M15 6h5M15 10h5M15 14h5M15 18h5' },
   {
-    path: '/home',
-    label: 'Home',
-    icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+    path: "/dashboard",
+    label: "Dashboard",
+    icon: "M4 6h7M4 10h7M4 14h7M4 18h7M15 6h5M15 10h5M15 14h5M15 18h5",
   },
   {
-    path: '/alumni',
-    label: 'Alumni Directory',
-    icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
+    path: "/home",
+    label: "Home",
+    icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
   },
   {
-    path: '/events',
-    label: 'Events',
-    icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+    path: "/alumni",
+    label: "Alumni Directory",
+    icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
   },
   {
-    path: '/achievements',
-    label: 'Achievements',
-    icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
+    path: "/events",
+    label: "Events",
+    icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
   },
   {
-    path: '/employment',
-    label: 'Employment',
-    icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+    path: "/achievements",
+    label: "Achievements",
+    icon: "M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",
   },
   {
-    path: '/donations',
-    label: 'Donations',
-    icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
+    path: "/employment",
+    label: "Employment",
+    icon: "M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+  },
+  {
+    path: "/donations",
+    label: "Donations",
+    icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z",
   },
 ];
 
 const adminNavItems = [
   {
-    path: '/pending-approval',
-    label: 'Pending Requests',
-    icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    role: 'TEACHER',
+    path: "/pending-approval",
+    label: "Pending Requests",
+    icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+    role: "TEACHER",
   },
   {
-    path: '/manage-users',
-    label: 'Manage Users',
-    icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
+    path: "/manage-users",
+    label: "Manage Users",
+    icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
   },
   {
-    path: '/teachers',
-    label: 'Teachers',
-    icon: 'M12 14a4 4 0 100-8 4 4 0 000 8zm0 2c-3.333 0-6 1.334-6 4v2h12v-2c0-2.666-2.667-4-6-4zm7-10h3m-1.5-1.5V7.5',
-    role: 'TEACHER',
+    path: "/teachers",
+    label: "Teachers",
+    icon: "M12 14a4 4 0 100-8 4 4 0 000 8zm0 2c-3.333 0-6 1.334-6 4v2h12v-2c0-2.666-2.667-4-6-4zm7-10h3m-1.5-1.5V7.5",
+    role: "TEACHER",
   },
 ];
 
 const isItemActive = (locationPath, itemPath) => {
-  if (itemPath === '/settings') {
+  if (itemPath === "/settings") {
     return (
-      locationPath === '/settings' ||
-      locationPath.startsWith('/settings/') ||
-      locationPath === '/profile'
+      locationPath === "/settings" ||
+      locationPath.startsWith("/settings/") ||
+      locationPath === "/profile"
     );
   }
   return locationPath === itemPath;
@@ -86,36 +90,55 @@ const isItemActive = (locationPath, itemPath) => {
 
 const getProfileImageSrc = (user) => {
   const imagePath = user?.profile_image || user?.profileImage;
-  if (!imagePath) return '';
-  return imagePath.startsWith('http') ? imagePath : `${IMAGE_BASE_URL}${imagePath}`;
+  if (!imagePath) return "";
+  return imagePath.startsWith("http")
+    ? imagePath
+    : `${IMAGE_BASE_URL}${imagePath}`;
 };
 
 const getUserInitials = (user) => {
   const alumni = user?.alumni;
-  const first = alumni?.firstName || alumni?.first_name || user?.firstName || user?.username || 'U';
-  const last = alumni?.lastName || alumni?.last_name || user?.lastName || '';
-  return `${first.charAt(0)}${last ? last.charAt(0) : ''}`.toUpperCase() || 'U';
+  const first =
+    alumni?.firstName ||
+    alumni?.first_name ||
+    user?.firstName ||
+    user?.username ||
+    "U";
+  const last = alumni?.lastName || alumni?.last_name || user?.lastName || "";
+  return `${first.charAt(0)}${last ? last.charAt(0) : ""}`.toUpperCase() || "U";
 };
 
 const getUserDisplayName = (user) => {
   const alumni = user?.alumni;
-  const first = alumni?.firstName || alumni?.first_name || user?.firstName || '';
-  const last = alumni?.lastName || alumni?.last_name || user?.lastName || '';
+  const first =
+    alumni?.firstName || alumni?.first_name || user?.firstName || "";
+  const last = alumni?.lastName || alumni?.last_name || user?.lastName || "";
   const full = `${first} ${last}`.trim();
-  return full || user?.username || 'User';
+  return full || user?.username || "User";
 };
 
 const getRoleLabel = (role) => {
-  if (role === 'TEACHER') return 'Faculty';
-  if (role === 'ADMIN') return 'Admin';
-  return 'Alumni';
+  if (role === "TEACHER") return "Faculty";
+  if (role === "ADMIN") return "Admin";
+  return "Alumni";
 };
 
-const SIDEBAR_SCROLL_KEY = 'userSidebarScrollTop';
+const SIDEBAR_SCROLL_KEY = "userSidebarScrollTop";
 
-const SidebarIcon = ({ d, className = 'h-5 w-5' }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d={d} />
+const SidebarIcon = ({ d, className = "h-5 w-5" }) => (
+  <svg
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.75"
+      d={d}
+    />
   </svg>
 );
 
@@ -124,18 +147,30 @@ const SidebarPanelToggle = ({ onClick, expanded }) => (
     type="button"
     onClick={onClick}
     className="app-sidebar-track text-blue-200/80 transition-colors hover:bg-blue-800/60 hover:text-white"
-    aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
-    title={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
+    aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+    title={expanded ? "Collapse sidebar" : "Expand sidebar"}
   >
-    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <svg
+      className="h-5 w-5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
       <rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="1.5" />
       <path strokeLinecap="round" strokeWidth="1.5" d="M9 4v16" />
     </svg>
   </button>
 );
 
-const LogoutIcon = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+const LogoutIcon = ({ className = "h-5 w-5" }) => (
+  <svg
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -151,7 +186,7 @@ const UserLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const readCollapsedPreference = () => {
     try {
-      return localStorage.getItem('sidebarCollapsed') === 'true';
+      return localStorage.getItem("sidebarCollapsed") === "true";
     } catch {
       return false;
     }
@@ -163,23 +198,28 @@ const UserLayout = ({ children }) => {
   const prevScrollRef = useRef(null);
   const user = authService.getCurrentUser();
   const [isLargeScreen, setIsLargeScreen] = useState(
-    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+    typeof window !== "undefined" ? window.innerWidth >= 1024 : false,
   );
 
-  const userRole = (authService.getRole() || '').toUpperCase();
-  const isAdminSide = userRole === 'TEACHER' || userRole === 'ADMIN';
+  const userRole = (authService.getRole() || "").toUpperCase();
+  const isAdminSide = userRole === "TEACHER" || userRole === "ADMIN";
 
   const visibleTop = topNavItems.filter((item) => !item.role || isAdminSide);
   const visibleMain = mainNavItems.filter((item) => !item.role || isAdminSide);
-  const visibleAdmin = adminNavItems.filter((item) => !item.role || isAdminSide);
+  const visibleAdmin = adminNavItems.filter(
+    (item) => !item.role || isAdminSide,
+  );
 
   const isDesktopCollapsed = collapsed && isLargeScreen;
 
   const toggleCollapsed = () => {
     const next = !collapsed;
     setCollapsed(next);
+    if (!isLargeScreen) {
+      setSidebarOpen(false);
+    }
     try {
-      localStorage.setItem('sidebarCollapsed', String(next));
+      localStorage.setItem("sidebarCollapsed", String(next));
     } catch {
       /* ignore */
     }
@@ -190,17 +230,17 @@ const UserLayout = ({ children }) => {
   }, [location.pathname, isLargeScreen]);
 
   useEffect(() => {
-    const mq = window.matchMedia('(min-width:1024px)');
+    const mq = window.matchMedia("(min-width:1024px)");
     const onChange = (e) => setIsLargeScreen(e.matches);
     try {
-      mq.addEventListener('change', onChange);
+      mq.addEventListener("change", onChange);
     } catch {
       mq.addListener(onChange);
     }
     setIsLargeScreen(mq.matches);
     return () => {
       try {
-        mq.removeEventListener('change', onChange);
+        mq.removeEventListener("change", onChange);
       } catch {
         mq.removeListener(onChange);
       }
@@ -220,21 +260,38 @@ const UserLayout = ({ children }) => {
   useLayoutEffect(() => {
     const sidebarElement = sidebarScrollRef.current;
     if (!sidebarElement) return;
-    const savedScrollTop = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY) || '0');
-    sidebarElement.scrollTop = Number.isFinite(savedScrollTop) ? savedScrollTop : 0;
+    const savedScrollTop = Number(
+      sessionStorage.getItem(SIDEBAR_SCROLL_KEY) || "0",
+    );
+    sidebarElement.scrollTop = Number.isFinite(savedScrollTop)
+      ? savedScrollTop
+      : 0;
   }, []);
 
   useEffect(() => {
     const sidebarElement = sidebarScrollRef.current;
     if (!sidebarElement) return undefined;
     const handleSidebarScroll = () => {
-      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(sidebarElement.scrollTop));
+      sessionStorage.setItem(
+        SIDEBAR_SCROLL_KEY,
+        String(sidebarElement.scrollTop),
+      );
     };
-    sidebarElement.addEventListener('scroll', handleSidebarScroll, { passive: true });
-    return () => sidebarElement.removeEventListener('scroll', handleSidebarScroll);
+    sidebarElement.addEventListener("scroll", handleSidebarScroll, {
+      passive: true,
+    });
+    return () =>
+      sidebarElement.removeEventListener("scroll", handleSidebarScroll);
   }, []);
 
   const navigatePreservingScroll = (path) => {
+    if (isItemActive(location.pathname, path)) {
+      if (!isLargeScreen) {
+        setSidebarOpen(false);
+      }
+      return;
+    }
+
     if (isLargeScreen) {
       navigate(path);
       return;
@@ -242,7 +299,10 @@ const UserLayout = ({ children }) => {
     prevScrollRef.current = window.scrollY;
     const sidebarElement = sidebarScrollRef.current;
     if (sidebarElement) {
-      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(sidebarElement.scrollTop));
+      sessionStorage.setItem(
+        SIDEBAR_SCROLL_KEY,
+        String(sidebarElement.scrollTop),
+      );
     }
     setSidebarOpen(false);
     navigate(path);
@@ -250,7 +310,7 @@ const UserLayout = ({ children }) => {
 
   const handleLogout = async () => {
     await authService.logout();
-    navigate('/login', { replace: true });
+    navigate("/login", { replace: true });
   };
 
   const openLogoutConfirm = () => {
@@ -268,23 +328,27 @@ const UserLayout = ({ children }) => {
           e.preventDefault();
           navigatePreservingScroll(item.path);
         }}
-        className={`app-sidebar-nav-btn app-sidebar-row rounded-lg py-2 pr-2 text-sm font-medium ${
-          isActive ? 'is-active' : 'text-blue-100/90'
+        className={`app-sidebar-nav-btn app-sidebar-row rounded-lg text-sm font-medium ${
+          isActive ? "is-active" : "text-blue-100/90"
         }`}
       >
         <span className="app-sidebar-track">
           <SidebarIcon d={item.icon} className="h-5 w-5" />
         </span>
-        <span className="app-sidebar-label app-sidebar-fade truncate">{item.label}</span>
+        <span className="app-sidebar-label app-sidebar-fade truncate">
+          {item.label}
+        </span>
       </button>
     );
   };
 
   if (!isAdminSide) {
     return (
-      <div className="min-h-screen bg-slate-100">
+      <div className="min-h-screen bg-white">
         <Navbar />
-        <main className="min-h-screen px-4 py-4 sm:px-6 lg:px-8 lg:py-6">{children}</main>
+        <main className="min-h-screen px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+          {children}
+        </main>
       </div>
     );
   }
@@ -311,8 +375,12 @@ const UserLayout = ({ children }) => {
       <div className="sidebar-top app-sidebar-pad flex h-14 shrink-0 items-center gap-1 border-b border-blue-800/50">
         <button
           type="button"
-          onClick={() => navigate('/dashboard')}
-          className="sidebar-brand-btn app-sidebar-row min-w-0 flex-1 rounded-lg transition-colors hover:bg-blue-800/60"
+          onClick={() => {
+            if (location.pathname !== "/dashboard") {
+              navigate("/dashboard");
+            }
+          }}
+          className="sidebar-brand-btn app-sidebar-row min-w-0 flex-1 rounded-lg hover:bg-blue-800/60"
           title="Dashboard"
         >
           <span className="app-sidebar-track">
@@ -326,26 +394,35 @@ const UserLayout = ({ children }) => {
             LCCB Alumni
           </span>
         </button>
-        <SidebarPanelToggle onClick={toggleCollapsed} expanded={!isDesktopCollapsed} />
+        <SidebarPanelToggle
+          onClick={toggleCollapsed}
+          expanded={!isDesktopCollapsed}
+        />
       </div>
 
       <nav
         ref={sidebarScrollRef}
-        className="app-sidebar-pad min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-3"
+        className="app-sidebar-pad min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-1"
       >
-        <div className="flex flex-col gap-0.5">{visibleTop.map(renderNavButton)}</div>
-        <div className="my-3 border-t border-blue-800/50" />
-        <div className="flex flex-col gap-0.5">{visibleMain.map(renderNavButton)}</div>
+        <div className="flex flex-col gap-px">
+          {visibleTop.map(renderNavButton)}
+        </div>
+        <div className="my-1 border-t border-blue-800/50" />
+        <div className="flex flex-col gap-px">
+          {visibleMain.map(renderNavButton)}
+        </div>
         {visibleAdmin.length > 0 && (
           <>
-            <div className="my-3 border-t border-blue-800/50" />
-            <div className="flex flex-col gap-0.5">{visibleAdmin.map(renderNavButton)}</div>
+            <div className="my-1 border-t border-blue-800/50" />
+            <div className="flex flex-col gap-px">
+              {visibleAdmin.map(renderNavButton)}
+            </div>
           </>
         )}
       </nav>
 
-      <div className="app-sidebar-pad mt-auto shrink-0 border-t border-blue-800/50 py-2">
-        <div className="sidebar-footer-panel flex flex-col gap-0.5 py-1">
+      <div className="app-sidebar-pad mt-auto shrink-0 border-t border-blue-800/50 py-1">
+        <div className="sidebar-footer-panel flex flex-col gap-px py-0.5">
           <div
             className="app-sidebar-row py-0.5"
             title={isDesktopCollapsed ? displayName : undefined}
@@ -356,21 +433,27 @@ const UserLayout = ({ children }) => {
               </span>
             </span>
             <span className="app-sidebar-label app-sidebar-fade min-w-0">
-              <span className="block truncate text-sm font-medium text-white">{displayName}</span>
-              <span className="block truncate text-xs text-blue-200/75">{roleLabel}</span>
+              <span className="block truncate text-sm font-medium text-white">
+                {displayName}
+              </span>
+              <span className="block truncate text-xs text-blue-200/75">
+                {roleLabel}
+              </span>
             </span>
           </div>
           <button
             type="button"
             onClick={openLogoutConfirm}
-            className="app-sidebar-logout-btn app-sidebar-row rounded-lg py-2 pr-2 text-xs font-medium text-blue-200/75"
+            className="app-sidebar-logout-btn app-sidebar-row rounded-lg text-xs font-medium text-blue-200/75"
             aria-label="Log out"
-            title={isDesktopCollapsed ? 'Log out' : undefined}
+            title={isDesktopCollapsed ? "Log out" : undefined}
           >
             <span className="app-sidebar-track">
               <LogoutIcon className="h-5 w-5" />
             </span>
-            <span className="app-sidebar-label app-sidebar-fade truncate text-left">Log out</span>
+            <span className="app-sidebar-label app-sidebar-fade truncate text-left">
+              Log out
+            </span>
           </button>
         </div>
       </div>
@@ -378,7 +461,9 @@ const UserLayout = ({ children }) => {
   );
 
   return (
-    <div className={`bg-slate-100 ${isLargeScreen && isAdminSide ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
+    <div
+      className={`bg-white ${isLargeScreen && isAdminSide ? "h-screen overflow-hidden" : "min-h-screen"}`}
+    >
       <ConfirmModal
         isOpen={confirmLogoutOpen}
         onClose={() => setConfirmLogoutOpen(false)}
@@ -397,31 +482,33 @@ const UserLayout = ({ children }) => {
         <div className="app-sidebar-shell h-full">
           <aside
             className="app-sidebar-aside flex h-full flex-col overflow-hidden border-r border-blue-800/50 bg-blue-950 text-white"
-            data-collapsed={isDesktopCollapsed ? 'true' : 'false'}
+            data-collapsed={isDesktopCollapsed ? "true" : "false"}
           >
             {sidebarContent}
           </aside>
-          <div className="app-sidebar-main h-full overflow-y-auto overflow-x-hidden bg-slate-100">
-            <main className="px-4 py-4 sm:px-6 lg:px-8 lg:py-6">{children}</main>
+          <div className="app-sidebar-main h-full overflow-y-auto overflow-x-hidden bg-white">
+            <main className="px-4 py-3 sm:px-5 lg:px-6 lg:py-4">
+              {children}
+            </main>
           </div>
         </div>
       ) : (
         <>
           <aside
-            className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-blue-800/50 bg-blue-950 text-white transition-transform duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
-              sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            className={`app-sidebar-aside fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-blue-800/50 bg-blue-950 text-white transition-transform duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
+              sidebarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
             {sidebarContent}
           </aside>
-          {sidebarOpen && (
-            <button
-              type="button"
-              aria-label="Close navigation"
-              onClick={() => setSidebarOpen(false)}
-              className="fixed inset-0 z-30 bg-slate-950/60"
-            />
-          )}
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setSidebarOpen(false)}
+            className={`fixed inset-0 z-30 bg-slate-950/60 transition-opacity duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
+              sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+          />
           <div className="min-h-screen">
             <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
               <div className="flex items-center gap-3 px-4 py-3">
@@ -431,17 +518,33 @@ const UserLayout = ({ children }) => {
                   className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm"
                   aria-label="Open navigation"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
                   </svg>
                 </button>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.28em] text-slate-500">LCCB Alumni</p>
-                  <h1 className="text-base font-semibold text-slate-900">Network</h1>
+                  <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+                    LCCB Alumni
+                  </p>
+                  <h1 className="text-base font-semibold text-slate-900">
+                    Network
+                  </h1>
                 </div>
               </div>
             </header>
-            <main className="min-h-screen px-4 py-4 sm:px-6 lg:px-8 lg:py-6">{children}</main>
+            <main className="min-h-screen px-4 py-3 sm:px-5 lg:px-6 lg:py-4">
+              {children}
+            </main>
           </div>
         </>
       )}

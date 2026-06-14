@@ -25,7 +25,20 @@ export const fullName = (obj) => {
 
 export const imageUrl = (path, baseOrigin) => {
   if (!path) return null;
-  if (String(path).startsWith('http')) return path;
+  const str = String(path).trim();
+  if (!str) return null;
+  if (str.startsWith('http')) {
+    if (baseOrigin && str.includes('localhost')) {
+      try {
+        const origin = new URL(baseOrigin);
+        return str.replace(/\/\/localhost(:\d+)?/, `//${origin.hostname}${origin.port ? ':' + origin.port : ''}`);
+      } catch {
+        return str;
+      }
+    }
+    return str;
+  }
   if (!baseOrigin) return path;
-  return `${baseOrigin}${path}`;
+  const cleanPath = str.startsWith('/') ? str : `/${str}`;
+  return `${baseOrigin}${cleanPath}`;
 };

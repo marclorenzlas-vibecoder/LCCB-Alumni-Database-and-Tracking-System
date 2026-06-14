@@ -558,44 +558,45 @@ const JobApplications = () => {
 
         {/* Cover Letter Modal */}
         {showCoverLetterModal && selectedApplication && selectedApplication.cover_letter && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-[110]">
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide relative">
-              <button
-                onClick={() => setShowCoverLetterModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 z-10"
-              >
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-
-              <div className="p-8">
-                <div className="mb-6">
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Cover Letter</h2>
-                  <p className="text-gray-600">
-                    from <span className="font-semibold">{selectedApplication.applicant.first_name} {selectedApplication.applicant.last_name}</span>
-                  </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Applied for: <span className="font-medium">{job?.job_title}</span>
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-slate-950/60 backdrop-blur-sm p-0 sm:p-4">
+            <div className="relative w-full sm:max-w-2xl max-h-[95vh] sm:max-h-[92vh] rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+              <div className="sm:hidden flex justify-center pt-2 pb-1 shrink-0">
+                <div className="h-1.5 w-10 rounded-full bg-slate-300" />
+              </div>
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 sm:px-7 py-4 shrink-0">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-900">Cover Letter</h2>
+                  <p className="mt-0.5 text-xs sm:text-sm text-slate-500">
+                    <span className="font-semibold text-slate-700">{selectedApplication.applicant.first_name} {selectedApplication.applicant.last_name}</span>
+                    <span className="mx-1.5">&middot;</span>
+                    <span className="font-medium text-slate-700">{job?.job_title}</span>
                   </p>
                 </div>
+                <button
+                  onClick={() => setShowCoverLetterModal(false)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
 
-                <div className="border-t border-gray-200 pt-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-8 shadow-inner">
-                    <p className="text-gray-800 whitespace-pre-wrap leading-relaxed text-base">
-                      {selectedApplication.cover_letter}
-                    </p>
-                  </div>
+              <div className="overflow-y-auto px-5 sm:px-7 py-5 flex-1">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+                  <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+                    {selectedApplication.cover_letter}
+                  </p>
                 </div>
+              </div>
 
-                <div className="mt-6 flex justify-end gap-3 pt-6 border-t border-gray-200">
-                  <button
-                    onClick={() => setShowCoverLetterModal(false)}
-                    className="px-6 py-2.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 font-medium"
-                  >
-                    Close
-                  </button>
-                </div>
+              <div className="flex justify-end border-t border-slate-100 px-5 sm:px-7 py-4 shrink-0">
+                <button
+                  onClick={() => setShowCoverLetterModal(false)}
+                  className="rounded-lg bg-slate-100 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>

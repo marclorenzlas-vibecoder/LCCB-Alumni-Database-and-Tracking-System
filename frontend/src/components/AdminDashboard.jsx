@@ -53,10 +53,11 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         message: payload?.message || notification.message || '',
         link: payload?.link || notification.link || '',
         senderName: payload?.senderName || notification.sender_name || notification.senderName || 'Alumnus',
+        senderProfileImage: payload?.senderProfileImage || notification.sender_profile_image || notification.senderProfileImage || null,
         amountLabel: payload?.amountLabel || notification.amountLabel || '',
         campaignName: payload?.campaignName || notification.campaignName || '',
         donationKind: payload?.donationKind || notification.donationKind || 'money',
-        createdAt
+        createdAt: payload?.createdAt || createdAt
       };
 
       setRecentDonations((previous) => {
@@ -345,12 +346,12 @@ const AdminDashboard = ({ pendingOnly = false }) => {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-3">
 
         {!pendingOnly && (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {overviewCards.map((card) => (
-            <div key={card.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div key={card.label} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className={`h-1.5 w-20 rounded-full bg-gradient-to-r ${toneClasses[card.tone]}`} />
               <div className="mt-4 text-sm font-medium uppercase tracking-[0.18em] text-slate-500">{card.label}</div>
               <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{card.value}</div>
@@ -361,7 +362,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         )}
 
         {!pendingOnly && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Registration Trends</p>
@@ -417,8 +418,8 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         )}
 
         {!pendingOnly && (
-        <section className="grid items-stretch gap-6 xl:grid-cols-2">
-          <div className="flex h-[620px] min-h-0 flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="grid items-stretch gap-3 xl:grid-cols-2">
+          <div className="flex h-[620px] min-h-0 flex-col rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-3">
@@ -479,7 +480,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
             )}
           </div>
 
-          <div className="flex h-[620px] min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex h-[620px] min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-4 flex-shrink-0">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Registrations</p>
               <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Registration Status Overview</h2>
@@ -511,7 +512,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         </section>
         )}
         {!pendingOnly && courseData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Analytics</p>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Alumni by Course/Department</h2>
@@ -532,7 +533,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         )}
 
         {!pendingOnly && employmentStatusData.some(d => d.value > 0) && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Alumni Status</p>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Employment Status Distribution</h2>
@@ -554,7 +555,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         )}
 
         {!pendingOnly && registrationTrendsData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Growth</p>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Alumni Registration Trends</h2>
@@ -576,7 +577,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         )}
 
         {!pendingOnly && eventData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Events</p>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Event Participation</h2>
@@ -597,7 +598,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         )}
 
         {!pendingOnly && donationData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Fundraising</p>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Donation Trends</h2>
@@ -680,15 +681,9 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                           <div className="flex flex-col gap-2">
                             <button onClick={(e) => { e.stopPropagation(); handleApproval(user.id); }} className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-emerald-700">
-                              <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                              </svg>
                               Approve
                             </button>
                             <button onClick={(e) => { e.stopPropagation(); handleRejection(user.id); }} className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-rose-700">
-                              <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
                               Reject
                             </button>
                           </div>

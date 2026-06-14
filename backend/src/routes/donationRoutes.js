@@ -287,7 +287,7 @@ const buildLiveDonationActivityFeed = ({ notifications = [], donations = [], alu
     if (seen.has(key)) continue;
     seen.add(key);
     activity.push(item);
-    if (activity.length >= 10) break;
+    if (activity.length >= 100) break;
   }
 
   return activity;
@@ -297,6 +297,35 @@ const extractLineValue = (text = '', label = '') => {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(text || '').match(new RegExp(`^${escapedLabel}:\\s*(.+)$`, 'im'));
   return match?.[1]?.trim() || '';
+};
+
+const buildContributionBlock = ({
+  campaignPurpose,
+  donorName,
+  amountLabel,
+  recordedAt,
+  donorDetailsText = ''
+}) => {
+  const lines = [
+    `Donation for: ${campaignPurpose || 'a donation campaign'}`,
+    `Donor: ${donorName || 'Alumnus'}`,
+    `Amount: ${amountLabel || 'a donation'}`,
+    `Recorded: ${recordedAt.toISOString()}`
+  ];
+
+  const extraLines = String(donorDetailsText || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !/^donor:/i.test(line));
+
+  return [...lines, ...extraLines].join('\n');
+};
+
+const appendContributionRecord = (existingCleanDescription, contributionBlock) => {
+  const base = String(existingCleanDescription || '').trim();
+  const block = String(contributionBlock || '').trim();
+  if (!block) return base;
+  return base ? `${base}\n\n${block}` : block;
 };
 
 const parseDonationActivitiesFromCampaign = (campaign) => {
@@ -391,6 +420,51 @@ const getDonorProfileImage = async (req) => {
   return null;
 };
 
+const handleRecentDonationActivity = async (req, res) => {
+  try {
+    const [donations, notifications, alumniRows] = await Promise.all([
+      prisma.donation.findMany({
+        include: {
+          alumni: {
+            select: {
+              first_name: true,
+              last_name: true,
+              profile_image: true
+            }
+          }
+        },
+        orderBy: { date: 'desc' },
+        take: 100
+      }),
+      prisma.notification.findMany({
+        where: { type: 'DONATION' },
+        orderBy: { created_at: 'desc' },
+        take: 100
+      }),
+      prisma.alumni.findMany({
+        select: {
+          first_name: true,
+          last_name: true,
+          profile_image: true
+        }
+      })
+    ]);
+
+    const alumniMap = new Map();
+    for (const alumni of alumniRows) {
+      const key = `${alumni.first_name || ''} ${alumni.last_name || ''}`.trim().toLowerCase();
+      if (key) alumniMap.set(key, alumni);
+    }
+
+    const activity = buildLiveDonationActivityFeed({ notifications, donations, alumniMap });
+
+    res.json(activity);
+  } catch (error) {
+    console.error('Error fetching recent donation activity:', error);
+    res.status(500).json({ error: 'Failed to fetch live donation activity' });
+  }
+};
+
 // Get all donations
 router.get('/', async (req, res) => {
   try {
@@ -413,6 +487,10 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Recent donation activity for admin dashboard (must be registered before /:id)
+router.get('/recent', flexibleAuthMiddleware, handleRecentDonationActivity);
+router.get('/live/recent', flexibleAuthMiddleware, handleRecentDonationActivity);
+
 // Get all donations for an alumni
 router.get('/alumni/:alumniId', async (req, res) => {
   try {
@@ -428,19 +506,17 @@ router.get('/alumni/:alumniId', async (req, res) => {
   }
 });
 
-// Check weekly donation limit status for an alumni
+// Check weekly donation limit status for an alumni (register before /alumni/:alumniId)
 router.get('/alumni/:alumniId/weekly-status', async (req, res) => {
   try {
     const { alumniId } = req.params;
     const alumniIdNum = Number(alumniId);
 
-    // Calculate start of current week (Sunday)
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
 
-    // Count donations from this alumni this week
     const weeklyDonationCount = await prisma.donation.count({
       where: {
         alumni_id: alumniIdNum,
@@ -469,34 +545,41 @@ router.get('/alumni/:alumniId/weekly-status', async (req, res) => {
   }
 });
 
-const handleRecentDonationActivity = async (req, res) => {
+// Get a single donation by ID
+router.get('/:id', async (req, res) => {
   try {
-    const donations = await prisma.donation.findMany({
+    const { id } = req.params;
+    const donation = await prisma.donation.findUnique({
+      where: { id: Number(id) },
       include: {
         alumni: {
           select: {
+            id: true,
             first_name: true,
             last_name: true,
+            email: true,
             profile_image: true
           }
         }
-      },
-      orderBy: { date: 'desc' },
-      take: 100
+      }
     });
 
-    const activity = buildLiveDonationActivityFeed({ notifications: [], donations, alumniMap: new Map() });
+    if (!donation) {
+      return res.status(404).json({ error: 'Donation not found' });
+    }
 
-    res.json(activity);
+    const { cleanDescription, meta } = parseDescriptionMeta(donation.description || '');
+
+    res.json({
+      ...donation,
+      cleanDescription,
+      meta
+    });
   } catch (error) {
-    console.error('Error fetching recent donation activity:', error);
-    res.status(500).json({ error: 'Failed to fetch live donation activity' });
+    console.error('Error fetching donation:', error);
+    res.status(500).json({ error: 'Failed to fetch donation' });
   }
-};
-
-// Recent donation activity for admin dashboard
-router.get('/recent', flexibleAuthMiddleware, handleRecentDonationActivity);
-router.get('/live/recent', flexibleAuthMiddleware, handleRecentDonationActivity);
+});
 
 // Create new donation (Requires authentication: Alumni or Admin only)
 router.post('/', flexibleAuthMiddleware, upload.fields([
@@ -563,7 +646,7 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
 });
 
 // Contribute to an existing donation campaign
-router.post('/:id/contribute', flexibleAuthMiddleware, async (req, res) => {
+router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), async (req, res) => {
   try {
     const { id } = req.params;
     const { amount, description } = req.body;
@@ -592,17 +675,25 @@ router.post('/:id/contribute', flexibleAuthMiddleware, async (req, res) => {
     const contributionAmountLabel = contributionAmount > 0
       ? formatDonationAmount(contributionAmount, contributionDonationCurrency)
       : 'an item donation';
-    const activityDescription = [
-      cleanDescription,
-      `Amount: ${contributionAmountLabel}`,
-      `Recorded: ${new Date().toISOString()}`
-    ].filter(Boolean).join('\n');
     const existingData = parseDescriptionMeta(existingCampaign.description || '');
     const mergedMeta = { ...existingData.meta, ...meta };
-    const updatedDescription = buildDescriptionWithMeta(
-      [existingData.cleanDescription, activityDescription].filter(Boolean).join('\n\n'),
-      mergedMeta
+    if (req.files && req.files.length > 0) {
+      mergedMeta.itemImagePaths = req.files.map((f) => `/uploads/donations/${f.filename}`);
+    }
+
+    const donorName = await getDonorDisplayName(req);
+    const contributionBlock = buildContributionBlock({
+      campaignPurpose: existingCampaign.purpose || 'a donation campaign',
+      donorName,
+      amountLabel: contributionAmountLabel,
+      recordedAt: new Date(),
+      donorDetailsText: cleanDescription
+    });
+    const combinedCleanDescription = appendContributionRecord(
+      existingData.cleanDescription,
+      contributionBlock
     );
+    const updatedDescription = buildDescriptionWithMeta(combinedCleanDescription, mergedMeta);
 
     const updatedCampaign = await prisma.donation.update({
       where: { id: Number(id) },
@@ -614,7 +705,6 @@ router.post('/:id/contribute', flexibleAuthMiddleware, async (req, res) => {
     });
 
     try {
-      const donorName = await getDonorDisplayName(req);
       const senderProfileImage = await getDonorProfileImage(req);
       const { cleanDescription: donorNotes, meta } = parseDescriptionMeta(description || '');
       const donationKind = contributionDonationKind;
@@ -634,7 +724,8 @@ router.post('/:id/contribute', flexibleAuthMiddleware, async (req, res) => {
         senderProfileImage,
         amountLabel,
         campaignName: existingCampaign.purpose || 'a donation campaign',
-        donationKind
+        donationKind,
+        createdAt: new Date().toISOString()
       };
 
       // Alumni see live donation toasts only — do not persist DONATION rows for them.

@@ -61,7 +61,7 @@ function AppContent() {
           } />
           <Route path="/dashboard" element={
             <ProtectedRoute>
-              {['teacher', 'admin'].includes(authService.getRole()) ? <AdminDashboard /> : <Dashboard />}
+              <AdminDashboard />
             </ProtectedRoute>
           } />
           <Route path="/home" element={

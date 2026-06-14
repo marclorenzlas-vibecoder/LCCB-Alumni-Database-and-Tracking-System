@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
-import PrimaryButton from '../../components/PrimaryButton';
 import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
 import { eventService } from '../../services/eventService';
@@ -19,6 +18,22 @@ const STATUS_OPTIONS = [
 ];
 
 const SORT_OPTIONS = ['date', 'name', 'attendees'];
+
+const TYPE_COLORS = {
+  Workshop: { bg: '#eff6ff', text: '#1d4ed8' },
+  Seminar: { bg: '#f0fdf4', text: '#166534' },
+  Networking: { bg: '#fef3c7', text: '#92400e' },
+  Conference: { bg: '#fce7f3', text: '#9d174d' },
+  Social: { bg: '#ede9fe', text: '#5b21b6' },
+  Sports: { bg: '#dcfce7', text: '#166534' },
+  Career: { bg: '#e0f2fe', text: '#075985' },
+  Competition: { bg: '#fff7ed', text: '#c2410c' }
+};
+
+const getTypeColor = (type) => {
+  if (!type) return { bg: '#f1f5f9', text: '#475569' };
+  return TYPE_COLORS[type] || { bg: '#f1f5f9', text: '#475569' };
+};
 
 const getEventDateState = (event) => {
   const today = new Date();
@@ -67,6 +82,7 @@ export default function EventsListScreen({ navigation, route }) {
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [previousExpanded, setPreviousExpanded] = useState(true);
 
   const loadEvents = useCallback(async () => {
     const data = await eventService.getAll();
@@ -224,7 +240,6 @@ export default function EventsListScreen({ navigation, route }) {
               </View>
               <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{selectedType || 'All Types'}</Text>
             </View>
-            <Text style={styles.filterCaret}>v</Text>
           </Pressable>
 
           <Pressable style={styles.filterButton} onPress={() => setShowStatusMenu(true)}>
@@ -234,7 +249,6 @@ export default function EventsListScreen({ navigation, route }) {
               </View>
               <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{selectedStatus === 'all' ? 'All Events' : selectedStatus === 'current' ? 'Happening Today' : selectedStatus === 'past' ? 'Past Events' : 'Upcoming'}</Text>
             </View>
-            <Text style={styles.filterCaret}>v</Text>
           </Pressable>
 
           <Pressable style={styles.filterButton} onPress={() => setShowSortMenu(true)}>
@@ -244,7 +258,6 @@ export default function EventsListScreen({ navigation, route }) {
               </View>
               <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{sortBy === 'date' ? 'Date' : sortBy === 'name' ? 'Name' : 'Attendees'}</Text>
             </View>
-            <Text style={styles.filterCaret}>v</Text>
           </Pressable>
         </View>
 
@@ -274,7 +287,7 @@ export default function EventsListScreen({ navigation, route }) {
           <View style={styles.sectionWrap}>
             <EventSection title="Current Event" count={categorized.current.length} events={categorized.current} navigation={navigation} teacher={teacher} />
             <EventSection title="Upcoming Events" count={categorized.upcoming.length} events={categorized.upcoming} navigation={navigation} teacher={teacher} />
-            <EventSection title="Previous Events" count={categorized.past.length} events={categorized.past} navigation={navigation} teacher={teacher} collapsible expanded />
+            <EventSection title="Previous Events" count={categorized.past.length} events={categorized.past} navigation={navigation} teacher={teacher} collapsible expanded={previousExpanded} onToggle={() => setPreviousExpanded((prev) => !prev)} />
           </View>
         ) : (
           <View style={styles.sectionWrap}>
@@ -367,15 +380,23 @@ function EventSection({ title, count, events, navigation, teacher, collapsible =
         </View>
       </Pressable>
 
-      {expanded && events.map((event) => (
+      {expanded && events.map((event) => {
+        const typeColor = getTypeColor(event.type);
+        return (
         <View key={event.id} style={styles.eventCard}>
-          <View style={styles.badgeRow}>
-            <Text style={styles.pastBadge}>{getStatusLabel(event)}</Text>
-            <View style={[styles.statusDot, styles[`statusDot${getStatusTone(event).charAt(0).toUpperCase()}${getStatusTone(event).slice(1)}`]]} />
-          </View>
-
           <Pressable onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}>
-            <EventImage path={event.image} />
+            <View style={styles.eventImageWrap}>
+              <EventImage path={event.image} />
+              <View style={styles.badgeRow}>
+                {event.type ? (
+                  <View style={[styles.typeBadge, { backgroundColor: typeColor.bg }]}>
+                    <Text style={[styles.typeBadgeText, { color: typeColor.text }]}>{event.type}</Text>
+                  </View>
+                ) : null}
+                <Text style={styles.pastBadge}>{getStatusLabel(event)}</Text>
+                <View style={[styles.statusDot, styles[`statusDot${getStatusTone(event).charAt(0).toUpperCase()}${getStatusTone(event).slice(1)}`]]} />
+              </View>
+            </View>
             <View style={styles.eventBody}>
               <Text style={styles.eventName}>{event.name}</Text>
               <Text style={styles.eventMeta}>{formatDate(event.date)}</Text>
@@ -384,7 +405,11 @@ function EventSection({ title, count, events, navigation, teacher, collapsible =
             </View>
           </Pressable>
 
-          <PrimaryButton label="View Details" onPress={() => navigation.navigate('EventDetail', { eventId: event.id })} />
+          <View style={styles.eventActions}>
+            <Pressable style={styles.viewDetailsBtn} onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}>
+              <Text style={styles.viewDetailsText}>View Details</Text>
+            </Pressable>
+          </View>
 
           {teacher ? (
             <View style={styles.actions}>
@@ -394,7 +419,8 @@ function EventSection({ title, count, events, navigation, teacher, collapsible =
             </View>
           ) : null}
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -414,24 +440,20 @@ function EventImage({ path }) {
 
 const styles = StyleSheet.create({
   heroWrap: {
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 6,
+    alignItems: 'flex-start',
+    paddingHorizontal: 14,
     paddingBottom: 4
   },
   heroTitle: {
-    fontSize: 40,
+    fontSize: 22,
     fontWeight: '800',
-    color: '#0b1635',
-    letterSpacing: -0.8
+    color: '#0f172a'
   },
   heroSubtitle: {
-    textAlign: 'center',
+    marginTop: 4,
     fontSize: 13,
-    lineHeight: 21,
-    color: '#334155',
-    maxWidth: 320
+    lineHeight: 20,
+    color: '#64748b'
   },
   filterPanel: {
     borderWidth: 1,
@@ -612,8 +634,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#94a3b8'
   },
   sectionTitle: {
-    fontSize: 34,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#0b1635'
   },
   sectionMetaWrap: {
@@ -645,12 +667,21 @@ const styles = StyleSheet.create({
     elevation: 1
   },
   badgeRow: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 6,
+    position: 'absolute',
+    top: 8,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: 6
+  },
+  typeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700'
   },
   pastBadge: {
     backgroundColor: '#f8fafc',
@@ -679,8 +710,11 @@ const styles = StyleSheet.create({
   },
   eventImage: {
     width: '100%',
-    height: 118,
+    height: 180,
     backgroundColor: '#111827'
+  },
+  eventImageWrap: {
+    position: 'relative'
   },
   placeholderImage: {
     alignItems: 'center',
@@ -711,6 +745,24 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     lineHeight: 19,
     fontSize: 13
+  },
+  eventActions: {
+    paddingHorizontal: 14,
+    paddingTop: 8
+  },
+  viewDetailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 10
+  },
+  viewDetailsText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700'
   },
   actions: {
     marginTop: 10,

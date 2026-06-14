@@ -207,45 +207,44 @@ export default function AchievementsScreen({ user }) {
 
 const styles = StyleSheet.create({
   headerWrap: {
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    marginBottom: 14
+    alignItems: 'flex-start',
+    paddingHorizontal: 14,
+    paddingBottom: 12
   },
   headerTitle: {
-    fontSize: 33,
-    lineHeight: 36,
+    fontSize: 22,
     fontWeight: '800',
-    color: '#0f172a',
-    textAlign: 'center'
+    color: '#0f172a'
   },
   headerSubtitle: {
-    marginTop: 6,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 22
+    marginTop: 4,
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 20
   },
   chipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
     justifyContent: 'center',
-    marginBottom: 18
+    gap: 8,
+    paddingHorizontal: 14,
+    marginBottom: 14
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0'
   },
   chipActive: {
-    backgroundColor: '#1e3a8a',
-    borderColor: '#1e3a8a'
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
   },
   chipText: {
-    color: '#334155',
-    fontSize: 12,
+    color: '#475569',
+    fontSize: 13,
     fontWeight: '600'
   },
   chipTextActive: {

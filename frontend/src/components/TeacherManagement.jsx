@@ -205,7 +205,7 @@ const TeacherManagement = () => {
                 onClick={openCreateModal}
                 className="app-primary-button"
               >
-                + Add Teacher
+                Add New
               </button>
             </div>
           </div>
@@ -235,14 +235,11 @@ const TeacherManagement = () => {
                     </td>
                     <td className="px-3 py-4 text-sm">
                       <div className="flex flex-nowrap gap-2">
-                        <button
-                          onClick={() => openEditModal(teacher)}
-                          className="inline-flex items-center justify-center rounded-md bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-600"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5h2m-1 0v14m-7-7h14" />
-                          </svg>
-                          Edit
+                          <button
+                            onClick={() => openEditModal(teacher)}
+                            className="inline-flex items-center justify-center rounded-md bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800"
+                          >
+                            Edit
                         </button>
                         <button
                           onClick={() => handleDelete(teacher.id, teacher.username)}

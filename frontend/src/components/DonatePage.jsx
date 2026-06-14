@@ -240,10 +240,6 @@ const DonatePage = () => {
     contactByPhone: false,
     allowContact: true,
     agreeTerms: false,
-    itemDescription: '',
-    itemQuantity: '',
-    itemCondition: '',
-    itemDropOff: '',
     currency: 'PHP',
     paymentMethod: 'card'
   });
@@ -263,7 +259,7 @@ const DonatePage = () => {
   const canDonate = currentRole === 'alumni' || currentRole === 'admin' || currentRole === 'teacher';
 
   const donationSteps = [
-    { number: '1', title: 'Select', description: 'Choose donation type' },
+    { number: '1', title: 'Amount', description: 'Enter donation amount' },
     { number: '2', title: 'Details', description: 'Enter donation info' },
     { number: '3', title: 'Verify', description: 'Confirm account access' },
     { number: '4', title: 'Pay', description: 'Finalize donation' },
@@ -465,9 +461,6 @@ const DonatePage = () => {
   const campaignMeta = donationInfo.meta || {};
   const paymentNumber = campaignMeta.paymentNumber || '0912-345-6789';
   const paymentMethods = campaignMeta.paymentMethods || 'GCash / PayMaya / Debit Card';
-  const deliveryInstructions = campaignMeta.deliveryInstructions || '';
-  const acceptedItems = campaignMeta.acceptedItems || 'Books, shirts, shoes, school supplies';
-  const itemInstructions = campaignMeta.itemInstructions || 'Please prepare clean and usable items for drop-off.';
 
   const paymentProviders = {
     card: { label: 'Debit / credit card' },
@@ -598,27 +591,10 @@ const DonatePage = () => {
   };
 
   const validateStepOne = () => {
-    const wantsMoney = formData.donationType === 'money' || formData.donationType === 'both';
-    const wantsItems = formData.donationType === 'items' || formData.donationType === 'both';
-
-    if (wantsMoney && (!formData.amount || parseFloat(formData.amount) <= 0)) {
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
       toast.warning('Please choose or enter a valid donation amount first.');
       return false;
     }
-
-    if (wantsItems && !formData.itemDescription.trim()) {
-      toast.warning('Please describe the items you want to donate first.');
-      return false;
-    }
-
-    if (wantsItems) {
-      const qty = parseInt(formData.itemQuantity || '0', 10);
-      if (isNaN(qty) || qty <= 0) {
-        toast.warning('Please enter a valid numeric quantity for items first.');
-        return false;
-      }
-    }
-
     return true;
   };
 
@@ -659,27 +635,17 @@ const DonatePage = () => {
     return fullName || user?.username || 'Anonymous donor';
   };
 
-  const buildDonationReceipt = (updatedCampaign, wantsMoney, wantsItems) => {
+  const buildDonationReceipt = (updatedCampaign) => {
     const receiptNumber = `RCPT-${Date.now().toString().slice(-8)}`;
-    const donationTypeLabel =
-      wantsMoney && wantsItems ? 'Money + Items' : wantsMoney ? 'Money' : 'Items';
 
     return {
       receiptNumber,
       issuedAt: new Date().toLocaleString(),
       donorName: getDonorDisplayName(),
       campaignName: campaign?.purpose || 'Donation Campaign',
-      donationTypeLabel,
-      amountLabel: wantsMoney ? formatAmount(formData.amount, formData.currency) : 'N/A',
-      itemSummary: wantsItems
-        ? [
-            formData.itemDescription ? `Items: ${formData.itemDescription}` : null,
-            formData.itemQuantity ? `Quantity: ${formData.itemQuantity}` : null,
-            formData.itemCondition ? `Condition: ${formData.itemCondition}` : null,
-            formData.itemDropOff || deliveryInstructions || itemInstructions ? `Drop-off: ${formData.itemDropOff || deliveryInstructions || itemInstructions}` : null
-          ].filter(Boolean).join('\n')
-        : 'N/A',
-      paymentMethod: wantsMoney ? (paymentProviders[formData.paymentMethod]?.label || 'Debit / credit card') : 'N/A'
+      donationTypeLabel: 'Money',
+      amountLabel: formatAmount(formData.amount, formData.currency),
+      paymentMethod: paymentProviders[formData.paymentMethod]?.label || 'Debit / credit card'
     };
   };
 
@@ -702,7 +668,7 @@ const DonatePage = () => {
 
     if (!validateStepOne()) return;
 
-    if (wantsMoney && formData.paymentMethod === 'card') {
+    if (formData.paymentMethod === 'card') {
       const requiredCardFields = ['cardholderName', 'cardId', 'cardNumber', 'expiryMonth', 'expiryYear', 'cvv'];
       const missingCardField = requiredCardFields.find((field) => !paymentDetails[field].trim());
       if (missingCardField) {
@@ -715,37 +681,22 @@ const DonatePage = () => {
       setSubmitting(true);
       setError('');
 
-      const paymentSummary = wantsMoney
-        ? (formData.paymentMethod === 'card'
-            ? [
-                'Payment method: Debit Card',
-                `Card holder: ${paymentDetails.cardholderName}`,
-                `Card ID: ${paymentDetails.cardId}`,
-                `Card number: **** **** **** ${paymentDetails.cardNumber.replace(/\D/g, '').slice(-4)}`,
-                `Expiry: ${paymentDetails.expiryMonth}/${paymentDetails.expiryYear}`,
-                `Currency: ${formData.currency}`
-              ].join('\n')
-            : `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}\nCurrency: ${formData.currency}`)
-        : null;
-
-      const itemSummary = wantsItems
+      const paymentSummary = formData.paymentMethod === 'card'
         ? [
-            'Donation type: Items',
-            `Items: ${formData.itemDescription}`,
-            `Quantity: ${formData.itemQuantity || '1'}`,
-            `Condition: ${formData.itemCondition || 'Usable condition'}`,
-            `Drop-off: ${formData.itemDropOff || deliveryInstructions || itemInstructions}`
+            'Payment method: Debit Card',
+            `Card holder: ${paymentDetails.cardholderName}`,
+            `Card ID: ${paymentDetails.cardId}`,
+            `Card number: **** **** **** ${paymentDetails.cardNumber.replace(/\D/g, '').slice(-4)}`,
+            `Expiry: ${paymentDetails.expiryMonth}/${paymentDetails.expiryYear}`,
+            `Currency: ${formData.currency}`
           ].join('\n')
-        : null;
+        : `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}\nCurrency: ${formData.currency}`;
 
       const donationMeta = {
-        donationMode: formData.donationType,
-        acceptedItems: wantsItems ? formData.itemDescription : '',
-        itemInstructions: wantsItems ? formData.itemCondition || itemInstructions : itemInstructions,
-        paymentCurrency: wantsMoney ? formData.currency : '',
+        donationMode: 'money',
+        paymentCurrency: formData.currency,
         paymentNumber,
         paymentMethods,
-        deliveryInstructions: formData.itemDropOff || deliveryInstructions || itemInstructions
       };
 
       const donorSummary = [
@@ -757,19 +708,19 @@ const DonatePage = () => {
           ? `Contact preference: ${[formData.contactByEmail ? 'Email' : null, formData.contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'}`
           : 'Contact preference: Do not contact',
         `Agreement: ${formData.agreeTerms ? 'Accepted' : 'Not accepted'}`,
-        itemSummary,
         paymentSummary
       ].filter(Boolean).join('\n');
 
       const payload = {
-        amount: wantsMoney ? parseFloat(formData.amount) : 0,
-        description: withDonationMeta(`Donation for: ${campaign.purpose}\n\n${donorSummary}`, donationMeta),
+        amount: parseFloat(formData.amount),
+        description: withDonationMeta(donorSummary, donationMeta),
         date: formData.date
       };
 
-      const updatedCampaign = await donationService.contributeToDonation(campaign.id, payload);
+      let updatedCampaign;
+      updatedCampaign = await donationService.contributeToDonation(campaign.id, payload);
 
-      const receipt = buildDonationReceipt(updatedCampaign, wantsMoney, wantsItems);
+      const receipt = buildDonationReceipt(updatedCampaign);
 
       setSuccessState({
         campaign: updatedCampaign || campaign,
@@ -781,7 +732,7 @@ const DonatePage = () => {
       });
       setCurrentStep(5);
 
-      if (wantsMoney && (formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya')) {
+      if (formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya') {
         handlePaymentRedirect(formData.paymentMethod);
       }
     } catch (err) {
@@ -821,17 +772,10 @@ const DonatePage = () => {
     );
   }
 
-  const reviewWantsMoney = formData.donationType === 'money' || formData.donationType === 'both';
-  const reviewWantsItems = formData.donationType === 'items' || formData.donationType === 'both';
   const donorNameForReview = [formData.title, formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
   const contactPreferenceForReview = formData.allowContact
     ? [formData.contactByEmail ? 'Email' : null, formData.contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
     : 'Do not contact';
-  const donationTypeForReview = reviewWantsMoney && reviewWantsItems
-    ? 'Money + Items'
-    : reviewWantsMoney
-      ? 'Money'
-      : 'Items';
   const verifiedChecks = [
     { label: 'Account signed in', value: user?.username || 'Unknown account', ok: isLoggedIn },
     { label: 'Donation permission', value: canDonate ? `${currentRole || 'User'} account can donate` : 'Role cannot donate', ok: canDonate },
@@ -890,14 +834,6 @@ const DonatePage = () => {
               <span className="text-slate-500 text-xs font-semibold">Payment</span>
               <span className="font-bold text-slate-900 text-xs">{successState.receipt.paymentMethod}</span>
             </div>
-            {successState.receipt.itemSummary && successState.receipt.itemSummary !== 'N/A' && (
-              <div className="mt-1">
-                <span className="text-slate-500 text-xs font-semibold block mb-1">Items / Notes</span>
-                <div className="bg-slate-50 rounded-lg p-2.5 text-xs text-slate-700 whitespace-pre-line leading-relaxed border border-slate-100 font-medium">
-                  {successState.receipt.itemSummary}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Dashed separator */}
@@ -974,7 +910,9 @@ const DonatePage = () => {
             const stepNum = index + 1;
             const isActive = stepNum === currentStep;
             const isComplete = stepNum < currentStep;
-            const stateClass = isComplete ? 'is-complete' : isActive ? 'is-active' : '';
+            const isCurrentDone = currentStep >= donationSteps.length && stepNum === donationSteps.length;
+            const showCheck = isComplete || isCurrentDone;
+            const stateClass = showCheck ? 'is-complete' : isActive ? 'is-active' : '';
             return (
               <li
                 key={step.number}
@@ -982,7 +920,7 @@ const DonatePage = () => {
                 aria-current={isActive ? 'step' : undefined}
               >
                 <span className="donation-stepper__marker">
-                  {isComplete ? (
+                  {showCheck ? (
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
@@ -1128,7 +1066,6 @@ const DonatePage = () => {
                         `Donor: ${successState.receipt.donorName}`,
                         `Type: ${successState.receipt.donationTypeLabel}`,
                         `Payment: ${successState.receipt.paymentMethod}`,
-                        `Items/Notes: ${successState.receipt.itemSummary}`,
                         '--------------------------------',
                         '',
                         `TOTAL: ${successState.receipt.amountLabel}`,
@@ -1198,158 +1135,89 @@ const DonatePage = () => {
                 {currentStep === 1 && (
                   <div>
                     <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
-                      <label className="block text-sm font-semibold text-slate-900 mb-2">Donation type</label>
-                      <div className="flex flex-wrap gap-3">
-                        {[
-                          { key: 'money', label: 'Money' },
-                          { key: 'items', label: 'Items' },
-                          { key: 'both', label: 'Both' }
-                        ].map((option) => (
+                      <div className="grid gap-4 gap-y-4 sm:grid-cols-[1.2fr_1.8fr] items-start mb-4">
+                        <div ref={currencyMenuRef} className="relative">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Donation currency *</label>
                           <button
-                            key={option.key}
                             type="button"
-                            onClick={() => setFormData((prev) => ({ ...prev, donationType: option.key }))}
-                            className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
-                              formData.donationType === option.key
-                                ? 'border-slate-900 bg-slate-900 text-white'
-                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                            }`}
+                            onClick={() => setCurrencyMenuOpen((prev) => !prev)}
+                            className={`relative w-full text-left rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition duration-200 ${currencyMenuOpen ? 'ring-2 ring-blue-900 shadow-md' : 'hover:shadow-sm'}`}
+                            aria-haspopup="listbox"
+                            aria-expanded={currencyMenuOpen}
                           >
-                            {option.label}
+                            <span className="block truncate">
+                              {currencyOptions.find((option) => option.value === formData.currency)?.label || formData.currency}
+                            </span>
+                            <span className={`pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400 transition-transform duration-200 ${currencyMenuOpen ? 'rotate-180' : ''}`}>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </span>
+                          </button>
+
+                          {currencyMenuOpen && (
+                            <div className="absolute left-0 right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                              <div className="max-h-[294px] overflow-y-auto">
+                                {currencyOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData((prev) => ({ ...prev, currency: option.value }));
+                                      setCurrencyMenuOpen(false);
+                                    }}
+                                    className={`w-full px-4 py-3 text-left text-sm transition ${
+                                      formData.currency === option.value
+                                        ? 'bg-blue-700 font-semibold text-white'
+                                        : 'text-slate-700 hover:bg-slate-100'
+                                    }`}
+                                    role="option"
+                                    aria-selected={formData.currency === option.value}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Donation Amount ({formData.currency}) *</label>
+                          <p className="text-xs text-slate-500">Choose the currency you want to donate in for your current location.</p>
+                        </div>
+                      </div>
+
+                      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {presetAmounts.map((presetAmount) => (
+                          <button
+                            key={presetAmount}
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, amount: String(presetAmount) }))}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            {formatAmount(presetAmount, formData.currency)}
                           </button>
                         ))}
                       </div>
 
-                      {(formData.donationType === 'items' || formData.donationType === 'both') && (
-                        <div className="mt-4 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">What items are you donating? *</label>
-                            <textarea
-                              name="itemDescription"
-                              value={formData.itemDescription}
-                              onChange={handleInputChange}
-                              rows="3"
-                              className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                              placeholder="e.g. Books, shirts, shoes"
-                            />
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-2">Quantity *</label>
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                min="1"
-                                step="1"
-                                name="itemQuantity"
-                                value={formData.itemQuantity}
-                                onChange={handleInputChange}
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                                placeholder="20"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-2">Condition</label>
-                              <input
-                                type="text"
-                                name="itemCondition"
-                                value={formData.itemCondition}
-                                onChange={handleInputChange}
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                                placeholder="New or gently used"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                      <div className="relative">
+                        <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-500 text-sm">
+                          {getCurrencySymbol(formData.currency)}
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          name="amount"
+                          value={formData.amount}
+                          onChange={handleInputChange}
+                          min="1"
+                          step="0.01"
+                          className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-11"
+                          placeholder={`Enter amount in ${formData.currency}`}
+                        />
+                      </div>
                     </div>
-
-                    {(formData.donationType === 'money' || formData.donationType === 'both') && (
-                      <>
-                        <div className="grid gap-4 gap-y-4 sm:grid-cols-[1.2fr_1.8fr] items-start mb-4">
-                          <div ref={currencyMenuRef} className="relative">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Donation currency *</label>
-                            <button
-                              type="button"
-                              onClick={() => setCurrencyMenuOpen((prev) => !prev)}
-                              className={`relative w-full text-left rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition duration-200 ${currencyMenuOpen ? 'ring-2 ring-blue-900 shadow-md' : 'hover:shadow-sm'}`}
-                              aria-haspopup="listbox"
-                              aria-expanded={currencyMenuOpen}
-                            >
-                              <span className="block truncate">
-                                {currencyOptions.find((option) => option.value === formData.currency)?.label || formData.currency}
-                              </span>
-                              <span className={`pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400 transition-transform duration-200 ${currencyMenuOpen ? 'rotate-180' : ''}`}>
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </span>
-                            </button>
-
-                            {currencyMenuOpen && (
-                              <div className="absolute left-0 right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                                <div className="max-h-[294px] overflow-y-auto">
-                                  {currencyOptions.map((option) => (
-                                    <button
-                                      key={option.value}
-                                      type="button"
-                                      onClick={() => {
-                                        setFormData((prev) => ({ ...prev, currency: option.value }));
-                                        setCurrencyMenuOpen(false);
-                                      }}
-                                      className={`w-full px-4 py-3 text-left text-sm transition ${
-                                        formData.currency === option.value
-                                          ? 'bg-blue-700 font-semibold text-white'
-                                          : 'text-slate-700 hover:bg-slate-100'
-                                      }`}
-                                      role="option"
-                                      aria-selected={formData.currency === option.value}
-                                    >
-                                      {option.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Donation Amount ({formData.currency}) *</label>
-                            <p className="text-xs text-slate-500">Choose the currency you want to donate in for your current location.</p>
-                          </div>
-                        </div>
-
-                        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          {presetAmounts.map((presetAmount) => (
-                            <button
-                              key={presetAmount}
-                              type="button"
-                              onClick={() => setFormData((prev) => ({ ...prev, amount: String(presetAmount) }))}
-                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-                            >
-                              {formatAmount(presetAmount, formData.currency)}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="relative">
-                          <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-500 text-sm">
-                            {getCurrencySymbol(formData.currency)}
-                          </span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            name="amount"
-                            value={formData.amount}
-                            onChange={handleInputChange}
-                            min="1"
-                            step="0.01"
-                            className="w-full rounded-xl border border-gray-300 px-4 py-3 pl-11"
-                            placeholder={`Enter amount in ${formData.currency}`}
-                          />
-                        </div>
-                      </>
-                    )}
                   </div>
                 )}
 
@@ -1614,25 +1482,15 @@ const DonatePage = () => {
                           <div className="text-sm font-bold text-slate-900">{campaign?.purpose}</div>
                           <div className="mt-1 text-sm text-slate-500">Campaign selected for this donation</div>
                         </div>
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">{donationTypeForReview}</span>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Money</span>
                       </div>
 
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        {reviewWantsMoney && (
-                          <div className="rounded-xl bg-slate-50 p-4">
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Amount</div>
-                            <div className="mt-1 text-xl font-black text-slate-900">{formatAmount(formData.amount, formData.currency)}</div>
-                            <div className="text-sm text-slate-500">Currency: {formData.currency}</div>
-                          </div>
-                        )}
-                        {reviewWantsItems && (
-                          <div className="rounded-xl bg-slate-50 p-4">
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Items</div>
-                            <div className="mt-1 text-sm font-bold text-slate-900">{formData.itemDescription}</div>
-                            <div className="text-sm text-slate-500">Quantity: {formData.itemQuantity || '1'}</div>
-                            <div className="text-sm text-slate-500">Condition: {formData.itemCondition || 'Usable condition'}</div>
-                          </div>
-                        )}
+                        <div className="rounded-xl bg-slate-50 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Amount</div>
+                          <div className="mt-1 text-xl font-black text-slate-900">{formatAmount(formData.amount, formData.currency)}</div>
+                          <div className="text-sm text-slate-500">Currency: {formData.currency}</div>
+                        </div>
                       </div>
                     </div>
 
@@ -1647,7 +1505,6 @@ const DonatePage = () => {
                         <div className="font-bold text-slate-900">Campaign payment details</div>
                         <div className="mt-2">Number: {paymentNumber}</div>
                         <div>Methods: {paymentMethods}</div>
-                        {reviewWantsItems && <div className="mt-2 text-slate-500">Drop-off: {formData.itemDropOff || deliveryInstructions || itemInstructions}</div>}
                       </div>
                     </div>
                   </div>
@@ -1655,27 +1512,13 @@ const DonatePage = () => {
 
                 {currentStep === 4 && (
                   <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    {(formData.donationType === 'items' || formData.donationType === 'both') && (
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                        <div className="font-semibold">Item donation summary</div>
-                        <div className="mt-2">Items: {formData.itemDescription}</div>
-                        <div>Quantity: {formData.itemQuantity}</div>
-                        <div>Condition: {formData.itemCondition || 'Usable condition'}</div>
-                        <div>Drop-off: {formData.itemDropOff || deliveryInstructions || itemInstructions}</div>
-                      </div>
-                    )}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                      <div className="font-semibold">Payment summary</div>
+                      <div className="mt-2">Amount: {formatAmount(formData.amount, formData.currency)}</div>
+                      <div>Currency: {formData.currency}</div>
+                    </div>
 
-                    {(formData.donationType === 'money' || formData.donationType === 'both') && (
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                        <div className="font-semibold">Payment summary</div>
-                        <div className="mt-2">Amount: {formatAmount(formData.amount, formData.currency)}</div>
-                        <div>Currency: {formData.currency}</div>
-                      </div>
-                    )}
-
-                    {(formData.donationType === 'money' || formData.donationType === 'both') && (
-                      <>
-                        <h3 className="text-base font-semibold text-slate-900">Please select a payment method:</h3>
+                    <h3 className="text-base font-semibold text-slate-900">Please select a payment method:</h3>
                         <div className="grid gap-3 sm:grid-cols-3">
                           {paymentMethodOptions.map((method) => (
                             <button
@@ -1729,14 +1572,6 @@ const DonatePage = () => {
                             <p className="text-sm text-slate-600">You will be redirected to the GCash form. Please fill out all the required form fields.</p>
                           </div>
                         )}
-                      </>
-                    )}
-
-                    {formData.donationType === 'items' && (
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                        Item-only donations do not require payment.
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1750,11 +1585,7 @@ const DonatePage = () => {
                     </button>
                   ) : (
                     <button type="submit" disabled={!isLoggedIn || !canDonate || submitting} className="flex-1 rounded-xl bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400">
-                      {submitting
-                        ? 'Processing...'
-                        : formData.donationType === 'items'
-                          ? 'Confirm Item Donation'
-                          : 'Pay'}
+                      {submitting ? 'Processing...' : 'Pay'}
                     </button>
                   )}
                 </div>

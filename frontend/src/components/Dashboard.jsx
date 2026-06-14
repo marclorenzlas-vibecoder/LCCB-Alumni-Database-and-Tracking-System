@@ -47,10 +47,9 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    const alumniService = new AlumniService();
     const loadBirthdays = async () => {
       try {
-        const result = await alumniService.getBirthdayAlumniToday();
+        const result = await AlumniService.getBirthdayAlumniToday();
         setTodayBirthdays(Array.isArray(result.birthdays) ? result.birthdays : []);
         setIsUserBirthday(Boolean(result.isYourBirthday));
       } catch (error) {

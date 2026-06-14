@@ -1,19 +1,29 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiClient, { registerAuthTokenGetter } from './apiClient';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import apiClient, { registerAuthTokenGetter } from "./apiClient";
 
-const TOKEN_KEY = 'auth_token';
-const USER_KEY = 'auth_user';
+const TOKEN_KEY = "auth_token";
+const USER_KEY = "auth_user";
 
 const authApi = {
-  login: (payload) => apiClient.post('/auth/login', payload),
-  register: (payload) => apiClient.post('/auth/register', payload),
-  registerTeacher: (payload) => apiClient.post('/auth/register-teacher', payload),
+  login: (payload) => apiClient.post("/auth/login", payload),
+  register: (payload) => apiClient.post("/auth/register", payload),
+  registerTeacher: (payload) =>
+    apiClient.post("/auth/register-teacher", payload),
   updateProfile: (userId, payload, multipart = false) =>
-    apiClient.put(`/auth/profile/${userId}`, payload, multipart ? {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    } : undefined),
-  changePassword: (userId, payload) => apiClient.put(`/auth/change-password/${userId}`, payload),
-  getUser: (userId) => apiClient.get(`/auth/profile/${userId}`)
+    apiClient.put(
+      `/auth/profile/${userId}`,
+      payload,
+      multipart
+        ? {
+            headers: { "Content-Type": "multipart/form-data" },
+          }
+        : undefined,
+    ),
+  changePassword: (userId, payload) =>
+    apiClient.put(`/auth/change-password/${userId}`, payload),
+  getUser: (userId) => apiClient.get(`/auth/profile/${userId}`),
+  updateNotificationPreference: (payload) =>
+    apiClient.put("/auth/notification-preference", payload),
 };
 
 registerAuthTokenGetter(async () => AsyncStorage.getItem(TOKEN_KEY));
@@ -46,9 +56,6 @@ export const authService = {
 
   async updateProfile(userId, payload, multipart = false) {
     const response = await authApi.updateProfile(userId, payload, multipart);
-    if (response.data?.user) {
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
-    }
     return response.data;
   },
 
@@ -75,28 +82,36 @@ export const authService = {
     return response.data;
   },
 
+  async updateNotificationPreference(userId, payload) {
+    const response = await authApi.updateNotificationPreference({
+      userId,
+      ...payload,
+    });
+    return response.data;
+  },
+
   async loadSession() {
     const [token, user] = await Promise.all([
       AsyncStorage.getItem(TOKEN_KEY),
-      AsyncStorage.getItem(USER_KEY)
+      AsyncStorage.getItem(USER_KEY),
     ]);
 
     return {
       token,
-      user: user ? JSON.parse(user) : null
+      user: user ? JSON.parse(user) : null,
     };
   },
 
   async logout() {
     try {
-      await apiClient.post('/auth/logout');
+      await apiClient.post("/auth/logout");
     } catch {
       // Ignore network/logout endpoint failures and clear local session anyway.
     }
 
     await Promise.all([
       AsyncStorage.removeItem(TOKEN_KEY),
-      AsyncStorage.removeItem(USER_KEY)
+      AsyncStorage.removeItem(USER_KEY),
     ]);
-  }
+  },
 };

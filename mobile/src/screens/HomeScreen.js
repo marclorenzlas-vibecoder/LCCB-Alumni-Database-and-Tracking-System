@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
@@ -87,14 +87,14 @@ export default function HomeScreen({ navigation, user }) {
 
   if (loading) {
     return (
-      <ScreenContainer>
+      <ScreenContainer noTopPadding>
         <LoadingState label="Loading home" />
       </ScreenContainer>
     );
   }
 
   return (
-    <ScreenContainer refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+    <ScreenContainer noTopPadding refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <HeroSection navigation={navigation} />
 
       <View style={styles.statsGrid}>
@@ -107,16 +107,11 @@ export default function HomeScreen({ navigation, user }) {
       <SectionHeading title="ABOUT" subtitle="Your comprehensive platform for staying connected with the LCCB community" />
 
       <InfoCard
-        icon="flash"
-        iconBg="#1e3a8a"
         title="Our Mission"
         content="The LCCB Alumni Database and Tracking System is designed to bridge the gap between past and present, creating a vibrant ecosystem where alumni can reconnect, collaborate, and support each other's professional and personal growth."
       />
 
       <FeatureListCard
-        icon="checkmark-circle"
-        iconBg="#dcfce7"
-        iconColor="#16a34a"
         title="What We Provide"
         items={[
           'Comprehensive alumni directory with advanced search and filtering',
@@ -133,9 +128,6 @@ export default function HomeScreen({ navigation, user }) {
       </View>
 
       <FeatureListCard
-        icon="sparkles"
-        iconBg="#ede9fe"
-        iconColor="#7c3aed"
         title="Key Features"
         items={[
           'Secure account management',
@@ -178,41 +170,50 @@ export default function HomeScreen({ navigation, user }) {
       />
 
       <SectionHeaderRow title="Upcoming Events" subtitle="Don't miss out on our latest activities" actionLabel="View All" onPress={() => navigation.navigate('Events', { screen: 'EventsList' })} />
-      {upcomingEvents.map((item) => (
-        <EntityCard
-          key={`event-${item.id}`}
-          image={imageUrl(item.image, API_ORIGIN)}
-          title={item.name}
-          description={item.description || 'Alumni event details available inside this event page.'}
-          meta={formatDate(item.date)}
-          onPress={() => navigation.navigate('Events', { screen: 'EventDetail', params: { eventId: item.id } })}
-        />
-      ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
+        {upcomingEvents.map((item) => (
+          <EntityCard
+            key={`event-${item.id}`}
+            image={imageUrl(item.image, API_ORIGIN)}
+            title={item.name}
+            description={item.description || 'Alumni event details available inside this event page.'}
+            meta={formatDate(item.date)}
+            onPress={() => navigation.navigate('Events', { screen: 'EventDetail', params: { eventId: item.id } })}
+            slider={true}
+          />
+        ))}
+      </ScrollView>
 
       <SectionHeaderRow title="Recent Achievements" subtitle="Celebrating our alumni successes" actionLabel="View All" onPress={() => navigation.navigate('Achievements')} />
-      {recentAchievements.map((item) => (
-        <EntityCard
-          key={`achievement-${item.id}`}
-          image={imageUrl(item.image, API_ORIGIN)}
-          title={item.title}
-          description={item.description || 'Achievement details available in the achievements module.'}
-          meta={formatDate(item.date)}
-          onPress={() => navigation.navigate('Achievements')}
-        />
-      ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
+        {recentAchievements.map((item) => (
+          <EntityCard
+            key={`achievement-${item.id}`}
+            image={imageUrl(item.image, API_ORIGIN)}
+            title={item.title}
+            description={item.description || 'Achievement details available in the achievements module.'}
+            meta={formatDate(item.date)}
+            onPress={() => navigation.navigate('Achievements')}
+            slider={true}
+          />
+        ))}
+      </ScrollView>
 
       <SectionHeaderRow title="Career Opportunities" subtitle="Latest job postings from our network" actionLabel="View All" onPress={() => navigation.navigate('Employment')} />
-      {latestJobs.map((job) => (
-        <JobCard key={`job-${job.id}`} job={job} onPress={() => navigation.navigate('Employment', { screen: 'JobDetail', params: { jobId: job.id } })} />
-      ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
+        {latestJobs.map((job) => (
+          <JobCard key={`job-${job.id}`} job={job} onPress={() => navigation.navigate('Employment', { screen: 'JobDetail', params: { jobId: job.id } })} slider={true} />
+        ))}
+      </ScrollView>
 
       <SectionHeaderRow title="Support Our Causes" subtitle="Make a difference with your contribution" actionLabel="View All" onPress={() => navigation.navigate('Donations', { screen: 'DonationsList' })} />
-      {topCauses.map((item) => (
-        <CauseCard key={`cause-${item.id}`} item={item} onPress={() => navigation.navigate('Donations', { screen: 'DonationDetail', params: { donationId: item.id } })} />
-      ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
+        {topCauses.map((item) => (
+          <CauseCard key={`cause-${item.id}`} item={item} onPress={() => navigation.navigate('Donations', { screen: 'DonationDetail', params: { donationId: item.id } })} slider={true} />
+        ))}
+      </ScrollView>
 
       <ContactCards />
-      <FooterBlock />
     </ScreenContainer>
   );
 }
@@ -230,6 +231,57 @@ function HeroSection({ navigation }) {
       <Pressable style={styles.heroGhostBtn} onPress={() => navigation.navigate('Events', { screen: 'EventsList' })}>
         <Text style={styles.heroGhostText}>View Upcoming Events  🗓</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function ContactCards() {
+  return (
+    <>
+      <View style={styles.contactCard}>
+        <View style={styles.contactBlock}>
+          <Ionicons name="time-outline" size={16} color="#1e3a8a" />
+          <View style={styles.contactTextWrap}>
+            <Text style={styles.contactTitle}>Office Hours</Text>
+            <Text style={styles.contactText}>Mondays to Fridays: 8:00 AM to 5:00 PM{`\n`}(We observe Noon Break)</Text>
+          </View>
+        </View>
+        <View style={styles.contactDivider} />
+        <View style={styles.contactBlock}>
+          <Ionicons name="location-outline" size={16} color="#1e3a8a" />
+          <View style={styles.contactTextWrap}>
+            <Text style={styles.contactTitle}>Location</Text>
+            <Text style={styles.contactText}>G/F, L-Shaped Building, La Consolacion College Bacolod, Corner Galo-Gatuslao Streets, Bacolod City 6100</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.contactCard}>
+        <View style={styles.contactBlock}>
+          <Ionicons name="chatbox-ellipses-outline" size={16} color="#1e3a8a" />
+          <View style={styles.contactTextWrap}>
+            <Text style={styles.contactTitle}>Stay Connected</Text>
+            <Text style={styles.contactText}>Follow us on social media for the latest updates, news, and alumni stories.</Text>
+          </View>
+        </View>
+        <View style={styles.socialGrid}>
+          <SocialItem icon="logo-facebook" label="Facebook" bg="#dbeafe" color="#2563eb" />
+          <SocialItem icon="logo-instagram" label="Instagram" bg="#fce7f3" color="#db2777" />
+          <SocialItem icon="logo-youtube" label="YouTube" bg="#fee2e2" color="#dc2626" />
+          <SocialItem icon="location" label="Google Map" bg="#dcfce7" color="#16a34a" />
+        </View>
+      </View>
+    </>
+  );
+}
+
+function SocialItem({ icon, label, bg, color }) {
+  return (
+    <View style={styles.socialItem}>
+      <View style={[styles.socialIconWrap, { backgroundColor: bg }]}>
+        <Ionicons name={icon} size={16} color={color} />
+      </View>
+      <Text style={styles.socialLabel}>{label}</Text>
     </View>
   );
 }
@@ -255,10 +307,12 @@ function SectionHeading({ title, subtitle }) {
 function InfoCard({ icon, iconBg, title, content }) {
   return (
     <View style={styles.infoCard}>
-      <View style={[styles.infoIconWrap, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={16} color="#ffffff" />
-      </View>
-      <View style={styles.infoBody}>
+      {icon ? (
+        <View style={[styles.infoIconWrap, { backgroundColor: iconBg }]}>
+          <Ionicons name={icon} size={16} color="#ffffff" />
+        </View>
+      ) : null}
+      <View style={icon ? styles.infoBody : styles.infoBodyFull}>
         <Text style={styles.infoTitle}>{title}</Text>
         <Text style={styles.infoText}>{content}</Text>
       </View>
@@ -269,10 +323,12 @@ function InfoCard({ icon, iconBg, title, content }) {
 function FeatureListCard({ icon, iconBg, iconColor, title, items }) {
   return (
     <View style={styles.infoCard}>
-      <View style={[styles.infoIconWrap, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={16} color={iconColor} />
-      </View>
-      <View style={styles.infoBody}>
+      {icon ? (
+        <View style={[styles.infoIconWrap, { backgroundColor: iconBg }]}>
+          <Ionicons name={icon} size={16} color={iconColor} />
+        </View>
+      ) : null}
+      <View style={icon ? styles.infoBody : styles.infoBodyFull}>
         <Text style={styles.infoTitle}>{title}</Text>
         {items.map((item) => (
           <View key={item} style={styles.bulletRow}>
@@ -328,9 +384,9 @@ function SectionHeaderRow({ title, subtitle, actionLabel, onPress }) {
   );
 }
 
-function EntityCard({ image, title, description, meta, onPress }) {
+function EntityCard({ image, title, description, meta, onPress, slider = false }) {
   return (
-    <Pressable style={styles.entityCard} onPress={onPress}>
+    <Pressable style={[styles.entityCard, slider && styles.entityCardSlider]} onPress={onPress}>
       {image ? <Image source={{ uri: image }} style={styles.entityImage} /> : null}
       <View style={styles.entityBody}>
         <Text style={styles.entityTitle}>{title}</Text>
@@ -344,9 +400,9 @@ function EntityCard({ image, title, description, meta, onPress }) {
   );
 }
 
-function JobCard({ job, onPress }) {
+function JobCard({ job, onPress, slider = false }) {
   return (
-    <Pressable style={styles.jobCard} onPress={onPress}>
+    <Pressable style={[styles.jobCard, slider && styles.jobCardSlider]} onPress={onPress}>
       <Text style={styles.jobTitle}>{job.job_title}</Text>
       <Text style={styles.jobCompany}>{job.company || 'Company not specified'}</Text>
       <View style={styles.jobMetaRow}><Ionicons name="location-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.location || 'Not specified'}</Text></View>
@@ -356,14 +412,14 @@ function JobCard({ job, onPress }) {
   );
 }
 
-function CauseCard({ item, onPress }) {
+function CauseCard({ item, onPress, slider = false }) {
   const amount = Number(item.amount || 0);
   const goal = Number(item.goal || 50000);
   const progress = Math.max(0, Math.min(100, Math.round((amount / Math.max(1, goal)) * 100)));
   const image = imageUrl(item.image, API_ORIGIN);
 
   return (
-    <Pressable style={styles.causeCard} onPress={onPress}>
+    <Pressable style={[styles.causeCard, slider && styles.causeCardSlider]} onPress={onPress}>
       {image ? <Image source={{ uri: image }} style={styles.causeImage} /> : null}
       <View style={styles.causeBody}>
         <Text style={styles.causeBadge}>{item.category || 'Community'}</Text>
@@ -382,101 +438,11 @@ function CauseCard({ item, onPress }) {
   );
 }
 
-function ContactCards() {
-  return (
-    <>
-      <View style={styles.contactCard}>
-        <View style={styles.contactBlock}>
-          <Ionicons name="time-outline" size={16} color="#1e3a8a" />
-          <View style={styles.contactTextWrap}>
-            <Text style={styles.contactTitle}>Office Hours</Text>
-            <Text style={styles.contactText}>Mondays to Fridays: 8:00 AM to 5:00 PM{`\n`}(We observe Noon Break)</Text>
-          </View>
-        </View>
-        <View style={styles.contactDivider} />
-        <View style={styles.contactBlock}>
-          <Ionicons name="location-outline" size={16} color="#1e3a8a" />
-          <View style={styles.contactTextWrap}>
-            <Text style={styles.contactTitle}>Location</Text>
-            <Text style={styles.contactText}>G/F, L-Shaped Building, La Consolacion College Bacolod, Corner Galo-Gatuslao Streets, Bacolod City 6100</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.contactCard}>
-        <View style={styles.contactBlock}>
-          <Ionicons name="chatbox-ellipses-outline" size={16} color="#1e3a8a" />
-          <View style={styles.contactTextWrap}>
-            <Text style={styles.contactTitle}>Stay Connected</Text>
-            <Text style={styles.contactText}>Follow us on social media for the latest updates, news, and alumni stories.</Text>
-          </View>
-        </View>
-        <View style={styles.socialGrid}>
-          <SocialItem icon="logo-facebook" label="Facebook" bg="#dbeafe" color="#2563eb" />
-          <SocialItem icon="logo-instagram" label="Instagram" bg="#fce7f3" color="#db2777" />
-          <SocialItem icon="logo-youtube" label="YouTube" bg="#fee2e2" color="#dc2626" />
-          <SocialItem icon="location" label="Google Map" bg="#dcfce7" color="#16a34a" />
-        </View>
-      </View>
-    </>
-  );
-}
-
-function SocialItem({ icon, label, bg, color }) {
-  return (
-    <View style={styles.socialItem}>
-      <View style={[styles.socialIconWrap, { backgroundColor: bg }]}>
-        <Ionicons name={icon} size={16} color={color} />
-      </View>
-      <Text style={styles.socialLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function FooterBlock() {
-  return (
-    <View style={styles.footer}>
-      <Text style={styles.footerTitle}>LCCB Alumni</Text>
-      <Text style={styles.footerText}>Building bridges between graduates, fostering professional growth, and strengthening our community through meaningful connections and opportunities.</Text>
-
-      <Text style={styles.footerHeading}>Quick Links</Text>
-      <Text style={styles.footerLink}>Alumni Directory</Text>
-      <Text style={styles.footerLink}>Events Calendar</Text>
-      <Text style={styles.footerLink}>Career Opportunities</Text>
-      <Text style={styles.footerLink}>Support LCCB</Text>
-
-      <Text style={styles.footerHeading}>Get Involved</Text>
-      <FooterBullet text="Network with fellow graduates" />
-      <FooterBullet text="Attend exclusive events" />
-      <FooterBullet text="Access career resources" />
-      <FooterBullet text="Contribute to the community" />
-
-      <Text style={styles.footerHeading}>Join Our Network</Text>
-      <Text style={styles.footerText}>Become part of our growing alumni community today.</Text>
-      <Pressable style={styles.footerPrimaryBtn}>
-        <Text style={styles.footerPrimaryText}>Register Now</Text>
-      </Pressable>
-      <Pressable style={styles.footerGhostBtn}>
-        <Text style={styles.footerGhostText}>Sign In</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function FooterBullet({ text }) {
-  return (
-    <View style={styles.footerBulletRow}>
-      <Ionicons name="checkmark-circle" size={12} color="#60a5fa" />
-      <Text style={styles.footerLink}>{text}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   heroWrap: {
     borderRadius: 0,
     marginHorizontal: -18,
-    marginTop: -18,
+    marginTop: 0,
     backgroundColor: '#1e3a8a',
     paddingHorizontal: 24,
     paddingVertical: 32,
@@ -608,6 +574,10 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   infoBody: {
+    flex: 1,
+    gap: 8
+  },
+  infoBodyFull: {
     flex: 1,
     gap: 8
   },
@@ -846,10 +816,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#1e3a8a'
   },
-  progressText: {
-    color: '#64748b',
-    fontSize: 12
-  },
   contactCard: {
     borderRadius: 10,
     borderWidth: 1,
@@ -903,63 +869,21 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 14
   },
-  footer: {
-    borderRadius: 0,
+  slider: {
     marginHorizontal: -18,
-    marginTop: 20,
-    backgroundColor: '#1e3a8a',
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    gap: 9
+    paddingHorizontal: 18
   },
-  footerTitle: {
-    color: '#ffffff',
-    fontSize: 30,
-    fontWeight: '800'
+  sliderContent: {
+    gap: 12,
+    paddingRight: 18
   },
-  footerHeading: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 8
+  entityCardSlider: {
+    width: 280
   },
-  footerText: {
-    color: '#dbeafe',
-    lineHeight: 25,
-    fontSize: 14
+  jobCardSlider: {
+    width: 280
   },
-  footerLink: {
-    color: '#dbeafe',
-    fontSize: 14,
-    lineHeight: 23
-  },
-  footerBulletRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  footerPrimaryBtn: {
-    marginTop: 4,
-    backgroundColor: '#ffffff',
-    borderRadius: 6,
-    paddingVertical: 10,
-    alignItems: 'center'
-  },
-  footerPrimaryText: {
-    color: '#1e3a8a',
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  footerGhostBtn: {
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    borderRadius: 6,
-    paddingVertical: 10,
-    alignItems: 'center'
-  },
-  footerGhostText: {
-    color: '#dbeafe',
-    fontSize: 16,
-    fontWeight: '700'
+  causeCardSlider: {
+    width: 280
   }
 });

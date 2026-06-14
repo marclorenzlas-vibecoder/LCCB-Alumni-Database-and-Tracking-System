@@ -307,7 +307,7 @@ const Donations = () => {
 
   return (
     <UserLayout>
-      <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gray-50 py-8">
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -336,10 +336,7 @@ const Donations = () => {
               <button 
                 onClick={() => setShowModal(true)}
                 className="app-primary-button">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                </svg>
-                Add Campaign
+                Add New
               </button>
             )}
           </div>
@@ -366,7 +363,7 @@ const Donations = () => {
         {loading && <div className="text-center">Loading...</div>}
         {error && <div className="text-center text-red-600">{error}</div>}
         
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {filteredDonations.map((donation) => (
             <div
               key={donation.id}
@@ -624,21 +621,6 @@ const Donations = () => {
                         className="app-input"
                         placeholder="e.g., GCash / Maya / Bank Transfer"
                       />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Drop-off / Delivery Instructions (Optional)
-                      </label>
-                      <textarea
-                        name="deliveryInstructions"
-                        value={formData.deliveryInstructions}
-                        onChange={handleInputChange}
-                        rows="3"
-                        className="app-textarea"
-                        placeholder="e.g., Donate clothes to 123 Main St. Office hours M-F 9am-5pm"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">This will be shown on the campaign page as where donors can drop off or deliver items.</p>
                     </div>
                   </div>
 

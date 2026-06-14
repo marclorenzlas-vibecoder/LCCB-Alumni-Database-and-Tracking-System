@@ -9,11 +9,10 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 const Achievements = () => {
   const [achievements, setAchievements] = useState([]);
   const isTeacher = authService.isTeacher();
-  const [alumniList, setAlumniList] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    alumni_id: '',
+    alumni_name: '',
     title: '',
     description: '',
     date: '',
@@ -37,18 +36,7 @@ const Achievements = () => {
   // Fetch all achievements on component mount
   useEffect(() => {
     fetchAllAchievements();
-    fetchAlumniList();
   }, []);
-
-  const fetchAlumniList = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/alumni`);
-      const data = await response.json();
-      setAlumniList(data);
-    } catch (err) {
-      console.error('Error fetching alumni list:', err);
-    }
-  };
 
   const fetchAllAchievements = async () => {
     try {
@@ -89,7 +77,7 @@ const Achievements = () => {
       // If image present, send as FormData
       if (formData.image) {
         const fd = new FormData();
-        fd.append('alumni_id', formData.alumni_id);
+        fd.append('alumni_name', formData.alumni_name);
         fd.append('title', formData.title);
         if (formData.description) fd.append('description', formData.description);
         if (formData.date) fd.append('date', formData.date);
@@ -112,7 +100,7 @@ const Achievements = () => {
       setShowModal(false);
       setEditingId(null);
       setFormData({
-        alumni_id: '',
+        alumni_name: '',
         title: '',
         description: '',
         date: '',
@@ -129,7 +117,7 @@ const Achievements = () => {
   const handleEdit = (achievement) => {
     setEditingId(achievement.id);
     setFormData({
-      alumni_id: achievement.alumni_id || '',
+      alumni_name: achievement.alumni_name || (achievement.alumni ? `${achievement.alumni.first_name} ${achievement.alumni.last_name}` : ''),
       title: achievement.title || '',
       description: achievement.description || '',
       date: achievement.date ? achievement.date.split('T')[0] : '',
@@ -189,18 +177,12 @@ const Achievements = () => {
             <p className="text-lg text-gray-600">
               Showcasing real alumni accomplishments, leadership roles, event-hosting potential, and affiliate impact.
             </p>
-            <p className="mt-2 text-sm text-gray-500 max-w-2xl">
-              Use achievements that highlight actual professional or community success rather than education-only honors. This helps admins quickly identify potential MCs, speakers, partners, and strong talent for events.
-            </p>
           </div>
           {isTeacher && (
             <button 
               onClick={() => setShowModal(true)}
               className="app-primary-button">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Add New Achievement
+              Add New
             </button>
           )}
         </div>
@@ -258,10 +240,10 @@ const Achievements = () => {
               </div>
 
               <div className="flex flex-1 flex-col px-6 pb-6 pt-5">
-                {achievement.alumni && (
+                {(achievement.alumni_name || achievement.alumni) && (
                   <p className="text-sm text-gray-600 mb-3">
                     <span className="font-semibold text-gray-800">
-                      {achievement.alumni.first_name} {achievement.alumni.last_name}
+                      {achievement.alumni_name || `${achievement.alumni.first_name} ${achievement.alumni.last_name}`}
                     </span>
                   </p>
                 )}
@@ -299,35 +281,31 @@ const Achievements = () => {
 
         {/* Modal for Adding Achievement */}
         {showModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-y-auto scrollbar-hide">
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl">
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-hidden h-full w-full z-50">
+            <div className="relative mx-auto mt-5 flex h-[calc(100vh-2.5rem)] max-w-3xl flex-col overflow-hidden rounded-xl border bg-white shadow-lg">
+              <div className="shrink-0 border-b border-gray-200 bg-white px-6 py-4">
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Achievement' : 'Add New Achievement'}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">Use a strong alumni accomplishment such as leadership, public service, event hosting, or affiliate impact. Avoid education-only honors like cum laude awards.</p>
               </div>
-              <div className="mt-6">
+              <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-hide">
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Alumni *
+                        Alumni Name *
                       </label>
-                      <select
-                        name="alumni_id"
-                        value={formData.alumni_id}
+                      <input
+                        type="text"
+                        name="alumni_name"
+                        value={formData.alumni_name}
                         onChange={handleInputChange}
                         required
-                        className="app-select"
-                      >
-                        <option value="">Select an alumni</option>
-                        {alumniList.map((alumni) => (
-                          <option key={alumni.id} value={alumni.id}>
-                            {alumni.first_name} {alumni.last_name} - {alumni.email}
-                          </option>
-                        ))}
-                      </select>
+                        className="app-input"
+                        placeholder="Type alumni name"
+                        autoComplete="off"
+                      />
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -74,6 +74,10 @@ export const checkSessionStatus = async () => {
         }
       }
 
+      if (response.status === 401 || response.status === 403) {
+        return { ok: false, blocked: false, unauthorized: true };
+      }
+
       if (!response.ok) {
         return { ok: false, blocked: false };
       }

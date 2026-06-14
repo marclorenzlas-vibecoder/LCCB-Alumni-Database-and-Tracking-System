@@ -156,6 +156,7 @@ export default function AlumniDirectoryScreen({ navigation }) {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [erroredImages, setErroredImages] = useState(new Set());
   const [selectedLevel, setSelectedLevel] = useState('ALL');
   const [selectedBatch, setSelectedBatch] = useState('ALL');
   const [selectedGroup, setSelectedGroup] = useState('ALL');
@@ -302,63 +303,86 @@ export default function AlumniDirectoryScreen({ navigation }) {
 
   const levelLabel = selectedLevel === 'ALL' ? 'All Levels' : selectedLevel;
   const batchLabel = selectedBatch === 'ALL' ? 'All Batches' : selectedBatch;
-  const groupLabel = selectedGroup === 'ALL' ? 'All Groups' : selectedGroup;
+  const groupLabelMap = useMemo(() => {
+    const map = {};
+    groupSections.forEach((section) => {
+      section.items.forEach((item) => { map[item.value] = item.label; });
+    });
+    return map;
+  }, [groupSections]);
+  const groupLabel = selectedGroup === 'ALL' ? 'All Groups' : (groupLabelMap[selectedGroup] || selectedGroup);
 
   return (
     <ScreenContainer>
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Alumni Directory</Text>
+      <View style={styles.heroWrap}>
+        <Text style={styles.heroTitle}>Alumni Directory</Text>
+        <Text style={styles.heroSubtitle}>Browse and connect with fellow LCCB alumni across all batches and programs.</Text>
+      </View>
 
-        <TextInput
-          style={styles.search}
-          placeholder="Search by name, course, email, company, location"
-          value={query}
-          onChangeText={setQuery}
-          placeholderTextColor="#94a3b8"
-        />
+      <View style={styles.filterPanel}>
+        <Text style={styles.filterPanelTitle}>Search and Filters</Text>
 
-        <View style={styles.filtersRow}>
+        <View style={styles.searchShell}>
+          <Ionicons name="search-outline" size={18} color="#64748b" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name, course, email, company, location"
+            value={query}
+            onChangeText={setQuery}
+            placeholderTextColor="#94a3b8"
+          />
+          {query ? (
+            <Pressable style={styles.searchClearButton} onPress={() => setQuery('')} hitSlop={10}>
+              <Ionicons name="close-circle" size={18} color="#94a3b8" />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View style={styles.filterGrid}>
           <Pressable style={styles.filterButton} onPress={() => setLevelPickerOpen(true)}>
-            <View style={styles.filterLabelWrap}>
+            <View style={styles.filterButtonInner}>
               <View style={styles.filterIconPill}>
                 <Ionicons name="school-outline" size={13} color="#1d4ed8" />
               </View>
-              <Text style={styles.filterText}>{levelLabel}</Text>
+              <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{levelLabel}</Text>
             </View>
-            <Text style={styles.filterCaret}>v</Text>
           </Pressable>
           <Pressable style={styles.filterButton} onPress={() => setBatchPickerOpen(true)}>
-            <View style={styles.filterLabelWrap}>
+            <View style={styles.filterButtonInner}>
               <View style={styles.filterIconPill}>
                 <Ionicons name="calendar-outline" size={13} color="#1d4ed8" />
               </View>
-              <Text style={styles.filterText}>{batchLabel}</Text>
+              <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{batchLabel}</Text>
             </View>
-            <Text style={styles.filterCaret}>v</Text>
           </Pressable>
           <Pressable style={styles.filterButton} onPress={() => setGroupPickerOpen(true)}>
-            <View style={styles.filterLabelWrap}>
+            <View style={styles.filterButtonInner}>
               <View style={styles.filterIconPill}>
                 <Ionicons name="people-outline" size={13} color="#1d4ed8" />
               </View>
-              <Text style={styles.filterText}>{groupLabel}</Text>
+              <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{groupLabel}</Text>
             </View>
-            <Text style={styles.filterCaret}>v</Text>
           </Pressable>
           <Pressable
             style={[styles.filterButton, selectedBatch === 'ALL' ? styles.officersButtonDisabled : styles.officersButtonActive]}
             onPress={() => setShowOfficersModal(true)}
             disabled={selectedBatch === 'ALL'}
           >
-            <View style={styles.filterLabelWrap}>
+            <View style={styles.filterButtonInner}>
               <View style={styles.filterIconPill}>
                 <Ionicons name="people-outline" size={13} color="#1d4ed8" />
               </View>
-              <Text style={[styles.filterText, selectedBatch === 'ALL' && styles.filterTextDisabled]}>Batch Officers</Text>
+              <Text style={[styles.filterButtonText, selectedBatch === 'ALL' && styles.filterTextDisabled]} numberOfLines={1} ellipsizeMode="tail">Batch Officers</Text>
             </View>
           </Pressable>
         </View>
 
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryText}>Showing {filtered.length} of {list.length} alumni</Text>
+        </View>
+      </View>
+
+      <View style={styles.listWrap}>
         <View style={styles.tableHeader}>
           <Text style={styles.tableHeadLeft}>PROFILE</Text>
         </View>
@@ -367,16 +391,22 @@ export default function AlumniDirectoryScreen({ navigation }) {
         {!loading && filtered.length === 0 ? <EmptyState title="No alumni found" /> : null}
 
         {!loading && filtered.map((item) => {
-          const img = imageUrl(item.profile_image, API_ORIGIN);
+          const img = imageUrl(item.profile_image || item.profileImage, API_ORIGIN);
           const fullName = getDisplayName(item);
           const role = item.current_position || item.course || 'Alumni Member';
           const company = item.company || item.location || '';
+          const hasErrored = erroredImages.has(item.id);
 
           return (
             <Pressable key={item.id} style={styles.rowWrap} onPress={() => navigation.navigate('AlumniDetail', { alumniId: item.id })}>
               <View style={styles.rowContent}>
-                {img ? (
-                  <Image source={{ uri: img }} style={styles.avatar} />
+                {img && !hasErrored ? (
+                  <Image
+                    source={{ uri: img }}
+                    style={styles.avatar}
+                    resizeMode="cover"
+                    onError={() => setErroredImages((prev) => new Set(prev).add(item.id))}
+                  />
                 ) : (
                   <View style={styles.avatarFallback}>
                     <Text style={styles.avatarInitial}>{fullName.slice(0, 1).toUpperCase()}</Text>
@@ -452,21 +482,31 @@ export default function AlumniDirectoryScreen({ navigation }) {
                 <EmptyState title={selectedBatch === 'ALL' ? 'Select a batch to view officers' : 'No officers found for this batch'} />
               ) : null}
 
-              {!officersLoading && batchOfficers.map((off) => (
+              {!officersLoading && batchOfficers.map((off) => {
+                const officerImg = imageUrl(off.profile_image, API_ORIGIN);
+                const officerName = `${off.first_name || off.firstName || ''} ${off.last_name || off.lastName || ''}`.trim() || off.username || 'Officer';
+                const officerErrored = erroredImages.has(`off-${off.id}`);
+                return (
                 <View key={off.id} style={[styles.rowContent, { paddingVertical: 12 }]}>
-                  {off.profile_image ? (
-                    <Image source={{ uri: imageUrl(off.profile_image, API_ORIGIN) }} style={styles.avatar} />
+                  {officerImg && !officerErrored ? (
+                    <Image
+                      source={{ uri: officerImg }}
+                      style={styles.avatar}
+                      resizeMode="cover"
+                      onError={() => setErroredImages((prev) => new Set(prev).add(`off-${off.id}`))}
+                    />
                   ) : (
                     <View style={styles.avatarFallback}>
-                      <Text style={styles.avatarInitial}>{(off.first_name || off.firstName || off.username || 'A').slice(0, 1).toUpperCase()}</Text>
+                      <Text style={styles.avatarInitial}>{officerName.slice(0, 1).toUpperCase()}</Text>
                     </View>
                   )}
                   <View style={styles.infoBlock}>
-                    <Text style={styles.name}>{`${off.first_name || off.firstName || ''} ${off.last_name || off.lastName || ''}`.trim() || off.username || 'Officer'}</Text>
+                    <Text style={styles.name}>{officerName}</Text>
                     <Text style={styles.metaLine}>{off.position || off.role || 'Officer'}</Text>
                   </View>
                 </View>
-              ))}
+                );
+              })}
             </ScrollView>
           </Pressable>
         </Pressable>
@@ -538,61 +578,97 @@ function OptionPicker({ visible, title, options, sections, selected, onSelect, o
 }
 
 const styles = StyleSheet.create({
-  panel: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 0,
-    backgroundColor: '#ffffff',
-    overflow: 'hidden'
-  },
-  panelTitle: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#0f172a',
+  heroWrap: {
+    alignItems: 'flex-start',
     paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0'
+    paddingBottom: 12
   },
-  search: {
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  heroSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 20
+  },
+  filterPanel: {
+    borderWidth: 1,
+    borderColor: '#dbe3f0',
+    backgroundColor: '#f8fbff',
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1
+  },
+  filterPanelTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6
+  },
+  searchShell: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    borderRadius: 8,
     backgroundColor: '#fff',
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginHorizontal: 14,
-    marginTop: 12,
-    marginBottom: 8,
-    fontSize: 13
+    minHeight: 48
   },
-  filtersRow: {
+  searchIcon: {
+    marginRight: 8
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingHorizontal: 0,
+    fontSize: 14,
+    color: '#0f172a'
+  },
+  searchClearButton: {
+    marginLeft: 8
+  },
+  filterGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingBottom: 10
+    gap: 10
   },
   filterButton: {
-    minWidth: '30%',
-    flexGrow: 1,
+    width: '48%',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    borderRadius: 8,
-    height: 38,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    minHeight: 48,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff'
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1
   },
-  filterLabelWrap: {
+  filterButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minWidth: 0,
-    flex: 1
+    gap: 7,
+    flex: 1,
+    minWidth: 0
   },
   filterIconPill: {
     width: 20,
@@ -604,16 +680,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  filterText: {
+  filterButtonText: {
+    fontSize: 12,
     color: '#475569',
-    fontSize: 13,
     fontWeight: '500',
     flexShrink: 1
-  },
-  filterCaret: {
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '700'
   },
   officersButtonActive: {
     borderColor: '#93c5fd',
@@ -626,6 +697,24 @@ const styles = StyleSheet.create({
   filterTextDisabled: {
     color: '#94a3b8'
   },
+  summaryRow: {
+    marginTop: 4,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8
+  },
+  summaryText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '500'
+  },
+  listWrap: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 0,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden'
+  },
   tableHeader: {
     borderTopWidth: 1,
     borderBottomWidth: 1,
@@ -637,14 +726,6 @@ const styles = StyleSheet.create({
   },
   tableHeadLeft: {
     flex: 1,
-    fontSize: 10,
-    letterSpacing: 0.6,
-    fontWeight: '700',
-    color: '#64748b'
-  },
-  tableHeadRight: {
-    width: 60,
-    textAlign: 'right',
     fontSize: 10,
     letterSpacing: 0.6,
     fontWeight: '700',
@@ -665,7 +746,8 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#e2e8f0'
+    backgroundColor: '#e2e8f0',
+    overflow: 'hidden'
   },
   avatarFallback: {
     width: 36,

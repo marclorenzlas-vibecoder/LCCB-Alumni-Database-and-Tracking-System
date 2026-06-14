@@ -1,70 +1,116 @@
-const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const upload = require('../middleware/upload');
-const authMiddleware = require('../middleware/auth').authMiddleware;
-const path = require('path');
-const { broadcastUpdate } = require('../services/realtimeService');
+const express = require("express");
+const { PrismaClient } = require("@prisma/client");
+const upload = require("../middleware/upload");
+const authMiddleware = require("../middleware/auth").authMiddleware;
+const path = require("path");
+const { broadcastUpdate } = require("../services/realtimeService");
 const {
   normalizeLevel,
   parseEducationHistory,
   getEducationHistoryWithFallback,
   getEducationHistoryByAlumniIds,
-  replaceEducationHistory
-} = require('../utils/educationHistory');
+  replaceEducationHistory,
+} = require("../utils/educationHistory");
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Get all alumni
-router.get('/', async (req, res) => {
+// ---------------------------------------------------------------------------
+// Soft auth helper — tries to decode the JWT but never rejects the request.
+// Populates req.user if the token is valid, otherwise leaves it as null.
+// Used so that public-ish endpoints can still tailor their response by role.
+// ---------------------------------------------------------------------------
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+
+const softAuth = (req, res, next) => {
   try {
-    const alumni = await prisma.alumni.findMany({
-      where: {
-        NOT: {
-          OR: [
-            { email: { endsWith: '@lccbonline.com' } },
-            { user: { is: { email: { endsWith: '@lccbonline.com' } } } }
-          ]
-        }
+    const authHeader =
+      req.headers.authorization || req.headers["x-access-token"] || "";
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7).trim()
+      : authHeader.trim();
+    if (token) {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+    } else {
+      req.user = null;
+    }
+  } catch {
+    req.user = null;
+  }
+  next();
+};
+
+// Get all alumni.
+// Teachers and admins receive the full list (including private profiles so they
+// can manage the directory). Regular alumni and unauthenticated requests only
+// receive profiles where is_public is true or null (null is treated as public
+// to preserve backward-compatibility with records created before the field existed).
+router.get("/", softAuth, async (req, res) => {
+  try {
+    const roleUpper = String(req.user?.role || "").toUpperCase();
+    const isStaff = roleUpper === "TEACHER" || roleUpper === "ADMIN";
+
+    const where = {
+      NOT: {
+        OR: [
+          { email: { endsWith: "@lccbonline.com" } },
+          { user: { is: { email: { endsWith: "@lccbonline.com" } } } },
+        ],
       },
+      // Non-staff callers only see public profiles.
+      // is_public: null is treated as public (default when field was not yet set).
+      ...(!isStaff && {
+        OR: [{ is_public: true }, { is_public: null }],
+      }),
+    };
+
+    const alumni = await prisma.alumni.findMany({
+      where,
       include: {
         user: {
           select: {
             email: true,
-            username: true
-          }
+            username: true,
+          },
         },
-        social_link: true
-      }
+        social_link: true,
+      },
     });
 
     const historyByAlumniId = await getEducationHistoryByAlumniIds(
       prisma,
-      alumni.map((entry) => entry.id)
+      alumni.map((entry) => entry.id),
     );
 
     const payload = alumni.map((entry) => {
-      const history = getEducationHistoryWithFallback(entry, historyByAlumniId.get(entry.id) || []);
+      const history = getEducationHistoryWithFallback(
+        entry,
+        historyByAlumniId.get(entry.id) || [],
+      );
       return {
         ...entry,
         education_history: history,
-        educationHistory: history
+        educationHistory: history,
       };
     });
 
     res.json(payload);
   } catch (error) {
-    console.error('Error fetching alumni:', error);
-    res.status(500).json({ error: 'Failed to fetch alumni' });
+    console.error("Error fetching alumni:", error);
+    res.status(500).json({ error: "Failed to fetch alumni" });
   }
 });
 
 // Helper to run multer for profile images and surface readable errors
 const runProfileUpload = (req, res, next) => {
-  upload.single('profileImage')(req, res, (err) => {
+  upload.single("profileImage")(req, res, (err) => {
     if (err) {
-      const isSize = err.code === 'LIMIT_FILE_SIZE';
+      const isSize = err.code === "LIMIT_FILE_SIZE";
       return res.status(400).json({
-        error: isSize ? 'Profile image is too large. Max size is 15MB.' : (err.message || 'Invalid image upload')
+        error: isSize
+          ? "Profile image is too large. Max size is 15MB."
+          : err.message || "Invalid image upload",
       });
     }
     next();
@@ -72,40 +118,41 @@ const runProfileUpload = (req, res, next) => {
 };
 
 // Create new alumni
-router.post('/', runProfileUpload, async (req, res) => {
+router.post("/", runProfileUpload, async (req, res) => {
   try {
-    const { 
-      email, 
-      firstName, 
+    const {
+      email,
+      firstName,
       middleName,
-      lastName, 
-      graduationYear, 
-      course, 
-      currentPosition, 
-      company, 
-      skills, 
+      lastName,
+      graduationYear,
+      course,
+      currentPosition,
+      company,
+      skills,
       profileImage,
       contactNumber,
       level,
       batch,
       dateOfBirth,
-      date_of_birth
+      date_of_birth,
     } = req.body;
     const parsedEducationHistory = parseEducationHistory(
-      req.body.educationHistory ?? req.body.education_history
+      req.body.educationHistory ?? req.body.education_history,
     );
-    const primaryEducation = parsedEducationHistory.length > 0
-      ? parsedEducationHistory[parsedEducationHistory.length - 1]
-      : null;
+    const primaryEducation =
+      parsedEducationHistory.length > 0
+        ? parsedEducationHistory[parsedEducationHistory.length - 1]
+        : null;
 
     // Be tolerant to casing differences coming from the client
     const location = (req.body.location ?? req.body.Location) || null;
 
     // Validate required fields
     if (!firstName || !lastName || !course) {
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        required: ['firstName', 'lastName', 'course']
+      return res.status(400).json({
+        error: "Missing required fields",
+        required: ["firstName", "lastName", "course"],
       });
     }
 
@@ -114,21 +161,22 @@ router.post('/', runProfileUpload, async (req, res) => {
     if (email && email.trim()) {
       // Only look for existing users, don't create new ones
       user = await prisma.user.findUnique({ where: { email: email.trim() } });
-      
+
       if (user) {
         // Check if user already has an alumni profile
-        const existingAlumni = await prisma.alumni.findUnique({ 
-          where: { user_id: user.id } 
+        const existingAlumni = await prisma.alumni.findUnique({
+          where: { user_id: user.id },
         });
         if (existingAlumni) {
-          return res.status(400).json({ 
-            error: 'An alumni profile already exists for this email address' 
+          return res.status(400).json({
+            error: "An alumni profile already exists for this email address",
           });
         }
       }
     }
 
-    const birthDateValue = dateOfBirth !== undefined ? dateOfBirth : date_of_birth;
+    const birthDateValue =
+      dateOfBirth !== undefined ? dateOfBirth : date_of_birth;
     const parsedDateOfBirth = birthDateValue ? new Date(birthDateValue) : null;
     const alumniData = {
       first_name: firstName.trim(),
@@ -138,14 +186,26 @@ router.post('/', runProfileUpload, async (req, res) => {
       contact_number: contactNumber ? String(contactNumber).trim() : null,
       level: normalizeLevel(level) || primaryEducation?.level || null,
       batch: batch ? parseInt(batch, 10) : (primaryEducation?.batch ?? null),
-      graduation_year: graduationYear ? parseInt(graduationYear, 10) : (primaryEducation?.graduationYear ?? null),
+      graduation_year: graduationYear
+        ? parseInt(graduationYear, 10)
+        : (primaryEducation?.graduationYear ?? null),
       course: course.trim(),
       current_position: currentPosition ? currentPosition.trim() : null,
       company: company ? company.trim() : null,
       location: location ? String(location).trim() : null,
-      skills: Array.isArray(skills) ? skills.join(', ') : (skills ? String(skills) : null),
-      date_of_birth: parsedDateOfBirth instanceof Date && !Number.isNaN(parsedDateOfBirth.getTime()) ? parsedDateOfBirth : null,
-      profile_image: req.file ? `/uploads/profiles/${req.file.filename}` : (profileImage || null)
+      skills: Array.isArray(skills)
+        ? skills.join(", ")
+        : skills
+          ? String(skills)
+          : null,
+      date_of_birth:
+        parsedDateOfBirth instanceof Date &&
+        !Number.isNaN(parsedDateOfBirth.getTime())
+          ? parsedDateOfBirth
+          : null,
+      profile_image: req.file
+        ? `/uploads/profiles/${req.file.filename}`
+        : profileImage || null,
     };
 
     // Only add user_id if we found an existing user
@@ -157,14 +217,23 @@ router.post('/', runProfileUpload, async (req, res) => {
     try {
       // Create alumni record
       newAlumni = await prisma.alumni.create({
-        data: alumniData
+        data: alumniData,
       });
     } catch (err) {
       // Fallback if the DB/schema doesn't yet have contact_number
-      const msg = String(err?.message || '');
-      const badContact = msg.includes('Unknown arg `contact_number`') || msg.includes('Unknown column') || msg.includes('contact_number');
-      const badLevel = msg.includes('Unknown arg `level`') || msg.includes('Unknown column') || msg.includes('level');
-      const badBatch = msg.includes('Unknown arg `batch`') || msg.includes('Unknown column') || msg.includes('batch');
+      const msg = String(err?.message || "");
+      const badContact =
+        msg.includes("Unknown arg `contact_number`") ||
+        msg.includes("Unknown column") ||
+        msg.includes("contact_number");
+      const badLevel =
+        msg.includes("Unknown arg `level`") ||
+        msg.includes("Unknown column") ||
+        msg.includes("level");
+      const badBatch =
+        msg.includes("Unknown arg `batch`") ||
+        msg.includes("Unknown column") ||
+        msg.includes("batch");
 
       if (badContact || badLevel || badBatch) {
         const { contact_number, level, batch, ...rest } = alumniData;
@@ -175,52 +244,58 @@ router.post('/', runProfileUpload, async (req, res) => {
     }
 
     if (parsedEducationHistory.length > 0) {
-      await replaceEducationHistory(prisma, newAlumni.id, parsedEducationHistory);
+      await replaceEducationHistory(
+        prisma,
+        newAlumni.id,
+        parsedEducationHistory,
+      );
     }
 
-    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [newAlumni.id]);
+    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [
+      newAlumni.id,
+    ]);
     const history = historyByAlumniId.get(newAlumni.id) || [];
 
-    broadcastUpdate('alumni.created', {
+    broadcastUpdate("alumni.created", {
       alumniId: newAlumni.id,
-      userId: newAlumni.user_id || null
+      userId: newAlumni.user_id || null,
     });
 
     res.status(201).json({
       ...newAlumni,
       education_history: history,
-      educationHistory: history
+      educationHistory: history,
     });
   } catch (error) {
-    console.error('Error creating alumni:', error);
-    res.status(500).json({ 
-      error: 'Failed to create alumni record',
-      details: error.message 
+    console.error("Error creating alumni:", error);
+    res.status(500).json({
+      error: "Failed to create alumni record",
+      details: error.message,
     });
   }
 });
 
 // Get today's birthday alumni
-router.get('/birthdays/today', authMiddleware, async (req, res) => {
+router.get("/birthdays/today", authMiddleware, async (req, res) => {
   try {
     const today = new Date();
     const birthdays = await prisma.alumni.findMany({
       where: {
         date_of_birth: {
-          not: null
+          not: null,
         },
         status: {
-          not: 'DECEASED'
-        }
+          not: "DECEASED",
+        },
       },
       include: {
         user: {
           select: {
             email: true,
-            username: true
-          }
-        }
-      }
+            username: true,
+          },
+        },
+      },
     });
 
     const birthdayList = birthdays
@@ -238,38 +313,38 @@ router.get('/birthdays/today', authMiddleware, async (req, res) => {
         lastName: entry.last_name,
         profileImage: entry.profile_image,
         dateOfBirth: entry.date_of_birth,
-        email: entry.email || entry.user?.email || null
+        email: entry.email || entry.user?.email || null,
       }));
 
     const currentAlumni = await prisma.alumni.findFirst({
       where: {
-        OR: [
-          { user_id: req.user.id },
-          { email: req.user.email }
-        ]
-      }
+        OR: [{ user_id: req.user.id }, { email: req.user.email }],
+      },
     });
-    const isYourBirthday = currentAlumni && currentAlumni.date_of_birth ? (() => {
-      const dob = new Date(currentAlumni.date_of_birth);
-      return (
-        !Number.isNaN(dob.getTime()) &&
-        dob.getUTCDate() === today.getUTCDate() &&
-        dob.getUTCMonth() === today.getUTCMonth()
-      );
-    })() : false;
+    const isYourBirthday =
+      currentAlumni && currentAlumni.date_of_birth
+        ? (() => {
+            const dob = new Date(currentAlumni.date_of_birth);
+            return (
+              !Number.isNaN(dob.getTime()) &&
+              dob.getUTCDate() === today.getUTCDate() &&
+              dob.getUTCMonth() === today.getUTCMonth()
+            );
+          })()
+        : false;
 
     res.json({
       birthdays: birthdayList,
-      isYourBirthday
+      isYourBirthday,
     });
   } catch (error) {
-    console.error('Error fetching today birthdays:', error);
-    res.status(500).json({ error: 'Failed to fetch birthday alumni' });
+    console.error("Error fetching today birthdays:", error);
+    res.status(500).json({ error: "Failed to fetch birthday alumni" });
   }
 });
 
 // Get alumni by ID
-router.get('/:id', async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const alumni = await prisma.alumni.findUnique({
@@ -278,57 +353,64 @@ router.get('/:id', async (req, res) => {
         user: {
           select: {
             email: true,
-            username: true
-          }
+            username: true,
+          },
         },
-        social_link: true
-      }
+        social_link: true,
+      },
     });
 
     if (!alumni) {
-      return res.status(404).json({ error: 'Alumni not found' });
+      return res.status(404).json({ error: "Alumni not found" });
     }
 
-    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [alumni.id]);
-    const history = getEducationHistoryWithFallback(alumni, historyByAlumniId.get(alumni.id) || []);
+    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [
+      alumni.id,
+    ]);
+    const history = getEducationHistoryWithFallback(
+      alumni,
+      historyByAlumniId.get(alumni.id) || [],
+    );
 
     res.json({
       ...alumni,
       education_history: history,
-      educationHistory: history
+      educationHistory: history,
     });
   } catch (error) {
-    console.error('Error fetching alumni:', error);
-    res.status(500).json({ error: 'Failed to fetch alumni' });
+    console.error("Error fetching alumni:", error);
+    res.status(500).json({ error: "Failed to fetch alumni" });
   }
 });
 
 // Update alumni
-router.put('/:id', runProfileUpload, async (req, res) => {
+router.put("/:id", runProfileUpload, async (req, res) => {
   try {
     const { id } = req.params;
     const parsedEducationHistory = parseEducationHistory(
-      req.body.educationHistory ?? req.body.education_history
+      req.body.educationHistory ?? req.body.education_history,
     );
     const hasEducationHistoryInput =
-      req.body.educationHistory !== undefined || req.body.education_history !== undefined;
-    const primaryEducation = parsedEducationHistory.length > 0
-      ? parsedEducationHistory[parsedEducationHistory.length - 1]
-      : null;
-    
+      req.body.educationHistory !== undefined ||
+      req.body.education_history !== undefined;
+    const primaryEducation =
+      parsedEducationHistory.length > 0
+        ? parsedEducationHistory[parsedEducationHistory.length - 1]
+        : null;
+
     // Check if alumni exists
     const existingAlumni = await prisma.alumni.findUnique({
       where: { id: Number(id) },
-      include: { user: true }
+      include: { user: true },
     });
 
     if (!existingAlumni) {
-      return res.status(404).json({ error: 'Alumni not found' });
+      return res.status(404).json({ error: "Alumni not found" });
     }
 
     // Build update data from request body
     const updateData = {};
-    
+
     if (req.body.firstName && req.body.firstName.trim()) {
       updateData.first_name = req.body.firstName.trim();
     }
@@ -339,11 +421,16 @@ router.put('/:id', runProfileUpload, async (req, res) => {
       updateData.last_name = req.body.lastName.trim();
     }
     if (req.body.email !== undefined) {
-      updateData.email = req.body.email && req.body.email.trim() ? req.body.email.trim() : null;
+      updateData.email =
+        req.body.email && req.body.email.trim() ? req.body.email.trim() : null;
     }
     if (req.body.contactNumber !== undefined || req.body.phone !== undefined) {
-      const num = req.body.contactNumber !== undefined ? req.body.contactNumber : req.body.phone;
-      updateData.contact_number = num && String(num).trim() ? String(num).trim() : null;
+      const num =
+        req.body.contactNumber !== undefined
+          ? req.body.contactNumber
+          : req.body.phone;
+      updateData.contact_number =
+        num && String(num).trim() ? String(num).trim() : null;
     }
     if (req.body.graduationYear) {
       const year = parseInt(req.body.graduationYear);
@@ -366,7 +453,10 @@ router.put('/:id', runProfileUpload, async (req, res) => {
       if (req.body.batch === undefined) {
         updateData.batch = primaryEducation?.batch ?? null;
       }
-      if (req.body.graduationYear === undefined && req.body.graduation_year === undefined) {
+      if (
+        req.body.graduationYear === undefined &&
+        req.body.graduation_year === undefined
+      ) {
         updateData.graduation_year = primaryEducation?.graduationYear ?? null;
       }
     }
@@ -374,51 +464,83 @@ router.put('/:id', runProfileUpload, async (req, res) => {
       updateData.course = req.body.course.trim();
     }
     if (req.body.currentPosition !== undefined) {
-      updateData.current_position = req.body.currentPosition && req.body.currentPosition.trim() ? req.body.currentPosition.trim() : null;
+      updateData.current_position =
+        req.body.currentPosition && req.body.currentPosition.trim()
+          ? req.body.currentPosition.trim()
+          : null;
     }
     if (req.body.company !== undefined) {
-      updateData.company = req.body.company && req.body.company.trim() ? req.body.company.trim() : null;
+      updateData.company =
+        req.body.company && req.body.company.trim()
+          ? req.body.company.trim()
+          : null;
     }
-    const dobValue = req.body.dateOfBirth !== undefined ? req.body.dateOfBirth : req.body.date_of_birth;
+    const dobValue =
+      req.body.dateOfBirth !== undefined
+        ? req.body.dateOfBirth
+        : req.body.date_of_birth;
     if (dobValue !== undefined) {
       const parsedDob = dobValue ? new Date(dobValue) : null;
-      updateData.date_of_birth = parsedDob instanceof Date && !Number.isNaN(parsedDob.getTime()) ? parsedDob : null;
+      updateData.date_of_birth =
+        parsedDob instanceof Date && !Number.isNaN(parsedDob.getTime())
+          ? parsedDob
+          : null;
     }
-    const locationIncoming = req.body.location !== undefined ? req.body.location : req.body.Location;
+    const locationIncoming =
+      req.body.location !== undefined ? req.body.location : req.body.Location;
     if (locationIncoming !== undefined) {
-      updateData.location = locationIncoming ? String(locationIncoming).trim() : null;
+      updateData.location = locationIncoming
+        ? String(locationIncoming).trim()
+        : null;
     }
     if (req.body.skills !== undefined) {
       if (Array.isArray(req.body.skills)) {
-        updateData.skills = req.body.skills.length ? req.body.skills.join(', ') : null;
+        updateData.skills = req.body.skills.length
+          ? req.body.skills.join(", ")
+          : null;
       } else {
-        updateData.skills = req.body.skills ? String(req.body.skills).trim() : null;
+        updateData.skills = req.body.skills
+          ? String(req.body.skills).trim()
+          : null;
       }
+    }
+    if (req.body.isPublic !== undefined || req.body.is_public !== undefined) {
+      const visibilityValue =
+        req.body.isPublic !== undefined
+          ? req.body.isPublic
+          : req.body.is_public;
+      updateData.is_public =
+        visibilityValue === true ||
+        visibilityValue === "true" ||
+        visibilityValue === 1;
     }
 
     // Handle profile image upload
     if (req.file) {
       updateData.profile_image = `/uploads/profiles/${req.file.filename}`;
-    } else if (req.body.profileImage && req.body.profileImage.includes('/uploads/')) {
+    } else if (
+      req.body.profileImage &&
+      req.body.profileImage.includes("/uploads/")
+    ) {
       updateData.profile_image = req.body.profileImage;
     }
 
     // Log the update data for debugging
-    console.log('Updating alumni ID:', id);
-    console.log('Update data:', JSON.stringify(updateData, null, 2));
-    console.log('Has file upload:', !!req.file);
+    console.log("Updating alumni ID:", id);
+    console.log("Update data:", JSON.stringify(updateData, null, 2));
+    console.log("Has file upload:", !!req.file);
     if (req.file) {
-      console.log('File details:', {
+      console.log("File details:", {
         filename: req.file.filename,
         size: req.file.size,
-        mimetype: req.file.mimetype
+        mimetype: req.file.mimetype,
       });
     }
 
     // Validate that we have at least some data to update
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ 
-        error: 'No valid data provided for update' 
+      return res.status(400).json({
+        error: "No valid data provided for update",
       });
     }
 
@@ -431,24 +553,33 @@ router.put('/:id', runProfileUpload, async (req, res) => {
         include: {
           user: {
             select: {
-              email: true
-            }
-          }
-        }
+              email: true,
+            },
+          },
+        },
       });
     } catch (err) {
-      const msg = String(err?.message || '');
-      const badContact = msg.includes('Unknown arg `contact_number`') || msg.includes('Unknown column') || msg.includes('contact_number');
-      const badLevel = msg.includes('Unknown arg `level`') || msg.includes('Unknown column') || msg.includes('level');
-      const badBatch = msg.includes('Unknown arg `batch`') || msg.includes('Unknown column') || msg.includes('batch');
+      const msg = String(err?.message || "");
+      const badContact =
+        msg.includes("Unknown arg `contact_number`") ||
+        msg.includes("Unknown column") ||
+        msg.includes("contact_number");
+      const badLevel =
+        msg.includes("Unknown arg `level`") ||
+        msg.includes("Unknown column") ||
+        msg.includes("level");
+      const badBatch =
+        msg.includes("Unknown arg `batch`") ||
+        msg.includes("Unknown column") ||
+        msg.includes("batch");
       if (badContact || badLevel || badBatch) {
         const { contact_number, level, batch, ...rest } = updateData;
         updatedAlumni = await prisma.alumni.update({
           where: { id: Number(id) },
           data: rest,
           include: {
-            user: { select: { email: true } }
-          }
+            user: { select: { email: true } },
+          },
         });
       } else {
         throw err;
@@ -459,95 +590,100 @@ router.put('/:id', runProfileUpload, async (req, res) => {
       await replaceEducationHistory(prisma, Number(id), parsedEducationHistory);
     }
 
-    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [updatedAlumni.id]);
-    const history = getEducationHistoryWithFallback(updatedAlumni, historyByAlumniId.get(updatedAlumni.id) || []);
+    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [
+      updatedAlumni.id,
+    ]);
+    const history = getEducationHistoryWithFallback(
+      updatedAlumni,
+      historyByAlumniId.get(updatedAlumni.id) || [],
+    );
 
-    console.log('Alumni updated successfully:', updatedAlumni.id);
+    console.log("Alumni updated successfully:", updatedAlumni.id);
 
-    broadcastUpdate('alumni.updated', {
+    broadcastUpdate("alumni.updated", {
       alumniId: updatedAlumni.id,
-      userId: existingAlumni.user_id || null
+      userId: existingAlumni.user_id || null,
     });
 
     if (existingAlumni.user_id) {
-      broadcastUpdate('profile.updated', {
+      broadcastUpdate("profile.updated", {
         userId: existingAlumni.user_id,
-        alumniId: updatedAlumni.id
+        alumniId: updatedAlumni.id,
       });
     }
 
     res.json({
       ...updatedAlumni,
       education_history: history,
-      educationHistory: history
+      educationHistory: history,
     });
   } catch (error) {
-    console.error('=== ERROR UPDATING ALUMNI ===');
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.code);
-    console.error('Error stack:', error.stack);
-    console.error('Request body keys:', Object.keys(req.body));
-    console.error('============================');
-    res.status(500).json({ 
-      error: 'Failed to update alumni',
+    console.error("=== ERROR UPDATING ALUMNI ===");
+    console.error("Error message:", error.message);
+    console.error("Error code:", error.code);
+    console.error("Error stack:", error.stack);
+    console.error("Request body keys:", Object.keys(req.body));
+    console.error("============================");
+    res.status(500).json({
+      error: "Failed to update alumni",
       details: error.message,
-      code: error.code
+      code: error.code,
     });
   }
 });
 
 // Delete alumni
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Check if alumni exists and get user_id
     const existingAlumni = await prisma.alumni.findUnique({
-      where: { id: Number(id) }
+      where: { id: Number(id) },
     });
 
     if (!existingAlumni) {
-      return res.status(404).json({ error: 'Alumni not found' });
+      return res.status(404).json({ error: "Alumni not found" });
     }
 
     const userId = existingAlumni.user_id;
 
     // Delete alumni record first (this will cascade to related records)
     await prisma.alumni.delete({
-      where: { id: Number(id) }
+      where: { id: Number(id) },
     });
 
     // If alumni had a user_id, delete the user record too
     if (userId) {
       try {
         await prisma.user.delete({
-          where: { id: userId }
+          where: { id: userId },
         });
         console.log(`✅ Deleted user ${userId} along with alumni ${id}`);
       } catch (userDeleteError) {
-        console.error('Error deleting associated user:', userDeleteError);
+        console.error("Error deleting associated user:", userDeleteError);
         // Continue even if user deletion fails (user might already be deleted)
       }
     }
 
-    broadcastUpdate('alumni.deleted', {
+    broadcastUpdate("alumni.deleted", {
       alumniId: Number(id),
-      userId: userId || null
+      userId: userId || null,
     });
 
     if (userId) {
-      broadcastUpdate('profile.updated', {
+      broadcastUpdate("profile.updated", {
         userId,
-        alumniId: Number(id)
+        alumniId: Number(id),
       });
     }
 
-    res.json({ message: 'Alumni and associated user deleted successfully' });
+    res.json({ message: "Alumni and associated user deleted successfully" });
   } catch (error) {
-    console.error('Error deleting alumni:', error);
-    res.status(500).json({ 
-      error: 'Failed to delete alumni',
-      details: error.message 
+    console.error("Error deleting alumni:", error);
+    res.status(500).json({
+      error: "Failed to delete alumni",
+      details: error.message,
     });
   }
 });
@@ -557,39 +693,42 @@ router.delete('/:id', async (req, res) => {
 // Helper function to detect platform from URL
 function detectPlatform(url) {
   const urlLower = url.toLowerCase();
-  if (urlLower.includes('facebook.com') || urlLower.includes('fb.com')) return 'Facebook';
-  if (urlLower.includes('linkedin.com')) return 'LinkedIn';
-  if (urlLower.includes('twitter.com') || urlLower.includes('x.com')) return 'Twitter';
-  if (urlLower.includes('instagram.com')) return 'Instagram';
-  if (urlLower.includes('github.com')) return 'GitHub';
-  if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) return 'YouTube';
-  if (urlLower.includes('tiktok.com')) return 'TikTok';
-  return 'Other';
+  if (urlLower.includes("facebook.com") || urlLower.includes("fb.com"))
+    return "Facebook";
+  if (urlLower.includes("linkedin.com")) return "LinkedIn";
+  if (urlLower.includes("twitter.com") || urlLower.includes("x.com"))
+    return "Twitter";
+  if (urlLower.includes("instagram.com")) return "Instagram";
+  if (urlLower.includes("github.com")) return "GitHub";
+  if (urlLower.includes("youtube.com") || urlLower.includes("youtu.be"))
+    return "YouTube";
+  if (urlLower.includes("tiktok.com")) return "TikTok";
+  return "Other";
 }
 
 // Add social link
-router.post('/:id/social-links', authMiddleware, async (req, res) => {
+router.post("/:id/social-links", authMiddleware, async (req, res) => {
   try {
     const alumniId = Number(req.params.id);
     const { url } = req.body;
 
     if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+      return res.status(400).json({ error: "URL is required" });
     }
 
     // Check if alumni exists and user owns this profile
     const alumni = await prisma.alumni.findUnique({
       where: { id: alumniId },
-      include: { user: true }
+      include: { user: true },
     });
 
     if (!alumni) {
-      return res.status(404).json({ error: 'Alumni not found' });
+      return res.status(404).json({ error: "Alumni not found" });
     }
 
     // Only allow the owner or admin to add social links
-    if (req.user.id !== alumni.user_id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
+    if (req.user.id !== alumni.user_id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Unauthorized" });
     }
 
     // Auto-detect platform from URL
@@ -599,41 +738,41 @@ router.post('/:id/social-links', authMiddleware, async (req, res) => {
       data: {
         alumni_id: alumniId,
         platform,
-        url
-      }
+        url,
+      },
     });
 
     res.status(201).json(socialLink);
   } catch (error) {
-    console.error('Error adding social link:', error);
-    res.status(500).json({ error: 'Failed to add social link' });
+    console.error("Error adding social link:", error);
+    res.status(500).json({ error: "Failed to add social link" });
   }
 });
 
 // Update social link
-router.put('/:id/social-links/:linkId', authMiddleware, async (req, res) => {
+router.put("/:id/social-links/:linkId", authMiddleware, async (req, res) => {
   try {
     const alumniId = Number(req.params.id);
     const linkId = Number(req.params.linkId);
     const { url } = req.body;
 
     if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+      return res.status(400).json({ error: "URL is required" });
     }
 
     // Check if alumni exists and user owns this profile
     const alumni = await prisma.alumni.findUnique({
       where: { id: alumniId },
-      include: { user: true }
+      include: { user: true },
     });
 
     if (!alumni) {
-      return res.status(404).json({ error: 'Alumni not found' });
+      return res.status(404).json({ error: "Alumni not found" });
     }
 
     // Only allow the owner or admin to update social links
-    if (req.user.id !== alumni.user_id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
+    if (req.user.id !== alumni.user_id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Unauthorized" });
     }
 
     // Auto-detect platform from URL
@@ -643,19 +782,19 @@ router.put('/:id/social-links/:linkId', authMiddleware, async (req, res) => {
       where: { id: linkId },
       data: {
         platform,
-        url
-      }
+        url,
+      },
     });
 
     res.json(socialLink);
   } catch (error) {
-    console.error('Error updating social link:', error);
-    res.status(500).json({ error: 'Failed to update social link' });
+    console.error("Error updating social link:", error);
+    res.status(500).json({ error: "Failed to update social link" });
   }
 });
 
 // Delete social link
-router.delete('/:id/social-links/:linkId', authMiddleware, async (req, res) => {
+router.delete("/:id/social-links/:linkId", authMiddleware, async (req, res) => {
   try {
     const alumniId = Number(req.params.id);
     const linkId = Number(req.params.linkId);
@@ -663,47 +802,61 @@ router.delete('/:id/social-links/:linkId', authMiddleware, async (req, res) => {
     // Check if alumni exists and user owns this profile
     const alumni = await prisma.alumni.findUnique({
       where: { id: alumniId },
-      include: { user: true }
+      include: { user: true },
     });
 
     if (!alumni) {
-      return res.status(404).json({ error: 'Alumni not found' });
+      return res.status(404).json({ error: "Alumni not found" });
     }
 
     // Only allow the owner or admin to delete social links
-    if (req.user.id !== alumni.user_id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
+    if (req.user.id !== alumni.user_id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Unauthorized" });
     }
 
     await prisma.social_link.delete({
-      where: { id: linkId }
+      where: { id: linkId },
     });
 
-    res.json({ message: 'Social link deleted successfully' });
+    res.json({ message: "Social link deleted successfully" });
   } catch (error) {
-    console.error('Error deleting social link:', error);
-    res.status(500).json({ error: 'Failed to delete social link' });
+    console.error("Error deleting social link:", error);
+    res.status(500).json({ error: "Failed to delete social link" });
   }
 });
 
 // Report deceased alumni (Disabled)
-router.post('/:id/report-deceased', authMiddleware, async (req, res) => {
-  return res.status(400).json({ error: 'This feature is no longer supported.' });
+router.post("/:id/report-deceased", authMiddleware, async (req, res) => {
+  return res
+    .status(400)
+    .json({ error: "This feature is no longer supported." });
 });
 
 // Get pending deceased reports (Disabled)
-router.get('/deceased-reports/pending', authMiddleware, async (req, res) => {
+router.get("/deceased-reports/pending", authMiddleware, async (req, res) => {
   return res.json([]);
 });
 
 // Approve deceased report (Disabled)
-router.post('/deceased-reports/:reportId/approve', authMiddleware, async (req, res) => {
-  return res.status(400).json({ error: 'This feature is no longer supported.' });
-});
+router.post(
+  "/deceased-reports/:reportId/approve",
+  authMiddleware,
+  async (req, res) => {
+    return res
+      .status(400)
+      .json({ error: "This feature is no longer supported." });
+  },
+);
 
 // Reject deceased report (Disabled)
-router.post('/deceased-reports/:reportId/reject', authMiddleware, async (req, res) => {
-  return res.status(400).json({ error: 'This feature is no longer supported.' });
-});
+router.post(
+  "/deceased-reports/:reportId/reject",
+  authMiddleware,
+  async (req, res) => {
+    return res
+      .status(400)
+      .json({ error: "This feature is no longer supported." });
+  },
+);
 
 module.exports = router;

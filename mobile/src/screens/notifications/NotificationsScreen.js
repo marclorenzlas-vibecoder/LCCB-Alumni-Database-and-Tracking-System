@@ -9,6 +9,27 @@ import { notificationService } from '../../services/notificationService';
 import { formatDate } from '../../utils/formatters';
 import { theme } from '../../theme';
 
+const getDateGroup = (dateStr) => {
+  if (!dateStr) return 'Older';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const diffMs = startOfToday.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (date >= startOfToday) return 'Today';
+  if (date >= startOfYesterday) return 'Yesterday';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 14) return '1 week ago';
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  if (diffDays < 60) return '1 month ago';
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+  return 'Older';
+};
+
 export default function NotificationsScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,21 +160,41 @@ export default function NotificationsScreen({ navigation }) {
 
       {!loading && items.length > 0 ? (
         <View style={styles.list}>
-          {items.map((item) => (
-            <Pressable key={item.id} style={[styles.card, !item.is_read && styles.unread]} onPress={() => onPressNotification(item)}>
-              <View style={styles.cardTopRow}>
-                <View style={styles.itemIconWrap}>
-                  <Ionicons name={item.is_read ? 'mail-open-outline' : 'mail-unread-outline'} size={16} color={item.is_read ? '#475569' : '#1d4ed8'} />
-                </View>
-                <View style={styles.cardTextWrap}>
-                  <Text style={styles.title}>{item.title || 'Notification'}</Text>
-                  <Text style={styles.message}>{item.message || 'No message'}</Text>
-                </View>
-                {!item.is_read ? <View style={styles.unreadDot} /> : null}
-              </View>
-              <Text style={styles.date}>{formatDate(item.created_at)}</Text>
-            </Pressable>
-          ))}
+          {(() => {
+            const groups = [];
+            let lastGroup = '';
+            items.forEach((item) => {
+              const group = getDateGroup(item.created_at);
+              if (group !== lastGroup) {
+                groups.push({ type: 'header', label: group, key: `header-${group}` });
+                lastGroup = group;
+              }
+              groups.push({ type: 'item', data: item, key: `item-${item.id}` });
+            });
+            return groups.map((entry) => {
+              if (entry.type === 'header') {
+                return (
+                  <Text key={entry.key} style={styles.dateHeader}>{entry.label}</Text>
+                );
+              }
+              const item = entry.data;
+              return (
+                <Pressable key={entry.key} style={[styles.card, !item.is_read && styles.unread]} onPress={() => onPressNotification(item)}>
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.itemIconWrap}>
+                      <Ionicons name={item.is_read ? 'mail-open-outline' : 'mail-unread-outline'} size={16} color={item.is_read ? '#475569' : '#1d4ed8'} />
+                    </View>
+                    <View style={styles.cardTextWrap}>
+                      <Text style={styles.title}>{item.title || 'Notification'}</Text>
+                      <Text style={styles.message}>{item.message || 'No message'}</Text>
+                    </View>
+                    {!item.is_read ? <View style={styles.unreadDot} /> : null}
+                  </View>
+                  <Text style={styles.date}>{formatDate(item.created_at)}</Text>
+                </Pressable>
+              );
+            });
+          })()}
         </View>
       ) : null}
     </ScreenContainer>
@@ -163,6 +204,16 @@ export default function NotificationsScreen({ navigation }) {
 const styles = StyleSheet.create({
   list: {
     gap: 5
+  },
+  dateHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 12,
+    marginBottom: 4,
+    marginLeft: 2
   },
   heroCard: {
     flexDirection: 'row',

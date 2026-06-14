@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { authService } from '../services/authService';
 import { realtimeClient } from '../services/realtimeClient';
@@ -25,6 +25,13 @@ export default function AppNavigator() {
         const session = await authService.loadSession();
         if (session.user) {
           setUser(session.user);
+          try {
+            const freshUser = await authService.getUser(session.user.id);
+            if (freshUser) {
+              setUser(freshUser);
+              await authService.saveUser(freshUser);
+            }
+          } catch {}
         }
       } finally {
         setIsLoading(false);
@@ -63,9 +70,16 @@ export default function AppNavigator() {
       }
     });
 
+    const unsubDonation = realtimeClient.subscribe('notification.created', (payload) => {
+      if (payload?.type === 'DONATION' && payload?.senderName) {
+        Alert.alert('New Donation', `${payload.senderName} donated ${payload.amountLabel || ''} to ${payload.campaignName || 'a campaign'}.`, [{ text: 'OK' }]);
+      }
+    });
+
     return () => {
       unsubProfile();
       unsubAlumni();
+      unsubDonation();
     };
   }, [user?.id, user?.alumni?.id]);
 
@@ -101,7 +115,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ cardStyle: { backgroundColor: '#ffffff' } }}>
       {user ? (
         <Stack.Screen name="Main" options={{ headerShown: false }}>
           {(props) => <MainTabs {...props} user={user} setUser={setUser} />}

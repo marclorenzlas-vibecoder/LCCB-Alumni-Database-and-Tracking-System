@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -89,13 +90,7 @@ export default function ProfileScreen({ user, setUser }) {
     skills: user?.alumni?.skills || ''
   });
   const [educationHistory, setEducationHistory] = useState(initialEducationHistory);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
   const [saving, setSaving] = useState(false);
-  const [updatingPassword, setUpdatingPassword] = useState(false);
   const [imageAsset, setImageAsset] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [pickerState, setPickerState] = useState({
@@ -107,10 +102,11 @@ export default function ProfileScreen({ user, setUser }) {
   const refreshProfile = React.useCallback(() => {
     if (!user?.id) return;
     authService.getUser(user.id)
-      .then((freshUser) => {
+      .then(async (freshUser) => {
         const freshEducationHistory = normalizeEducationHistory(freshUser?.alumni || {});
         const primaryEducation = getPrimaryEducation(freshEducationHistory);
         setUser(freshUser);
+        await authService.saveUser(freshUser);
         setForm({
           username: freshUser?.username || '',
           email: freshUser?.email || '',
@@ -148,7 +144,6 @@ export default function ProfileScreen({ user, setUser }) {
       return prev.filter((_, i) => i !== index);
     });
   };
-  const setPasswordField = (key, value) => setPasswordForm((prev) => ({ ...prev, [key]: value }));
   const openPicker = (index, field) => setPickerState({ visible: true, field, index });
   const closePicker = () => setPickerState({ visible: false, field: null, index: null });
   const selectPickerValue = (value) => {
@@ -304,33 +299,6 @@ export default function ProfileScreen({ user, setUser }) {
     }
   };
 
-  const onUpdatePassword = async () => {
-    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-      Alert.alert('Missing fields', 'Please fill out all password fields.');
-      return;
-    }
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      Alert.alert('Password mismatch', 'New password and confirm password do not match.');
-      return;
-    }
-
-    setUpdatingPassword(true);
-    try {
-      await authService.changePassword(user.id, {
-        currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword,
-        email: form.email || user?.email || ''
-      });
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      Alert.alert('Updated', 'Password changed successfully.');
-    } catch (error) {
-      Alert.alert('Unable to update', error?.response?.data?.error || 'Failed to change password.');
-    } finally {
-      setUpdatingPassword(false);
-    }
-  };
-
   const onLogout = async () => {
     await authService.logout();
     setUser(null);
@@ -340,12 +308,17 @@ export default function ProfileScreen({ user, setUser }) {
     <ScreenContainer>
       <View style={styles.heroCard}>
         <View style={styles.heroBgDot} />
-        <Pressable onPress={onPickImage} style={styles.heroAvatarWrap}>
+        <Pressable onPress={editMode ? onPickImage : undefined} style={styles.heroAvatarWrap}>
           <Image
             source={{ uri: imageAsset?.uri || imageUrl(user?.profile_image, API_ORIGIN) || 'https://via.placeholder.com/150' }}
             style={styles.avatar}
           />
           <View style={styles.onlineBadge} />
+          {editMode ? (
+            <View style={styles.cameraOverlay}>
+              <Ionicons name="add" size={20} color="#ffffff" />
+            </View>
+          ) : null}
         </Pressable>
         <Text style={styles.heroName}>{form.username || fullName}</Text>
         <Text style={styles.heroEmail}>{form.email || user?.email || '-'}</Text>
@@ -462,43 +435,6 @@ export default function ProfileScreen({ user, setUser }) {
         {editMode ? <PrimaryButton label={saving ? 'Saving...' : 'Save Profile'} onPress={onSave} disabled={saving} /> : null}
       </View>
 
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Change Password</Text>
-
-        <Text style={styles.label}>Current Password</Text>
-        <TextInput
-          style={styles.input}
-          secureTextEntry
-          placeholder="Enter current password"
-          value={passwordForm.currentPassword}
-          onChangeText={(v) => setPasswordField('currentPassword', v)}
-        />
-
-        <Text style={styles.label}>New Password</Text>
-        <TextInput
-          style={styles.input}
-          secureTextEntry
-          placeholder="Enter new password"
-          value={passwordForm.newPassword}
-          onChangeText={(v) => setPasswordField('newPassword', v)}
-        />
-
-        <Text style={styles.label}>Confirm New Password</Text>
-        <TextInput
-          style={styles.input}
-          secureTextEntry
-          placeholder="Confirm new password"
-          value={passwordForm.confirmPassword}
-          onChangeText={(v) => setPasswordField('confirmPassword', v)}
-        />
-
-        <PrimaryButton
-          label={updatingPassword ? 'Updating...' : 'Update Password'}
-          onPress={onUpdatePassword}
-          disabled={updatingPassword}
-        />
-      </View>
-
       <PrimaryButton label="Logout" tone="danger" onPress={onLogout} />
 
       <Modal visible={pickerState.visible} transparent animationType="fade" onRequestClose={closePicker}>
@@ -570,6 +506,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
     borderWidth: 2,
     borderColor: '#dbeafe'
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff'
+  },
+  cameraIcon: {
+    fontSize: 12
   },
   heroName: {
     fontSize: 38 / 2,

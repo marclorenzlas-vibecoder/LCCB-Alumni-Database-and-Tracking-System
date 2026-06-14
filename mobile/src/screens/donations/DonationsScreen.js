@@ -121,7 +121,7 @@ export default function DonationsScreen({ navigation, user }) {
 
         {!teacher ? (
           <View style={styles.donateActionWrap}>
-            <Pressable style={styles.donateBtn}>
+            <Pressable style={styles.donateBtn} onPress={() => navigation.navigate('DonationDetail', { donationId: item.id })}>
               <Text style={styles.donateBtnText}>Donate</Text>
             </Pressable>
           </View>

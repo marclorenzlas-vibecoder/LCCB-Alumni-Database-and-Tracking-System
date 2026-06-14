@@ -10,7 +10,10 @@ export const extractDonationMeta = (rawDescription = '') => {
   const endIndex = rawDescription.indexOf(META_END);
 
   if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-    return { cleanDescription: rawDescription.trim(), meta: {} };
+    const strippedDescription = rawDescription
+      .split(/\n\s*\n(?=Donation for:|Donor:)/i)[0]
+      .trim();
+    return { cleanDescription: strippedDescription, meta: {} };
   }
 
   const metaRaw = rawDescription.slice(startIndex + META_START.length, endIndex).trim();
@@ -24,8 +27,12 @@ export const extractDonationMeta = (rawDescription = '') => {
 
   const withoutMeta = `${rawDescription.slice(0, startIndex)}${rawDescription.slice(endIndex + META_END.length)}`;
 
+  const strippedDescription = withoutMeta
+    .split(/\n\s*\n(?=Donation for:|Donor:)/i)[0]
+    .trim();
+
   return {
-    cleanDescription: withoutMeta.trim(),
+    cleanDescription: strippedDescription,
     meta: meta && typeof meta === 'object' ? meta : {}
   };
 };

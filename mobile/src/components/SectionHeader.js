@@ -12,9 +12,7 @@ export default function SectionHeader({ title, subtitle }) {
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    marginTop: 4
-  },
+  wrapper: {},
   title: {
     ...theme.typography.title,
     color: theme.colors.text

@@ -1,66 +1,114 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import ScreenContainer from '../../components/ScreenContainer';
-import LoadingState from '../../components/LoadingState';
-import { API_ORIGIN } from '../../config/api';
-import { communityService } from '../../services/communityService';
-import { donationService } from '../../services/donationService';
-import { imageUrl } from '../../utils/formatters';
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import ScreenContainer from "../../components/ScreenContainer";
+import LoadingState from "../../components/LoadingState";
+import { API_ORIGIN } from "../../config/api";
+import { communityService } from "../../services/communityService";
+import { donationService } from "../../services/donationService";
+import { imageUrl } from "../../utils/formatters";
 
 function getSocialIconMeta(link) {
-  const platform = String(link?.platform || '').toLowerCase();
-  const url = String(link?.url || '').toLowerCase();
+  const platform = String(link?.platform || "").toLowerCase();
+  const url = String(link?.url || "").toLowerCase();
 
-  if (platform.includes('instagram') || url.includes('instagram.com')) {
-    return { name: 'logo-instagram', color: '#e1306c', label: 'Instagram' };
+  if (platform.includes("instagram") || url.includes("instagram.com")) {
+    return { name: "logo-instagram", color: "#e1306c", label: "Instagram" };
   }
-  if (platform.includes('facebook') || url.includes('facebook.com') || url.includes('fb.com')) {
-    return { name: 'logo-facebook', color: '#1877f2', label: 'Facebook' };
+  if (
+    platform.includes("facebook") ||
+    url.includes("facebook.com") ||
+    url.includes("fb.com")
+  ) {
+    return { name: "logo-facebook", color: "#1877f2", label: "Facebook" };
   }
-  if (platform.includes('linkedin') || url.includes('linkedin.com')) {
-    return { name: 'logo-linkedin', color: '#0a66c2', label: 'LinkedIn' };
+  if (platform.includes("linkedin") || url.includes("linkedin.com")) {
+    return { name: "logo-linkedin", color: "#0a66c2", label: "LinkedIn" };
   }
-  if (platform.includes('twitter') || platform === 'x' || url.includes('twitter.com') || url.includes('x.com')) {
-    return { name: 'logo-twitter', color: '#1d9bf0', label: 'Twitter/X' };
+  if (
+    platform.includes("twitter") ||
+    platform === "x" ||
+    url.includes("twitter.com") ||
+    url.includes("x.com")
+  ) {
+    return { name: "logo-twitter", color: "#1d9bf0", label: "Twitter/X" };
   }
-  if (platform.includes('youtube') || url.includes('youtube.com') || url.includes('youtu.be')) {
-    return { name: 'logo-youtube', color: '#ff0000', label: 'YouTube' };
+  if (
+    platform.includes("youtube") ||
+    url.includes("youtube.com") ||
+    url.includes("youtu.be")
+  ) {
+    return { name: "logo-youtube", color: "#ff0000", label: "YouTube" };
   }
-  if (platform.includes('github') || url.includes('github.com')) {
-    return { name: 'logo-github', color: '#111827', label: 'GitHub' };
+  if (platform.includes("github") || url.includes("github.com")) {
+    return { name: "logo-github", color: "#111827", label: "GitHub" };
   }
-  if (platform.includes('tiktok') || url.includes('tiktok.com')) {
-    return { name: 'logo-tiktok', color: '#111827', label: 'TikTok' };
+  if (platform.includes("tiktok") || url.includes("tiktok.com")) {
+    return { name: "logo-tiktok", color: "#111827", label: "TikTok" };
   }
 
-  return { name: 'globe-outline', color: '#475569', label: link?.platform || 'Link' };
+  return {
+    name: "globe-outline",
+    color: "#475569",
+    label: link?.platform || "Link",
+  };
 }
 
 function getEducationHistory(alumni = {}) {
   const explicit = alumni.education_history || alumni.educationHistory || [];
   if (Array.isArray(explicit) && explicit.length > 0) return explicit;
-  if (alumni.level || alumni.batch || alumni.graduation_year || alumni.graduationYear) {
-    return [{
-      level: alumni.level,
-      batch: alumni.batch,
-      graduationYear: alumni.graduationYear || alumni.graduation_year
-    }];
+  if (
+    alumni.level ||
+    alumni.batch ||
+    alumni.graduation_year ||
+    alumni.graduationYear
+  ) {
+    return [
+      {
+        level: alumni.level,
+        batch: alumni.batch,
+        graduationYear: alumni.graduationYear || alumni.graduation_year,
+      },
+    ];
   }
   return [];
 }
 
 function getLevelLabel(value) {
   const map = {
-    INTEGRATED_SCHOOL: 'Integrated School',
-    NIGHT_HIGH: 'Night High',
-    SENIOR_HIGH: 'Senior High',
-    SENIOR_HIGH_SCHOOL: 'Senior High',
-    COLLEGE: 'College',
-    ETEEAP: 'ETEEAP',
-    GRAD_SCHOOL: 'Grad School'
+    INTEGRATED_SCHOOL: "Integrated School",
+    NIGHT_HIGH: "Night High",
+    SENIOR_HIGH: "Senior High",
+    SENIOR_HIGH_SCHOOL: "Senior High",
+    COLLEGE: "College",
+    ETEEAP: "ETEEAP",
+    GRAD_SCHOOL: "Grad School",
   };
-  return map[value] || value || 'Not set';
+  return map[value] || value || "Not set";
+}
+
+function formatBirthday(dateStr) {
+  if (!dateStr) return "Not provided";
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "Not provided";
+
+  try {
+    return date.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return "Not provided";
+  }
 }
 
 export default function AlumniDetailScreen({ route, navigation }) {
@@ -70,21 +118,24 @@ export default function AlumniDetailScreen({ route, navigation }) {
   const [careers, setCareers] = useState([]);
   const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [imgErrored, setImgErrored] = useState(false);
 
   const openExternalLink = async (rawUrl) => {
     if (!rawUrl) return;
     const trimmed = String(rawUrl).trim();
-    const normalizedUrl = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const normalizedUrl = /^https?:\/\//i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
     try {
       const canOpen = await Linking.canOpenURL(normalizedUrl);
       if (!canOpen) {
-        Alert.alert('Invalid link', 'Unable to open this social media link.');
+        Alert.alert("Invalid link", "Unable to open this social media link.");
         return;
       }
       await Linking.openURL(normalizedUrl);
     } catch (error) {
-      console.error('Failed to open social link:', error);
-      Alert.alert('Open failed', 'Could not open the social media link.');
+      console.error("Failed to open social link:", error);
+      Alert.alert("Open failed", "Could not open the social media link.");
     }
   };
 
@@ -95,7 +146,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
       communityService.getAlumniById(alumniId),
       communityService.getAchievements(alumniId),
       communityService.getCareers(alumniId),
-      donationService.getByAlumni(alumniId)
+      donationService.getByAlumni(alumniId),
     ])
       .then(([detail, achievementsData, careersData, donationsData]) => {
         if (!mounted) return;
@@ -105,8 +156,8 @@ export default function AlumniDetailScreen({ route, navigation }) {
         setDonations(donationsData || []);
       })
       .catch((error) => {
-        console.error('Failed to load alumni detail:', error?.message || error);
-        if (mounted) Alert.alert('Error', 'Failed to load alumni details.');
+        console.error("Failed to load alumni detail:", error?.message || error);
+        if (mounted) Alert.alert("Error", "Failed to load alumni details.");
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -130,8 +181,13 @@ export default function AlumniDetailScreen({ route, navigation }) {
       <ScreenContainer>
         <View style={styles.errorWrap}>
           <Text style={styles.errorTitle}>Alumni Not Found</Text>
-          <Text style={styles.errorDesc}>Could not load the alumni profile.</Text>
-          <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.errorDesc}>
+            Could not load the alumni profile.
+          </Text>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
             <Text style={styles.backButtonText}>← Go Back</Text>
           </Pressable>
         </View>
@@ -139,32 +195,51 @@ export default function AlumniDetailScreen({ route, navigation }) {
     );
   }
 
-  const img = imageUrl(alumni.profile_image, API_ORIGIN);
-  const fullName = `${alumni.first_name || ''} ${alumni.last_name || ''}`.trim() || alumni.user?.username || 'Unknown';
-  const skills = String(alumni.skills || '')
-    .split(',')
+  const img = imageUrl(alumni.profile_image || alumni.profileImage, API_ORIGIN);
+  const fullName =
+    `${alumni.first_name || ""} ${alumni.last_name || ""}`.trim() ||
+    alumni.user?.username ||
+    "Unknown";
+  const skills = String(alumni.skills || "")
+    .split(",")
     .map((skill) => skill.trim())
     .filter(Boolean);
-  const socialLinks = Array.isArray(alumni.social_link) ? alumni.social_link : [];
+  const socialLinks = Array.isArray(alumni.social_link)
+    ? alumni.social_link
+    : [];
   const educationHistory = getEducationHistory(alumni);
-  const primaryEducation = educationHistory.length > 0 ? educationHistory[educationHistory.length - 1] : {};
+  const primaryEducation =
+    educationHistory.length > 0
+      ? educationHistory[educationHistory.length - 1]
+      : {};
 
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          {img ? (
-            <Image source={{ uri: img }} style={styles.avatar} />
+          {img && !imgErrored ? (
+            <Image
+              source={{ uri: img }}
+              style={styles.avatar}
+              resizeMode="cover"
+              onError={() => setImgErrored(true)}
+            />
           ) : (
             <View style={styles.avatarFallback}>
-              <Text style={styles.avatarInitial}>{fullName.slice(0, 1).toUpperCase()}</Text>
+              <Text style={styles.avatarInitial}>
+                {fullName.slice(0, 1).toUpperCase()}
+              </Text>
             </View>
           )}
           <View style={styles.headerInfo}>
             <Text style={styles.fullName}>{fullName}</Text>
-            <Text style={styles.role}>{alumni.current_position || 'Alumni Member'}</Text>
-            {alumni.company && <Text style={styles.company}>{alumni.company}</Text>}
+            <Text style={styles.role}>
+              {alumni.current_position || "Alumni Member"}
+            </Text>
+            {alumni.company && (
+              <Text style={styles.company}>{alumni.company}</Text>
+            )}
             {alumni.location && (
               <View style={styles.locationRow}>
                 <Ionicons name="location" size={14} color="#64748b" />
@@ -184,15 +259,22 @@ export default function AlumniDetailScreen({ route, navigation }) {
           <View style={styles.infoGrid}>
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>School ID / Student Number</Text>
-              <Text style={styles.infoValue}>{alumni.student_id || alumni.studentId || 'Not provided'}</Text>
+              <Text style={styles.infoValue}>
+                {alumni.student_id || alumni.studentId || "Not provided"}
+              </Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>Course</Text>
-              <Text style={styles.infoValue}>{alumni.course || 'Not set'}</Text>
+              <Text style={styles.infoValue}>{alumni.course || "Not set"}</Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>Graduation Year</Text>
-              <Text style={styles.infoValue}>{alumni.graduationYear || alumni.graduation_year || primaryEducation.graduationYear || 'Not set'}</Text>
+              <Text style={styles.infoValue}>
+                {alumni.graduationYear ||
+                  alumni.graduation_year ||
+                  primaryEducation.graduationYear ||
+                  "Not set"}
+              </Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>Level & Batch</Text>
@@ -200,9 +282,13 @@ export default function AlumniDetailScreen({ route, navigation }) {
                 <View style={styles.historyWrap}>
                   {educationHistory.map((entry, index) => (
                     <View key={`education-${index}`} style={styles.historyCard}>
-                      <Text style={styles.historyLevel}>{`${index + 1}. ${getLevelLabel(entry.level)}`}</Text>
+                      <Text
+                        style={styles.historyLevel}
+                      >{`${index + 1}. ${getLevelLabel(entry.level)}`}</Text>
                       <View style={styles.batchChip}>
-                        <Text style={styles.batchChipText}>{`Batch: ${entry.batch || 'N/A'}`}</Text>
+                        <Text
+                          style={styles.batchChipText}
+                        >{`Batch: ${entry.batch || "N/A"}`}</Text>
                       </View>
                     </View>
                   ))}
@@ -223,7 +309,16 @@ export default function AlumniDetailScreen({ route, navigation }) {
 
           <View style={styles.infoBlock}>
             <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{alumni.email || 'Not provided'}</Text>
+            <Text style={styles.infoValue}>
+              {alumni.email || "Not provided"}
+            </Text>
+          </View>
+
+          <View style={styles.infoBlock}>
+            <Text style={styles.infoLabel}>Birthday</Text>
+            <Text style={styles.infoValue}>
+              {formatBirthday(alumni.date_of_birth || alumni.dateOfBirth)}
+            </Text>
           </View>
 
           {alumni.contact_number && (
@@ -237,7 +332,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
             <View style={styles.infoBlockNoBorder}>
               <Text style={styles.infoLabel}>Social Media</Text>
               <View style={styles.chipRow}>
-                {socialLinks.map((link) => (
+                {socialLinks.map((link) =>
                   (() => {
                     const icon = getSocialIconMeta(link);
                     return (
@@ -246,12 +341,16 @@ export default function AlumniDetailScreen({ route, navigation }) {
                         style={styles.linkChip}
                         onPress={() => openExternalLink(link.url)}
                       >
-                        <Ionicons name={icon.name} size={16} color={icon.color} />
+                        <Ionicons
+                          name={icon.name}
+                          size={16}
+                          color={icon.color}
+                        />
                         <Text style={styles.linkChipText}>{icon.label}</Text>
                       </Pressable>
                     );
-                  })()
-                ))}
+                  })(),
+                )}
               </View>
             </View>
           )}
@@ -266,7 +365,9 @@ export default function AlumniDetailScreen({ route, navigation }) {
 
           <View style={styles.infoBlock}>
             <Text style={styles.infoLabel}>Current Position</Text>
-            <Text style={styles.infoValue}>{alumni.current_position || 'Not provided'}</Text>
+            <Text style={styles.infoValue}>
+              {alumni.current_position || "Not provided"}
+            </Text>
           </View>
 
           {alumni.company && (
@@ -314,9 +415,17 @@ export default function AlumniDetailScreen({ route, navigation }) {
           ) : (
             achievements.map((item) => (
               <View key={item.id} style={styles.cardItem}>
-                <Text style={styles.cardItemTitle}>{item.title || 'Untitled achievement'}</Text>
-                {item.description ? <Text style={styles.cardItemDesc}>{item.description}</Text> : null}
-                {item.date ? <Text style={styles.cardItemMeta}>{new Date(item.date).toLocaleDateString()}</Text> : null}
+                <Text style={styles.cardItemTitle}>
+                  {item.title || "Untitled achievement"}
+                </Text>
+                {item.description ? (
+                  <Text style={styles.cardItemDesc}>{item.description}</Text>
+                ) : null}
+                {item.date ? (
+                  <Text style={styles.cardItemMeta}>
+                    {new Date(item.date).toLocaleDateString()}
+                  </Text>
+                ) : null}
               </View>
             ))
           )}
@@ -335,13 +444,27 @@ export default function AlumniDetailScreen({ route, navigation }) {
             careers.map((item) => (
               <View key={item.id} style={styles.cardItem}>
                 <View style={styles.cardItemHeaderRow}>
-                  <Text style={styles.cardItemTitle}>{item.job_title || 'Position'}</Text>
+                  <Text style={styles.cardItemTitle}>
+                    {item.job_title || "Position"}
+                  </Text>
                   <Text style={styles.cardItemMeta}>
-                    {item.start_date ? new Date(item.start_date).toLocaleDateString() : 'N/A'} - {item.is_current ? 'Present' : (item.end_date ? new Date(item.end_date).toLocaleDateString() : 'N/A')}
+                    {item.start_date
+                      ? new Date(item.start_date).toLocaleDateString()
+                      : "N/A"}{" "}
+                    -{" "}
+                    {item.is_current
+                      ? "Present"
+                      : item.end_date
+                        ? new Date(item.end_date).toLocaleDateString()
+                        : "N/A"}
                   </Text>
                 </View>
-                <Text style={styles.companyLink}>{item.company || 'Company not set'}</Text>
-                {item.description ? <Text style={styles.cardItemDesc}>{item.description}</Text> : null}
+                <Text style={styles.companyLink}>
+                  {item.company || "Company not set"}
+                </Text>
+                {item.description ? (
+                  <Text style={styles.cardItemDesc}>{item.description}</Text>
+                ) : null}
               </View>
             ))
           )}
@@ -360,27 +483,25 @@ export default function AlumniDetailScreen({ route, navigation }) {
             donations.map((item) => (
               <View key={item.id} style={styles.cardItem}>
                 <View style={styles.cardItemHeaderRow}>
-                  <Text style={styles.cardItemTitle}>{item.purpose || 'Donation'}</Text>
-                  <Text style={styles.cardItemMeta}>{item.date ? new Date(item.date).toLocaleDateString() : 'N/A'}</Text>
+                  <Text style={styles.cardItemTitle}>
+                    {item.purpose || "Donation"}
+                  </Text>
+                  <Text style={styles.cardItemMeta}>
+                    {item.date
+                      ? new Date(item.date).toLocaleDateString()
+                      : "N/A"}
+                  </Text>
                 </View>
-                <Text style={styles.donationAmount}>PHP {Number(item.amount || 0).toLocaleString()}</Text>
-                {item.description ? <Text style={styles.cardItemDesc}>{item.description}</Text> : null}
+                <Text style={styles.donationAmount}>
+                  PHP {Number(item.amount || 0).toLocaleString()}
+                </Text>
+                {item.description ? (
+                  <Text style={styles.cardItemDesc}>{item.description}</Text>
+                ) : null}
               </View>
             ))
           )}
         </View>
-
-        {/* Bio */}
-        {alumni.bio && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="document-text" size={18} color="#1d4ed8" />
-              <Text style={styles.sectionTitle}>Bio</Text>
-            </View>
-
-            <Text style={styles.bioText}>{alumni.bio}</Text>
-          </View>
-        )}
       </ScrollView>
     </ScreenContainer>
   );
@@ -388,250 +509,251 @@ export default function AlumniDetailScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 40
+    paddingBottom: 40,
   },
   header: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    marginBottom: 24
+    borderBottomColor: "#e2e8f0",
+    marginBottom: 24,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#e2e8f0'
+    backgroundColor: "#e2e8f0",
+    overflow: "hidden",
   },
   avatarFallback: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#dbeafe',
-    alignItems: 'center',
-    justifyContent: 'center'
+    backgroundColor: "#dbeafe",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarInitial: {
     fontSize: 32,
-    fontWeight: '700',
-    color: '#1e3a8a'
+    fontWeight: "700",
+    color: "#1e3a8a",
   },
   headerInfo: {
     flex: 1,
-    justifyContent: 'center',
-    gap: 4
+    justifyContent: "center",
+    gap: 4,
   },
   fullName: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#0f172a'
+    fontWeight: "700",
+    color: "#0f172a",
   },
   role: {
     fontSize: 14,
-    color: '#1d4ed8',
-    fontWeight: '600'
+    color: "#1d4ed8",
+    fontWeight: "600",
   },
   company: {
     fontSize: 13,
-    color: '#64748b'
+    color: "#64748b",
   },
   locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    marginTop: 2
+    marginTop: 2,
   },
   locationText: {
     fontSize: 12,
-    color: '#64748b'
+    color: "#64748b",
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0'
+    borderColor: "#e2e8f0",
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0'
+    borderBottomColor: "#e2e8f0",
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a'
+    fontWeight: "700",
+    color: "#0f172a",
   },
   infoGrid: {
-    gap: 12
+    gap: 12,
   },
   gridItem: {
-    gap: 4
+    gap: 4,
   },
   historyWrap: {
     gap: 8,
-    marginTop: 2
+    marginTop: 2,
   },
   historyCard: {
     borderWidth: 1,
-    borderColor: '#dbe3f0',
+    borderColor: "#dbe3f0",
     borderRadius: 10,
-    backgroundColor: '#f8fafc',
+    backgroundColor: "#f8fafc",
     padding: 10,
-    gap: 6
+    gap: 6,
   },
   historyLevel: {
     fontSize: 14,
-    color: '#0f172a',
-    fontWeight: '600'
+    color: "#0f172a",
+    fontWeight: "600",
   },
   batchChip: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: "#bfdbfe",
     borderRadius: 8,
-    backgroundColor: '#eff6ff',
+    backgroundColor: "#eff6ff",
     paddingHorizontal: 10,
-    paddingVertical: 6
+    paddingVertical: 6,
   },
   batchChipText: {
-    color: '#1e40af',
-    fontWeight: '700',
-    fontSize: 13
+    color: "#1e40af",
+    fontWeight: "700",
+    fontSize: 13,
   },
   infoBlock: {
     gap: 6,
-    paddingBottom: 12
+    paddingBottom: 12,
   },
   infoBlockNoBorder: {
     gap: 6,
-    paddingBottom: 0
+    paddingBottom: 0,
   },
   infoLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
+    fontWeight: "600",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   infoValue: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#0f172a'
+    fontWeight: "500",
+    color: "#0f172a",
   },
   chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
   },
   skillChip: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: "#dbeafe",
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 6
+    paddingVertical: 6,
   },
   skillChipText: {
-    color: '#1e40af',
+    color: "#1e40af",
     fontSize: 13,
-    fontWeight: '600'
+    fontWeight: "600",
   },
   linkChip: {
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: "#cbd5e1",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   linkChipText: {
-    color: '#334155',
+    color: "#334155",
     fontSize: 13,
-    fontWeight: '500'
+    fontWeight: "500",
   },
   emptyText: {
     fontSize: 13,
-    color: '#64748b'
+    color: "#64748b",
   },
   cardItem: {
     borderWidth: 1,
-    borderColor: '#dbe3f0',
+    borderColor: "#dbe3f0",
     borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     padding: 12,
     marginBottom: 10,
-    gap: 4
+    gap: 4,
   },
   cardItemHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 8
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 8,
   },
   cardItemTitle: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a'
+    fontWeight: "700",
+    color: "#0f172a",
   },
   cardItemDesc: {
     fontSize: 13,
     lineHeight: 18,
-    color: '#334155'
+    color: "#334155",
   },
   cardItemMeta: {
     fontSize: 12,
-    color: '#64748b'
+    color: "#64748b",
   },
   companyLink: {
     fontSize: 14,
-    color: '#1d4ed8',
-    fontWeight: '600'
+    color: "#1d4ed8",
+    fontWeight: "600",
   },
   donationAmount: {
     fontSize: 14,
-    color: '#0f172a',
-    fontWeight: '700'
+    color: "#0f172a",
+    fontWeight: "700",
   },
   bioText: {
     fontSize: 14,
-    color: '#334155',
-    lineHeight: 20
+    color: "#334155",
+    lineHeight: 20,
   },
   errorWrap: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     gap: 12,
-    paddingHorizontal: 24
+    paddingHorizontal: 24,
   },
   errorTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#0f172a'
+    fontWeight: "700",
+    color: "#0f172a",
   },
   errorDesc: {
     fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center'
+    color: "#64748b",
+    textAlign: "center",
   },
   backButton: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: "#dbeafe",
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    marginTop: 8
+    marginTop: 8,
   },
   backButtonText: {
-    color: '#1e3a8a',
-    fontWeight: '600'
-  }
+    color: "#1e3a8a",
+    fontWeight: "600",
+  },
 });
