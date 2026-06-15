@@ -60,12 +60,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         createdAt: payload?.createdAt || createdAt
       };
 
-      setRecentDonations((previous) => {
-        const withoutDuplicate = previous.filter((item) => item.id !== activity.id);
-        return [activity, ...withoutDuplicate]
-          .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
-          .slice(0, RECENT_DONATION_CACHE_LIMIT);
-      });
+      setRecentDonations((previous) => dedupeRecentDonations([activity, ...previous]));
     };
 
     const unsubscribe = realtimeClient.subscribe('notification.created', handleDonationActivity);
@@ -179,7 +174,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
     try {
       setRecentDonationsLoading(true);
       const data = await donationService.getRecentDonationActivity();
-      setRecentDonations(Array.isArray(data) ? data : []);
+      setRecentDonations(dedupeRecentDonations(Array.isArray(data) ? data : []));
     } catch (error) {
       console.error('Error loading recent donation activity:', error);
       toast.error(error?.response?.data?.error || 'Failed to load recent donations');
@@ -306,12 +301,76 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   const parseDonationDetailsText = (text = '') => {
     const result = {};
     if (!text || typeof text !== 'string') return result;
-    const re = /([A-Za-z][A-Za-z0-9 _-]*?):\s*([^:]+?)(?=(?:[A-Za-z][A-Za-z0-9 _-]*?:)|$)/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      result[m[1].trim()] = m[2].trim();
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      const match = line.match(/^([A-Za-z][A-Za-z0-9 _-]*?):\s*(.*)$/);
+      if (!match) continue;
+      const key = match[1]?.trim();
+      const value = match[2]?.trim();
+      if (key) {
+        result[key] = value;
+      }
     }
     return result;
+  };
+
+  const normalizeDonationSignaturePart = (value = '') => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const toMinuteBucket = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return normalizeDonationSignaturePart(value);
+    date.setSeconds(0, 0);
+    return date.toISOString();
+  };
+  const extractCampaignNameFromText = (text = '') => {
+    const match = String(text || '').match(/\bto\s+(.+?)(?:[.!?]|$)/i);
+    return match?.[1]?.trim() || '';
+  };
+  const isStructuredDonationMessage = (text = '') => /(?:^|\n)\s*Donation for:/i.test(String(text || ''));
+  const buildDonationActivitySignature = (donation = {}) => {
+    const raw = stripDonationMeta(donation.message || donation.title || '');
+    const details = parseDonationDetailsText(raw);
+    const donor = details.Donor || details.donor || donation.senderName || '';
+    const amount = details.Amount || details.amount || donation.amountLabel || '';
+    const campaign = details['Donation for']
+      || details.Donation
+      || donation.campaignName
+      || extractCampaignNameFromText(donation.title || donation.message || '');
+    const recorded = details.Recorded || details.recorded || donation.createdAt || '';
+    const signature = [
+      normalizeDonationSignaturePart(campaign),
+      normalizeDonationSignaturePart(donor),
+      normalizeDonationSignaturePart(amount),
+      toMinuteBucket(recorded)
+    ].join('|');
+
+    if (signature.replace(/\|/g, '').length > 0) {
+      return signature;
+    }
+
+    return normalizeDonationSignaturePart(`${donation.id}|${donation.title}|${donation.message}`);
+  };
+  const dedupeRecentDonations = (entries = []) => {
+    const deduped = new Map();
+    const sorted = [...entries].sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
+
+    for (const donation of sorted) {
+      const signature = buildDonationActivitySignature(donation);
+
+      if (!deduped.has(signature)) {
+        deduped.set(signature, donation);
+        continue;
+      }
+
+      const existing = deduped.get(signature);
+      if (isStructuredDonationMessage(donation.message) && !isStructuredDonationMessage(existing?.message)) {
+        deduped.set(signature, donation);
+      }
+    }
+
+    return Array.from(deduped.values())
+      .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
+      .slice(0, RECENT_DONATION_CACHE_LIMIT);
   };
 
   const formatDonationSummary = (rawText = '', donation = {}) => {
@@ -322,7 +381,8 @@ const AdminDashboard = ({ pendingOnly = false }) => {
       }
       return '';
     };
-    const donor = find(/^donor$/i) || donation.senderName || '';
+    const rawDonor = find(/^donor$/i) || donation.senderName || '';
+    const donor = rawDonor.trim();
     const amount = find(/amount/i) || '';
     const donationFor = find(/donation\s*for|donation$/i) || '';
     // Build a concise summary even if amount missing
@@ -620,70 +680,72 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         )}
 
         {pendingOnly && (
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
-            <h2 className="text-xl font-semibold text-slate-900">Pending Requests ({pendingUsers.length})</h2>
-            <p className="mt-1 text-sm text-slate-500">Approve or reject registrations after checking the submitted details.</p>
+        <div className="bg-white shadow sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Pending Requests ({pendingUsers.length})</h2>
+              <p className="mt-1 text-sm text-gray-500">Approve or reject registrations after checking the submitted details.</p>
+            </div>
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-slate-500">Loading pending registrations...</div>
+            <div className="p-8 text-center text-gray-500">Loading pending registrations...</div>
           ) : pendingUsers.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">No pending registrations to review.</div>
+            <div className="p-8 text-center text-gray-500">No pending registrations to review.</div>
           ) : (
             <div className="overflow-x-auto scrollbar-hide">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">School ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Contact</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Level/Course</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Batch/Grad Year</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Date Submitted</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">School ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Contact</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Level/Course</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Batch/Grad Year</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date Submitted</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
+                <tbody className="divide-y divide-gray-200 bg-white">
                   {pendingUsers.map((user) => {
                     const isVerified = verificationStatus[user.id]?.verified === true;
 
                     return (
-                      <tr key={user.id} className="hover:bg-slate-50/80">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-slate-900">{user.first_name} {user.last_name}</div>
-                          <div className="text-xs text-slate-500">({user.username})</div>
+                      <tr key={user.id} className="hover:bg-gray-50 transition-all duration-150">
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{user.first_name} {user.last_name}</div>
+                          <div className="text-xs text-gray-500">({user.username})</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-mono text-slate-900">{user.student_id || 'N/A'}</div>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm font-mono text-gray-900">{user.student_id || 'N/A'}</div>
                           {isVerified && (
-                            <span className="mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] bg-emerald-100 text-emerald-700">
+                            <span className="mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] bg-emerald-100 text-emerald-700">
                               Verified
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-slate-600">{user.email}</div>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-600">{user.email}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-slate-600">{user.contact_number || 'N/A'}</div>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-600">{user.contact_number || 'N/A'}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-slate-900">{formatLevel(user.level)}</div>
-                          <div className="text-xs text-slate-500">{user.course || 'N/A'}</div>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatLevel(user.level)}</div>
+                          <div className="text-xs text-gray-500">{user.course || 'N/A'}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-slate-900">{user.batch && `Batch ${user.batch}`}</div>
-                          <div className="text-xs text-slate-500">{user.graduation_year && `Grad: ${user.graduation_year}`}</div>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{user.batch && `Batch ${user.batch}`}</div>
+                          <div className="text-xs text-gray-500">{user.graduation_year && `Grad: ${user.graduation_year}`}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{new Date(user.created_at).toLocaleDateString()}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(user.created_at).toLocaleDateString()}</td>
+                        <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex flex-col gap-2">
-                            <button onClick={(e) => { e.stopPropagation(); handleApproval(user.id); }} className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-emerald-700">
+                            <button onClick={(e) => { e.stopPropagation(); handleApproval(user.id); }} className="w-full inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">
                               Approve
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleRejection(user.id); }} className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-rose-700">
+                            <button onClick={(e) => { e.stopPropagation(); handleRejection(user.id); }} className="w-full inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700">
                               Reject
                             </button>
                           </div>
@@ -695,7 +757,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
               </table>
             </div>
           )}
-        </section>
+        </div>
         )}
       </div>
     </Layout>

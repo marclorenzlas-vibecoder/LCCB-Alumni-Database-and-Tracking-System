@@ -189,9 +189,7 @@ const TeacherManagement = () => {
         confirmText="Delete"
         cancelText="Cancel"
       />
-
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white shadow sm:rounded-lg">
+      <div className="bg-white shadow sm:rounded-lg">
           {/* Header */}
           <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -215,39 +213,36 @@ const TeacherManagement = () => {
             <table className="min-w-full divide-y divide-gray-300">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Name</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Email</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Department</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Role</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Department</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {teachers.map((teacher) => (
-                  <tr key={teacher.id}>
-                    <td className="px-3 py-4 text-sm text-gray-900">{teacher.username}</td>
-                    <td className="px-3 py-4 text-sm text-gray-600">{teacher.email}</td>
-                    <td className="px-3 py-4 text-sm text-gray-600">{teacher.department || 'N/A'}</td>
-                    <td className="px-3 py-4 text-sm">
+                  <tr key={teacher.id} className="hover:bg-gray-50 transition-all duration-150">
+                    <td className="px-4 py-4 text-sm font-medium text-gray-900">{teacher.username}</td>
+                    <td className="px-4 py-4 text-sm text-gray-600">{teacher.email}</td>
+                    <td className="px-4 py-4 text-sm text-gray-600">{teacher.department || 'N/A'}</td>
+                    <td className="px-4 py-4 text-sm">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                         {teacher.role || 'ADMIN'}
                       </span>
                     </td>
-                    <td className="px-3 py-4 text-sm">
-                      <div className="flex flex-nowrap gap-2">
+                    <td className="px-4 py-4 text-right text-sm font-medium">
+                      <div className="flex justify-end gap-2">
                           <button
                             onClick={() => openEditModal(teacher)}
-                            className="inline-flex items-center justify-center rounded-md bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800"
+                            className="inline-flex items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800"
                           >
                             Edit
                         </button>
                         <button
                           onClick={() => handleDelete(teacher.id, teacher.username)}
-                          className="inline-flex items-center justify-center rounded-md bg-red-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-600"
+                          className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
                           Delete
                         </button>
                       </div>
@@ -257,7 +252,6 @@ const TeacherManagement = () => {
               </tbody>
             </table>
           </div>
-        </div>
       </div>
 
       {/* Add Teacher Modal */}

@@ -213,6 +213,7 @@ const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), al
     .filter((block) => block.includes('Donor:'))
     .map((block, index) => {
       const donorName = extractLineValue(block, 'Donor') || latestNotification?.sender_name || fallbackSenderName || 'Alumnus';
+      const cleanDonorName = donorName.replace(/^(mr|ms|mrs|dr|mr\.|ms\.|mrs\.|dr\.)\s+/i, '').trim();
       const amountLabel = extractLineValue(block, 'Amount');
       const donationKind = inferDonationKind(block);
       const donationLabel = amountLabel || (donationKind === 'items' ? 'an item donation' : 'a donation');
@@ -241,10 +242,10 @@ const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), al
 
       return {
         id: `donation-${entry.id}-${index}`,
-        title: `${donorName} donated ${donationLabel} to ${purpose}`,
+        title: `${cleanDonorName} donated ${donationLabel} to ${purpose}`,
         message: block,
         link: '/donations',
-        senderName: donorName,
+        senderName: cleanDonorName,
         senderProfileImage,
         amountLabel,
         campaignName: purpose,
@@ -277,15 +278,25 @@ const buildLiveDonationActivityFeed = ({ notifications = [], donations = [], alu
   ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
   for (const item of candidates) {
-    const key = [
-      item.title,
-      item.message,
-      item.link,
-      item.senderName
-    ].join('|');
+    const linkMatch = String(item.link || '').match(/\/donate\/(\d+)/);
+    const donationId = linkMatch ? linkMatch[1] : null;
+    const idMatch = String(item.id || '').match(/^donation-(\d+)/);
+    const entryId = idMatch ? idMatch[1] : null;
+    const uniqueDonationId = donationId || entryId;
 
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (uniqueDonationId) {
+      if (seen.has(`id:${uniqueDonationId}`)) continue;
+      seen.add(`id:${uniqueDonationId}`);
+    } else {
+      const key = [
+        item.title,
+        item.senderName,
+        item.amountLabel
+      ].join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+
     activity.push(item);
     if (activity.length >= 100) break;
   }
@@ -681,7 +692,8 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
       mergedMeta.itemImagePaths = req.files.map((f) => `/uploads/donations/${f.filename}`);
     }
 
-    const donorName = await getDonorDisplayName(req);
+    const donorNameFromForm = extractLineValue(cleanDescription, 'Donor');
+    const donorName = donorNameFromForm || await getDonorDisplayName(req);
     const contributionBlock = buildContributionBlock({
       campaignPurpose: existingCampaign.purpose || 'a donation campaign',
       donorName,

@@ -20,6 +20,7 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState({ alumni: 0, active: 0, events: 0, jobs: 0 });
 
+
   useEffect(() => {
     fetchPreviewData();
   }, []);
@@ -110,7 +111,7 @@ const Home = () => {
       {/* Notification Permission Popup */}
       <NotificationPermissionPopup />
       
-      <div className="home-hero relative min-h-[28rem] overflow-hidden">
+      <div className="home-hero relative min-h-[28rem] overflow-hidden bg-white">
         <img
           src={backgroundImage}
           alt=""

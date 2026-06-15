@@ -202,110 +202,102 @@ const ManageUsers = () => {
 
   return (
     <UserLayout>
-      <div className="container mx-auto px-4 py-8">
-        <div className="rounded-lg bg-white p-6 shadow-md">
-          <h1 className="mb-6 text-3xl font-bold text-gray-800">Manage Users</h1>
+      <div>
+      <div className="bg-white shadow sm:rounded-lg">
+          {/* Header */}
+          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Manage Users</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Manage registered alumni accounts
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full sm:w-64 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+                />
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+                >
+                  <option value="ALL">All Users</option>
+                  <option value="ACTIVE">Active Users</option>
+                  <option value="BLOCKED">Blocked Users</option>
+                </select>
+              </div>
+            </div>
+          </div>
 
           {error && (
-            <div className="mb-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
+            <div className="mx-4 mt-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700 text-sm">
               {error}
             </div>
           )}
 
-          <div className="mb-6 flex flex-col gap-4 md:flex-row">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Search by name or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="app-select"
-              >
-                <option value="ALL">All Users</option>
-                <option value="ACTIVE">Active Users</option>
-                <option value="BLOCKED">Blocked Users</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="scrollbar-hide overflow-x-auto">
-            <table className="min-w-full bg-white">
-              <thead className="bg-gray-100">
+          {/* Users List */}
+          <div className="overflow-x-auto scrollbar-hide">
+            <table className="min-w-full divide-y divide-gray-300">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Actions
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">User</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200 bg-white">
                 {filteredUsers.length > 0 ? (
                   filteredUsers.map((user) => (
-                    <tr key={`${user.id}-${user.alumniId || 'na'}`} className={user.is_blocked ? 'bg-red-50' : ''}>
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <div className="flex items-center">
+                    <tr key={`${user.id}-${user.alumniId || 'na'}`} className={`transition-all duration-150 ${user.is_blocked ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
                           {user.profile_image ? (
                             <img
                               src={resolveProfileImage(user.profile_image)}
                               alt={user.username}
-                              className="h-10 w-10 rounded-full object-cover"
+                              className="h-10 w-10 rounded-full object-cover border"
                             />
                           ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 font-bold text-white text-sm">
                               {user.username?.charAt(0).toUpperCase() || 'U'}
                             </div>
                           )}
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{user.username}</div>
-                          </div>
+                          <span className="text-sm font-medium text-gray-900">{user.username}</span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <div className="text-sm text-gray-900">{user.email}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{user.email}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           {user.role || 'ALUMNI'}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4 align-middle">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
                         {user.is_blocked ? (
-                          <span className="inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             Blocked
                           </span>
                         ) : (
-                          <span className="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             Active
                           </span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium align-middle">
-                        <div className="flex items-center gap-2">
+                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end">
                           <button
                             onClick={() => openBlockModal(user)}
-                            className={`${
+                            className={`rounded-lg px-4 py-2 text-xs font-semibold text-white transition-colors ${
                               user.is_blocked
-                                ? 'bg-green-600 hover:bg-green-700'
+                                ? 'bg-emerald-600 hover:bg-emerald-700'
                                 : 'bg-red-600 hover:bg-red-700'
-                            } rounded-md px-4 py-2 text-white transition-colors`}
+                            }`}
                           >
                             {user.is_blocked ? 'Unblock' : 'Block'}
                           </button>
@@ -315,15 +307,15 @@ const ManageUsers = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan="5" className="px-4 py-12 text-center text-sm text-gray-500">
                       No users found
                     </td>
                   </tr>
                 )}
-              </tbody>
-            </table>
-          </div>
+            </tbody>
+          </table>
         </div>
+      </div>
 
         {showBlockModal && selectedUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
