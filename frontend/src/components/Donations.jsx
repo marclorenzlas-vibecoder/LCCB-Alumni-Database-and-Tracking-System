@@ -478,7 +478,6 @@ const Donations = () => {
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Campaign' : 'Add New Campaign'}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">Enter the details for the {editingId ? 'campaign update' : 'new donation campaign'}</p>
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-hide">
                 <form onSubmit={handleSubmit} className="space-y-6">

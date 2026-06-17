@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import eventService from '../services/eventService';
+import { realtimeClient } from '../services/realtimeClient';
 import ConfirmModal from './ConfirmModal';
 import { authService } from '../services/authService';
 import UserLayout from './UserLayout';
@@ -216,6 +217,28 @@ const Events = () => {
   // Load events from database
   useEffect(() => {
     loadEvents();
+  }, []);
+
+  // Re-fetch when events change via realtime events
+  useEffect(() => {
+    const unsubCreated = realtimeClient.subscribe('event.created', () => {
+      loadEvents();
+    });
+    const unsubUpdated = realtimeClient.subscribe('event.updated', () => {
+      loadEvents();
+    });
+    const unsubDeleted = realtimeClient.subscribe('event.deleted', () => {
+      loadEvents();
+    });
+    const unsubAttendance = realtimeClient.subscribe('event.attendance.changed', () => {
+      loadEvents();
+    });
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubAttendance();
+    };
   }, []);
 
   const loadEvents = async () => {

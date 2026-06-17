@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { authService } from '../services/authService';
 import { realtimeClient } from '../services/realtimeClient';
+import { registerAuthErrorHandler } from '../services/apiClient';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import MainTabs from './MainTabs';
@@ -18,6 +19,14 @@ const centerStyle = {
 export default function AppNavigator() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    registerAuthErrorHandler((message) => {
+      Alert.alert('Session Expired', message, [
+        { text: 'OK', onPress: () => setUser(null) }
+      ]);
+    });
+  }, []);
 
   useEffect(() => {
     const bootstrap = async () => {

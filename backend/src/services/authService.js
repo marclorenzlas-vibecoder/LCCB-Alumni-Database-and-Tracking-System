@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
+const { broadcastUpdate } = require('./realtimeService');
 
 const prisma = new PrismaClient();
 
@@ -69,77 +70,85 @@ async function registerUser(userData) {
     
     console.log('✅ Pending registration created with ID:', pendingRegistration.id);
 
-    // Create notification for teachers/admins (optional - don't let it fail registration)
+    // Create notification for admins and faculty coordinators (optional - don't let it fail registration)
     try {
-      // Find users with ADMIN role or create entries for teachers
+      // Find all users with ADMIN role
       const adminUsers = await prisma.user.findMany({
-        where: { 
-          role: 'ADMIN'
-        }
+        where: {
+          role: 'ADMIN',
+          is_active: true,
+          is_blocked: false
+        },
+        select: { id: true, email: true }
       });
-      
+
       console.log(`📢 Found ${adminUsers.length} admin users for notifications`);
-      
-      // If no admin users exist, try to find/create user entries for teachers
-      if (adminUsers.length === 0) {
-        console.log('📢 No admin users found, checking for teachers in user table...');
-        
-        // Get all teachers
-        const teachers = await prisma.teacher.findMany();
-        console.log(`📢 Found ${teachers.length} teachers in teacher table`);
-        
-        // Create or find user entries for teachers
-        for (const teacher of teachers) {
-          let teacherUser = await prisma.user.findUnique({
-            where: { email: teacher.email }
+
+      // Also find teachers (faculty coordinators) and ensure they have user entries
+      const teachers = await prisma.teacher.findMany({
+        select: { id: true, email: true, username: true, password: true }
+      });
+      console.log(`📢 Found ${teachers.length} teachers in teacher table`);
+
+      for (const teacher of teachers) {
+        // Skip if this teacher email already has a user entry (avoids duplicates)
+        const alreadyExists = adminUsers.some(u => u.email === teacher.email);
+        if (alreadyExists) continue;
+
+        let teacherUser = await prisma.user.findUnique({
+          where: { email: teacher.email },
+          select: { id: true, email: true }
+        });
+
+        if (!teacherUser) {
+          console.log(`📢 Creating user entry for teacher: ${teacher.email}`);
+          teacherUser = await prisma.user.create({
+            data: {
+              email: teacher.email,
+              username: teacher.username || teacher.email.split('@')[0],
+              role: 'ADMIN',
+              approval_status: 'APPROVED',
+              is_active: true,
+              password: teacher.password
+            }
           });
-          
-          if (!teacherUser) {
-            console.log(`📢 Creating user entry for teacher: ${teacher.email}`);
-            teacherUser = await prisma.user.create({
-              data: {
-                email: teacher.email,
-                username: teacher.username || teacher.email.split('@')[0],
-                role: 'ADMIN',
-                approval_status: 'APPROVED',
-                is_active: true,
-                password: teacher.password
-              }
-            });
-          }
-          
-          adminUsers.push(teacherUser);
         }
+
+        adminUsers.push(teacherUser);
       }
-      
-      console.log(`📢 Creating notifications for ${adminUsers.length} admin users`);
-      
-      // Create notification for each admin/teacher
+
+      console.log(`📢 Creating notifications for ${adminUsers.length} admin/faculty users`);
+
+      // Standardized notification metadata per specification
+      const notifTitle = 'New Account Registration';
+      const notifMessage = 'A new alumni has registered and needs your approval.';
+      const notifLink = '/pending-approval';
+
+      // Create a notification record for each admin/faculty coordinator
       for (const admin of adminUsers) {
-        const verificationDetails = [];
-        if (firstName && lastName) verificationDetails.push(`Name: ${firstName} ${lastName}`);
-        if (studentId) verificationDetails.push(`School ID: ${studentId}`);
-        if (contactNumber) verificationDetails.push(`Contact: ${contactNumber}`);
-        if (level) verificationDetails.push(`Level: ${level}`);
-        if (course) verificationDetails.push(`Course: ${course}`);
-        if (batch) verificationDetails.push(`Batch: ${batch}`);
-        if (graduationYear) verificationDetails.push(`Graduated: ${graduationYear}`);
-        
-        const detailsText = verificationDetails.length > 0 ? ` - ${verificationDetails.join(', ')}` : '';
-        
-        await prisma.notification.create({
+        const notification = await prisma.notification.create({
           data: {
             user_id: admin.id,
             type: 'GENERAL',
-            title: 'New Alumni Registration Request',
-            message: `${username} (${email}) has submitted a registration request${detailsText}. Please review and verify their alumni status.`,
-            link: '/admin'
+            title: notifTitle,
+            message: notifMessage,
+            link: notifLink,
+            is_read: false
           }
         });
         console.log(`📧 Notification created for user_id: ${admin.id} (${admin.email})`);
       }
-      
-      console.log('✅ Notifications created successfully');
+
+      // Push real-time update so connected admin/faculty clients see it instantly
+      broadcastUpdate('notification.created', {
+        type: 'GENERAL',
+        title: notifTitle,
+        message: notifMessage,
+        link: notifLink,
+        count: adminUsers.length
+      });
+
+      console.log('✅ Notifications created and broadcast successfully');
     } catch (notifError) {
       // Log error but don't fail registration
       console.error('❌ Failed to create notification:', notifError);
@@ -499,6 +508,23 @@ module.exports = {
           is_verified: true // Mark as verified since admin approved it
         }
       });
+
+      // Also create alumni_list entry so the alumni directory shows this user
+      try {
+        await prisma.alumni_list.create({
+          data: {
+            student_id: pending.student_id,
+            first_name: firstName,
+            last_name: lastName,
+            level: pending.level,
+            course: pending.course,
+            batch: pending.batch,
+            graduation_year: pending.graduation_year || pending.batch
+          }
+        });
+      } catch (listErr) {
+        console.error('Warning: Failed to create alumni_list entry:', listErr.message);
+      }
 
       // DELETE from pending_registration after successful move to user table
       await prisma.pending_registration.delete({

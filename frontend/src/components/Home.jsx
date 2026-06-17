@@ -431,12 +431,16 @@ const Home = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
               {events.map((event) => (
                 <div key={event.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
-                  {event.image && (
+                  {event.image ? (
                     <img
                       src={event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image}
                       alt={event.name}
                       className="w-full h-40 object-cover"
                     />
+                  ) : (
+                    <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
+                      <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </div>
                   )}
                   <div className="p-5 flex-1 flex flex-col">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{event.name}</h3>
@@ -492,12 +496,16 @@ const Home = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {achievements.map((achievement) => (
                 <div key={achievement.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
-                  {achievement.image && (
+                  {achievement.image ? (
                     <img
                       src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
                       alt={achievement.title}
                       className="w-full h-40 object-cover rounded-lg mb-4"
                     />
+                  ) : (
+                    <div className="w-full h-40 bg-blue-100 rounded-lg mb-4 flex items-center justify-center">
+                      <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
                   )}
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">{achievement.title}</h3>
                   <p className="text-gray-600 text-sm line-clamp-3">{achievement.description}</p>
@@ -608,12 +616,16 @@ const Home = () => {
                 
                 return (
                   <div key={donation.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                    {donation.image && (
+                    {donation.image ? (
                       <img
                         src={donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image}
                         alt={donation.purpose}
                         className="w-full h-40 object-cover"
                       />
+                    ) : (
+                      <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
+                        <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                      </div>
                     )}
                     <div className="p-5">
                       <span className="px-3 py-1 text-xs font-medium text-blue-900 bg-blue-100 rounded-full">

@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import alumniService from '../services/alumniService';
 import achievementService from '../services/achievementService';
 import careerService from '../services/careerService';
+import { realtimeClient } from '../services/realtimeClient';
 import donationService from '../services/donationService';
 import officerService from '../services/officerService';
 import { authService } from '../services/authService';
@@ -38,6 +39,13 @@ const getLevelLabel = (level) => {
   const option = sharedLevelOptions.find(opt => opt.value === level);
   return option ? option.label : 'Not provided';
 };
+
+const createEducationEntry = (entry = {}) => ({
+  level: entry.level || '',
+  batch: entry.batch ?? ''
+});
+
+const DEFAULT_BATCH_OPTIONS = Array.from({ length: 60 }, (_, index) => String(new Date().getFullYear() - index));
 
 const getGroupLabel = (value) => {
   if (!value) return 'All Groups';
@@ -224,22 +232,61 @@ const AlumniDirectory = () => {
     educationHistory: []
   };
   const [newAlumni, setNewAlumni] = useState(blankAlumni);
+  const [educationHistory, setEducationHistory] = useState([createEducationEntry()]);
+
+  // Education history helpers
+  const handleEducationHistoryChange = (index, field, value) => {
+    setEducationHistory((prev) => prev.map((entry, i) => {
+      if (i !== index) return entry;
+      return { ...entry, [field]: value };
+    }));
+  };
+  const addEducationHistoryEntry = () => setEducationHistory((prev) => [...prev, createEducationEntry()]);
+  const removeEducationHistoryEntry = (index) => {
+    setEducationHistory((prev) => {
+      if (prev.length <= 1) return [createEducationEntry()];
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   // Fetch alumni list
+  const fetchAlumni = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await alumniService.getAllAlumni();
+      setAlumni(data);
+    } catch (e) {
+      setError(e.message || 'Failed to load alumni');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await alumniService.getAllAlumni();
-        setAlumni(data);
-      } catch (e) {
-        setError(e.message || 'Failed to load alumni');
-      } finally {
-        setLoading(false);
-      }
+    fetchAlumni();
+  }, []);
+
+  // Re-fetch when profile or alumni data changes via realtime events
+  useEffect(() => {
+    const unsubProfile = realtimeClient.subscribe('profile.updated', () => {
+      fetchAlumni();
+    });
+    const unsubAlumni = realtimeClient.subscribe('alumni.updated', () => {
+      fetchAlumni();
+    });
+    const unsubCreated = realtimeClient.subscribe('alumni.created', () => {
+      fetchAlumni();
+    });
+    const unsubDeleted = realtimeClient.subscribe('alumni.deleted', () => {
+      fetchAlumni();
+    });
+    return () => {
+      unsubProfile();
+      unsubAlumni();
+      unsubCreated();
+      unsubDeleted();
     };
-    load();
   }, []);
 
   const baseFilteredAlumni = useMemo(() => {
@@ -468,10 +515,24 @@ const AlumniDirectory = () => {
   const handleAddAlumni = async (e) => {
     e.preventDefault();
     try {
-      const created = await alumniService.addAlumni(newAlumni);
+      const cleanedHistory = educationHistory
+        .filter((entry) => entry.level)
+        .map((entry) => ({
+          level: entry.level,
+          batch: entry.batch ? parseInt(entry.batch, 10) : null
+        }));
+      const primary = cleanedHistory.length > 0 ? cleanedHistory[cleanedHistory.length - 1] : {};
+      const payload = {
+        ...newAlumni,
+        level: primary.level || newAlumni.level || null,
+        batch: primary.batch || newAlumni.batch || null,
+        educationHistory: cleanedHistory
+      };
+      const created = await alumniService.addAlumni(payload);
       setAlumni(prev => [created, ...prev]);
       setShowAddModal(false);
       setNewAlumni(blankAlumni);
+      setEducationHistory([createEducationEntry()]);
     } catch (err) {
       toast.error(err.message || 'Failed to add alumni');
     }
@@ -592,7 +653,7 @@ const AlumniDirectory = () => {
     e.preventDefault();
     if (!viewingAlumni) return;
     try {
-      const payload = { ...newAchievement, alumniId: viewingAlumni.id };
+      const payload = { ...newAchievement, alumni_id: Number(viewingAlumni.id) };
       const created = await achievementService.createAchievement(payload);
       setAchievements(prev => [...prev, created]);
       setShowAchievementModal(false);
@@ -603,7 +664,7 @@ const AlumniDirectory = () => {
     e.preventDefault();
     if (!viewingAlumni) return;
     try {
-      const payload = { ...newCareer, alumniId: viewingAlumni.id };
+      const payload = { ...newCareer, alumni_id: Number(viewingAlumni.id) };
       const created = await careerService.createCareer(payload);
       setCareers(prev => [...prev, created]);
       setShowCareerModal(false);
@@ -705,15 +766,6 @@ const AlumniDirectory = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                   Back to Directory
                 </button>
-                {isTeacher && (
-                  <button
-                    onClick={() => { setEditingAlumni(viewingAlumni); setNewAlumni({...viewingAlumni}); setShowViewModal(false); setShowEditModal(true); }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gray-100 border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-all"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                    Edit Profile
-                  </button>
-                )}
               </div>
               {/* Avatar + Name + Info */}
               <div className="relative px-5 sm:px-8 pt-4 pb-8">
@@ -884,7 +936,6 @@ const AlumniDirectory = () => {
                     <div className="space-y-3">{donations.length === 0 ? <p className="text-gray-500 text-sm">No donations recorded yet.</p> : donations.map(d => (<div key={d.id} className="rounded-2xl border border-transparent bg-transparent p-4"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">${d.amount}</h4>{d.purpose && <p className="text-sm text-gray-600 mt-1">{d.purpose}</p>}{d.date && <p className="text-xs text-gray-500 mt-2">{new Date(d.date).toLocaleDateString()}</p>}</div>{isTeacher && <button onClick={() => handleDeleteDonation(d.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
                   </div>
                 </div>
-                <div className="mt-8 flex justify-end gap-3"><button onClick={() => { setShowViewModal(false); setViewingAlumni(null); }} className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>{isTeacher && <button onClick={() => { setEditingAlumni(viewingAlumni); setNewAlumni({ ...viewingAlumni }); setShowViewModal(false); setShowEditModal(true); }} className="px-6 py-2 text-sm font-medium text-white bg-blue-900 rounded-lg hover:bg-blue-800">Edit Profile</button>}</div>
               </div>
             </div>
           </div>
@@ -896,7 +947,6 @@ const AlumniDirectory = () => {
             <div className="mx-auto flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
               <div className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
                 <h3 className="text-2xl font-semibold text-slate-900">Add New Alumni</h3>
-                <p className="mt-1 text-sm text-slate-500">Enter the details for the new alumni member</p>
               </div>
 
               <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-hide">
@@ -949,39 +999,63 @@ const AlumniDirectory = () => {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
-                        <h4 className="text-lg font-semibold text-slate-900">Academic Information</h4>
-                        <p className="text-sm text-slate-500">Choose a level first, then pick a course from the grouped list below.</p>
+                        <h4 className="text-lg font-semibold text-slate-900">Education History</h4>
+                        <p className="text-sm text-slate-500">Add level, batch, and graduation year entries.</p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={addEducationHistoryEntry}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                      >
+                        + Add Level & Batch
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {educationHistory.map((entry, index) => (
+                        <div key={`edu-${index}`} className="grid grid-cols-1 gap-3 p-3 rounded-lg border border-gray-200 bg-white sm:grid-cols-2">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
+                            <select
+                              value={entry.level}
+                              onChange={(e) => handleEducationHistoryChange(index, 'level', e.target.value)}
+                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="">Select Level</option>
+                              {sharedLevelOptions.filter((opt) => opt.value).map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Batch</label>
+                            <select
+                              value={entry.batch}
+                              onChange={(e) => handleEducationHistoryChange(index, 'batch', e.target.value)}
+                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="">Select Batch</option>
+                              {DEFAULT_BATCH_OPTIONS.map((batch) => (
+                                <option key={batch} value={batch}>{batch}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-end justify-between gap-3">
+                            <div className="text-xs text-gray-500">Select the level and matching batch for this entry.</div>
+                            {educationHistory.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeEducationHistoryEntry(index)}
+                                className="text-xs text-red-600 hover:text-red-700 font-medium"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Level</label>
-                        <FilterMenu
-                          menuRef={addLevelMenuRef}
-                          isOpen={showAddLevelMenu}
-                          setIsOpen={setShowAddLevelMenu}
-                          buttonLabel="Select level"
-                          selectedLabel={newAlumni.level ? getLevelLabel(newAlumni.level) : 'Select level'}
-                          selectedValue={newAlumni.level}
-                          icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5zm0 8l7.5-4.167V15L12 20l-7.5-5.167V6.833L12 11zm0 2.25L7.5 12v2.5L12 17l4.5-2.5V12L12 13.25z" /></svg>}
-                          sections={[
-                            {
-                              key: 'levels-add',
-                              title: 'Levels',
-                              items: sharedLevelOptions.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label }))
-                            }
-                          ]}
-                          onSelect={(value) => {
-                            setNewAlumniField('level', newAlumni.level === value ? '' : value);
-                            setShowAddLevelMenu(false);
-                          }}
-                          panelTitle="Select Level"
-                          panelWidthClass="w-full"
-                          alignClass="left-0"
-                        />
-                        <input type="hidden" name="level" value={newAlumni.level} required />
-                      </div>
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Course</label>
                         <FilterMenu
@@ -992,24 +1066,16 @@ const AlumniDirectory = () => {
                           selectedLabel={getCourseLabel(newAlumni.course)}
                           selectedValue={newAlumni.course}
                           icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
-                          sections={newAlumni.level ? registerCourseSections.filter((section) => section.key === newAlumni.level) : registerCourseSections}
+                          sections={educationHistory[0]?.level ? registerCourseSections.filter((section) => section.key === educationHistory[0].level) : registerCourseSections}
                           onSelect={(value) => {
                             setNewAlumniField('course', newAlumni.course === value ? '' : value);
                             setShowAddCourseMenu(false);
                           }}
-                          panelTitle={newAlumni.level ? `${getLevelLabel(newAlumni.level)} Courses` : 'Select Course'}
+                          panelTitle={educationHistory[0]?.level ? `${getLevelLabel(educationHistory[0].level)} Courses` : 'Select Course'}
                           panelWidthClass="w-full"
                           alignClass="left-0"
                         />
                         <input type="hidden" name="course" value={newAlumni.course} required />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Graduation Year</label>
-                        <input type="number" name="graduationYear" value={newAlumni.graduationYear} onChange={handleInputChange} className="app-input" placeholder="YYYY" required />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Batch</label>
-                        <input type="number" name="batch" value={newAlumni.batch} onChange={handleInputChange} className="app-input" placeholder="e.g. 2015" />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Current Position</label>
@@ -1105,7 +1171,7 @@ const AlumniDirectory = () => {
 
         {/* Achievement Modal */}
         {showAchievementModal && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[60]">
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[110]">
             <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
               <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Achievement</h3>
               <form onSubmit={handleAddAchievement} className="space-y-4 sm:space-y-5">
@@ -1150,7 +1216,7 @@ const AlumniDirectory = () => {
 
         {/* Career Modal */}
         {showCareerModal && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[60]">
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[110]">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
               <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Employment Record</h3>
               <form onSubmit={handleAddCareer} className="space-y-4 sm:space-y-5">
@@ -1229,7 +1295,7 @@ const AlumniDirectory = () => {
 
         {/* Donation Modal */}
         {showDonationModal && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[60]">
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[110]">
             <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
               <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Donation</h3>
               <form onSubmit={handleAddDonation} className="space-y-4 sm:space-y-5">

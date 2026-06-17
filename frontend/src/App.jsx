@@ -211,8 +211,8 @@ function App() {
           return;
         }
 
-        const currentUser = authService.getCurrentUser();
-        const previous = JSON.stringify(currentUser || {});
+        const latestUser = authService.getCurrentUser();
+        const previous = JSON.stringify(latestUser || {});
         const next = JSON.stringify(freshUser || {});
         if (previous !== next) {
           localStorage.setItem('user', JSON.stringify(freshUser));
@@ -260,21 +260,39 @@ function App() {
     };
   }, [forceBlockedLogout]);
 
-  // Check if user is authenticated by looking for both user and token
-  const user = authService.getCurrentUser();
-  const token = localStorage.getItem('token');
-  
-  // If we have user data but no token, clear the user data
-  if (user && !token) {
-    localStorage.removeItem('user');
-  }
-  
-  // If we have token but no user data, clear the token
-  if (token && !user) {
-    localStorage.removeItem('token');
-  }
-  
-  const isAuthenticated = !!(user && token);
+  // Clean up stale localStorage data (one-time on mount)
+  const [isAuthenticated, setIsAuthenticated] = React.useState(() => {
+    const user = authService.getCurrentUser();
+    const token = localStorage.getItem('token');
+
+    if (user && !token) {
+      localStorage.removeItem('user');
+    }
+    if (token && !user) {
+      localStorage.removeItem('token');
+    }
+
+    return !!(authService.getCurrentUser() && localStorage.getItem('token'));
+  });
+
+  // Keep isAuthenticated in sync with localStorage
+  useEffect(() => {
+    const syncAuth = () => {
+      const user = authService.getCurrentUser();
+      const token = localStorage.getItem('token');
+      setIsAuthenticated(!!(user && token));
+    };
+
+    window.addEventListener('storage', syncAuth);
+    window.addEventListener('auth-user-updated', syncAuth);
+    window.addEventListener('logout', syncAuth);
+
+    return () => {
+      window.removeEventListener('storage', syncAuth);
+      window.removeEventListener('auth-user-updated', syncAuth);
+      window.removeEventListener('logout', syncAuth);
+    };
+  }, []);
 
   // Active session guard: poll authenticated session-status + realtime block events.
   useEffect(() => {

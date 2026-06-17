@@ -632,7 +632,7 @@ const Profile = () => {
                     </div>
                     <div className="min-w-0">
                       <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Role</span>
-                      <p className="text-sm font-semibold text-white">Academic Staff</p>
+                      <p className="text-sm font-semibold text-white">{user.teacherRole === 'ADMIN' ? 'Admin' : 'Academic Staff'}</p>
                     </div>
                   </div>
                 ) : (

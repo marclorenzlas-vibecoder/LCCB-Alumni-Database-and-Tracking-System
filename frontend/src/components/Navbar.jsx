@@ -25,12 +25,71 @@ const getNotificationInitial = (notification) => {
   return name.charAt(0).toUpperCase() || "U";
 };
 
+const groupNotifications = (notifications) => {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const newItems = [];
+  const todayItems = [];
+  const earlierItems = [];
+
+  for (const n of notifications) {
+    if (!n.is_read) {
+      newItems.push(n);
+    } else {
+      const d = new Date(n.created_at);
+      if (d >= startOfToday) {
+        todayItems.push(n);
+      } else {
+        earlierItems.push(n);
+      }
+    }
+  }
+
+  const sections = [];
+  if (newItems.length > 0) sections.push({ label: 'New', items: newItems });
+  if (todayItems.length > 0) sections.push({ label: 'Today', items: todayItems });
+  if (earlierItems.length > 0) sections.push({ label: 'Earlier', items: earlierItems });
+  return sections;
+};
+
+const BellNotificationIcon = ({ notification, isBirthday }) => {
+  const TYPE_COLORS = {
+    EVENT: 'from-purple-500 to-indigo-600',
+    ACHIEVEMENT: 'from-amber-400 to-orange-500',
+    ANNOUNCEMENT: 'from-sky-500 to-cyan-600',
+    DONATION: 'from-emerald-500 to-teal-600',
+    GENERAL: 'from-blue-500 to-blue-700',
+  };
+  const TYPE_ICONS = {
+    EVENT: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+    ACHIEVEMENT: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
+    ANNOUNCEMENT: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z',
+    DONATION: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
+  };
+  const BIRTHDAY_ICON = 'M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7';
+
+  const type = (notification?.type || '').toUpperCase();
+  const color = TYPE_COLORS[type] || TYPE_COLORS.GENERAL;
+  const iconPath = isBirthday ? BIRTHDAY_ICON : (TYPE_ICONS[type] || TYPE_ICONS.EVENT);
+
+  return (
+    <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br ${color} text-white shadow-sm`}>
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d={iconPath} />
+      </svg>
+    </div>
+  );
+};
+
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [bellFilter, setBellFilter] = useState('all');
+  const [bellMenuOpen, setBellMenuOpen] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [birthdayGreetingComposer, setBirthdayGreetingComposer] = useState({
     isOpen: false,
@@ -65,6 +124,7 @@ const Navbar = () => {
     ? notifications.filter((n) => !n.is_read).length
     : 0;
   const notificationRef = useRef(null);
+  const bellMenuRef = useRef(null);
   const userMenuRef = useRef(null);
 
   const syncUserFromStorage = useCallback(() => {
@@ -401,7 +461,7 @@ const Navbar = () => {
     };
   }, [fetchNotifications, syncUserFromStorage, user?.role]);
 
-  // Close notification dropdown when clicking outside
+  // Close notification dropdown and bell menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -409,6 +469,13 @@ const Navbar = () => {
         !notificationRef.current.contains(event.target)
       ) {
         setShowNotifications(false);
+        setBellMenuOpen(false);
+      }
+      if (
+        bellMenuRef.current &&
+        !bellMenuRef.current.contains(event.target)
+      ) {
+        setBellMenuOpen(false);
       }
     };
 
@@ -761,7 +828,7 @@ const Navbar = () => {
           </Link>
 
           {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center space-x-1 flex-1 justify-center mx-4">
+          <div className="hidden md:flex items-center justify-center flex-1 space-x-1">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -794,12 +861,14 @@ const Navbar = () => {
                 </Link>
               );
             })}
+          </div>
 
-            {token ? (
-              <>
-                {/* Notification Bell */}
+          {/* Right side: Bell + Profile */}
+          {token ? (
+            <div className="hidden md:flex items-center gap-2 ml-auto flex-shrink-0">
+              {/* Notification Bell */}
                 <div
-                  className="relative ml-3 flex-shrink-0"
+                  className="relative flex-shrink-0"
                   ref={notificationRef}
                 >
                   <button
@@ -827,24 +896,11 @@ const Navbar = () => {
                   </button>
 
                   {showNotifications && (
-                    <div className="dropdown-menu-panel absolute right-0 mt-3 w-[420px] bg-white rounded-2xl shadow-2xl z-50 max-h-[520px] flex flex-col border border-gray-100/80 overflow-hidden">
+                    <div className="dropdown-menu-panel absolute right-0 mt-3 bg-white rounded-2xl shadow-[0_2px_20px_rgba(0,0,0,0.15)] z-50 flex flex-col border border-gray-100/80 overflow-hidden" style={{ width: 380, maxHeight: '85vh' }}>
                       {/* Sticky header */}
-                      <div className="px-5 py-3.5 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 flex items-center justify-between flex-shrink-0">
+                      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                         <div>
-                          <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                            <svg
-                              className="w-4 h-4 text-blue-600"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                              />
-                            </svg>
+                          <h3 className="text-[17px] font-bold text-gray-900">
                             Notifications
                           </h3>
                           {unreadCount > 0 && (
@@ -853,78 +909,165 @@ const Navbar = () => {
                             </p>
                           )}
                         </div>
-                        {unreadCount > 0 && (
-                          <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white shadow-sm">
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {unreadCount > 0 && (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white shadow-sm">
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                          )}
+                          {/* Three-dot menu */}
+                          {notifications.length > 0 && (
+                            <div className="relative" ref={bellMenuRef}>
+                              <button
+                                onClick={() => setBellMenuOpen(!bellMenuOpen)}
+                                className="p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-700 hover:text-gray-900"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01" />
+                                </svg>
+                              </button>
+                              {bellMenuOpen && (
+                                <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50">
+                                  {unreadCount > 0 && (
+                                    <button
+                                      onClick={async () => {
+                                        setBellMenuOpen(false);
+                                        try {
+                                          await fetch(`${API_BASE_URL}/notifications/read-all`, {
+                                            method: "PUT",
+                                            headers: {
+                                              Authorization: `Bearer ${token}`,
+                                              "Content-Type": "application/json",
+                                            },
+                                          });
+                                          setNotifications(
+                                            notifications.map((n) => ({ ...n, is_read: true }))
+                                          );
+                                        } catch (error) {
+                                          console.error("Error marking all as read:", error);
+                                        }
+                                      }}
+                                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                      Mark all read
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={async () => {
+                                      setBellMenuOpen(false);
+                                      try {
+                                        await fetch(`${API_BASE_URL}/notifications`, {
+                                          method: "DELETE",
+                                          headers: {
+                                            Authorization: `Bearer ${token}`,
+                                            "Content-Type": "application/json",
+                                          },
+                                        });
+                                        setNotifications([]);
+                                      } catch (error) {
+                                        console.error("Error clearing notifications:", error);
+                                      }
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Clear all
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Scrollable list */}
-                      <div className="overflow-y-auto flex-1 scrollbar-hide">
-                        {notifications.length > 0 ? (
-                          notifications.map((notif) => (
-                            <div
-                              key={notif.id}
-                              className={`px-4 py-3.5 cursor-pointer border-b border-gray-50 transition-all duration-200 group ${
-                                !notif.is_read
-                                  ? "bg-blue-50/60 hover:bg-blue-100/70"
-                                  : "hover:bg-gray-50"
-                              }`}
-                              onClick={() => handleNotificationClick(notif)}
-                            >
-                              <div className="flex items-start gap-3">
-                                {/* Avatar / Icon */}
-                                <div className="relative mt-0.5 flex-shrink-0">
-                                  {getNotificationImageSrc(notif) ? (
-                                    <img
-                                      src={getNotificationImageSrc(notif)}
-                                      alt={notif.sender_name || "Sender"}
-                                      className="h-10 w-10 rounded-full border border-gray-200 object-cover shadow-sm"
-                                    />
-                                  ) : (
-                                    <div
-                                      className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm ${
-                                        (notif.type || "")
-                                          .toLowerCase()
-                                          .includes("event")
-                                          ? "bg-gradient-to-br from-purple-500 to-indigo-600"
-                                          : (notif.type || "")
-                                                .toLowerCase()
-                                                .includes("donat")
-                                            ? "bg-gradient-to-br from-emerald-500 to-teal-600"
-                                            : (notif.type || "")
-                                                  .toLowerCase()
-                                                  .includes("birthday")
-                                              ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                                              : "bg-gradient-to-br from-blue-500 to-blue-700"
-                                      }`}
-                                    >
-                                      {getNotificationInitial(notif)}
-                                    </div>
-                                  )}
-                                  <span
-                                    className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${!notif.is_read ? "bg-blue-500" : "bg-gray-300"}`}
-                                  />
-                                </div>
+                      {/* All / Unread filter tabs */}
+                      <div className="flex border-b border-gray-100 flex-shrink-0">
+                        {[
+                          { key: 'all', label: 'All' },
+                          { key: 'unread', label: 'Unread' },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            onClick={() => setBellFilter(tab.key)}
+                            className={`flex-1 py-2.5 text-[13px] font-semibold transition-colors relative ${
+                              bellFilter === tab.key
+                                ? 'text-blue-600'
+                                : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                          >
+                            {tab.label}
+                            {tab.key === 'unread' && unreadCount > 0 && (
+                              <span className="ml-1 text-[11px]">({unreadCount})</span>
+                            )}
+                            {bellFilter === tab.key && (
+                              <div className="absolute bottom-0 left-4 right-4 h-[3px] bg-blue-600 rounded-full" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
 
-                                {/* Content */}
-                                <div className="flex-1 min-w-0">
-                                  <p
-                                    className={`text-[13px] leading-snug ${!notif.is_read ? "font-bold text-gray-900" : "font-semibold text-gray-700"} group-hover:text-blue-900 transition-colors line-clamp-1`}
-                                  >
-                                    {notif.title}
-                                  </p>
-                                  <p className="text-[12px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
-                                    {notif.message}
-                                  </p>
-                                  <p className="text-[11px] text-gray-400 mt-1 font-medium">
-                                    {new Date(
-                                      notif.created_at,
-                                    ).toLocaleString()}
-                                  </p>
+                      {/* Scrollable notification list */}
+                      <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}>
+                        {(() => {
+                          const filtered = (bellFilter === 'unread'
+                            ? notifications.filter((n) => !n.is_read)
+                            : notifications
+                          ).slice(0, 6);
+                          return filtered.length > 0 ? (
+                          groupNotifications(filtered).map((section) => (
+                            <div key={section.label}>
+                              <div className="px-5 py-2 flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{section.label}</span>
                                 </div>
-                              </div>
+                              {section.items.map((notif) => (
+                                <div
+                                  key={notif.id}
+                                  className={`px-4 py-3 cursor-pointer border-b border-gray-50 transition-all duration-200 group ${
+                                    !notif.is_read
+                                      ? "bg-blue-50/60 hover:bg-blue-100/70"
+                                      : "hover:bg-gray-50"
+                                  }`}
+                                  onClick={() => handleNotificationClick(notif)}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="relative mt-0.5 flex-shrink-0">
+                                      {getNotificationImageSrc(notif) ? (
+                                        <img
+                                          src={getNotificationImageSrc(notif)}
+                                          alt={notif.sender_name || "Sender"}
+                                          className="h-10 w-10 rounded-full border border-gray-200 object-cover shadow-sm"
+                                        />
+                                      ) : (
+                                        <BellNotificationIcon notification={notif} isBirthday={(notif.type || "").toLowerCase().includes("birthday") || String(notif?.title || "").toLowerCase().includes("birthday")} />
+                                      )}
+                                      <span
+                                        className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${!notif.is_read ? "bg-blue-500" : "bg-gray-300"}`}
+                                      />
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                      <p
+                                        className={`text-[13px] leading-snug ${!notif.is_read ? "font-bold text-gray-900" : "font-semibold text-gray-700"} group-hover:text-blue-900 transition-colors line-clamp-1`}
+                                      >
+                                        {notif.title}
+                                      </p>
+                                      <p className="text-[12px] text-gray-500 mt-0.5 line-clamp-2 leading-snug">
+                                        {notif.message}
+                                      </p>
+                                      <p className="text-[11px] text-gray-400 mt-1 font-medium">
+                                        {new Date(
+                                          notif.created_at,
+                                        ).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           ))
                         ) : (
@@ -945,81 +1088,22 @@ const Navbar = () => {
                               </svg>
                             </div>
                             <p className="text-sm text-gray-500 font-semibold">
-                              All caught up!
+                              {bellFilter === 'unread' ? 'No unread notifications' : 'All caught up!'}
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
-                              We'll notify you when something arrives
+                              {bellFilter === 'unread' ? 'You\'ve read all your notifications' : 'We\'ll notify you when something arrives'}
                             </p>
                           </div>
                         )}
+                        )()}
                       </div>
-
-                      {/* Sticky footer */}
-                      {notifications.length > 0 && (
-                        <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/80 flex justify-between items-center gap-3 flex-shrink-0">
-                          {unreadCount > 0 && (
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await fetch(
-                                    `${API_BASE_URL}/notifications/read-all`,
-                                    {
-                                      method: "PUT",
-                                      headers: {
-                                        Authorization: `Bearer ${token}`,
-                                        "Content-Type": "application/json",
-                                      },
-                                    },
-                                  );
-                                  setNotifications(
-                                    notifications.map((n) => ({
-                                      ...n,
-                                      is_read: true,
-                                    })),
-                                  );
-                                } catch (error) {
-                                  console.error(
-                                    "Error marking all as read:",
-                                    error,
-                                  );
-                                }
-                              }}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-semibold transition-colors"
-                            >
-                              Mark all read
-                            </button>
-                          )}
-                          <button
-                            onClick={async () => {
-                              try {
-                                await fetch(`${API_BASE_URL}/notifications`, {
-                                  method: "DELETE",
-                                  headers: {
-                                    Authorization: `Bearer ${token}`,
-                                    "Content-Type": "application/json",
-                                  },
-                                });
-                                setNotifications([]);
-                              } catch (error) {
-                                console.error(
-                                  "Error clearing notifications:",
-                                  error,
-                                );
-                              }
-                            }}
-                            className="text-xs text-red-500 hover:text-red-700 font-semibold transition-colors ml-auto"
-                          >
-                            Clear all
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
 
                 {/* User Profile Dropdown */}
                 <div
-                  className="relative ml-6 lg:ml-8 xl:ml-10 translate-x-2 lg:translate-x-3 flex-shrink-0"
+                  className="relative flex-shrink-0"
                   ref={userMenuRef}
                 >
                   <button
@@ -1197,7 +1281,7 @@ const Navbar = () => {
                     </div>
                   )}
                 </div>
-              </>
+              </div>
             ) : (
               <Link
                 to="/login"
@@ -1219,7 +1303,6 @@ const Navbar = () => {
                 <span>Login</span>
               </Link>
             )}
-          </div>
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center gap-2">

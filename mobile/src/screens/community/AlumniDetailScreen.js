@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import ScreenContainer from "../../components/ScreenContainer";
 import LoadingState from "../../components/LoadingState";
 import { API_ORIGIN } from "../../config/api";
@@ -139,34 +140,36 @@ export default function AlumniDetailScreen({ route, navigation }) {
     }
   };
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    Promise.all([
-      communityService.getAlumniById(alumniId),
-      communityService.getAchievements(alumniId),
-      communityService.getCareers(alumniId),
-      donationService.getByAlumni(alumniId),
-    ])
-      .then(([detail, achievementsData, careersData, donationsData]) => {
-        if (!mounted) return;
-        setAlumni(detail);
-        setAchievements(achievementsData || []);
-        setCareers(careersData || []);
-        setDonations(donationsData || []);
-      })
-      .catch((error) => {
-        console.error("Failed to load alumni detail:", error?.message || error);
-        if (mounted) Alert.alert("Error", "Failed to load alumni details.");
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      setLoading(true);
+      Promise.all([
+        communityService.getAlumniById(alumniId),
+        communityService.getAchievements(alumniId),
+        communityService.getCareers(alumniId),
+        donationService.getByAlumni(alumniId),
+      ])
+        .then(([detail, achievementsData, careersData, donationsData]) => {
+          if (!mounted) return;
+          setAlumni(detail);
+          setAchievements(achievementsData || []);
+          setCareers(careersData || []);
+          setDonations(donationsData || []);
+        })
+        .catch((error) => {
+          console.error("Failed to load alumni detail:", error?.message || error);
+          if (mounted) Alert.alert("Error", "Failed to load alumni details.");
+        })
+        .finally(() => {
+          if (mounted) setLoading(false);
+        });
 
-    return () => {
-      mounted = false;
-    };
-  }, [alumniId]);
+      return () => {
+        mounted = false;
+      };
+    }, [alumniId])
+  );
 
   if (loading) {
     return (

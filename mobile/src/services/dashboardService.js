@@ -11,7 +11,7 @@ export const dashboardService = {
       eventService.getAll(),
       jobService.getAllJobs(),
       communityService.getAchievements(alumniId),
-      alumniId ? donationService.getByAlumni(alumniId) : Promise.resolve([]),
+      donationService.getAll(),
       notificationService.getAll(false),
       notificationService.getUnreadCount(),
       statsService.getHomeStats()

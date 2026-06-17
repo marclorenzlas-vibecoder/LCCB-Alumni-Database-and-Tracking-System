@@ -81,7 +81,6 @@ const styles = StyleSheet.create({
   headerContainer: {
     width: "100%",
     maxWidth: "100%",
-    maxWidth: "100vw",
     boxSizing: "border-box",
     flexDirection: "row",
     alignItems: "center",

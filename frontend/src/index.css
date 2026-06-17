@@ -259,7 +259,7 @@ body::-webkit-scrollbar,
 
 /* Home hero — image + overlay only (no fade-in) */
 .home-hero__overlay {
-    background: rgb(15 23 42 / 0.45);
+    background: rgb(30 58 138 / 0.55);
     pointer-events: none;
 }
 
@@ -572,7 +572,7 @@ body::-webkit-scrollbar,
 }
 
 .app-sidebar-logout-btn:hover {
-    background-color: rgb(30 64 175 / 0.55);
+    background-color: rgb(239 68 68);
     color: #fff;
 }
 

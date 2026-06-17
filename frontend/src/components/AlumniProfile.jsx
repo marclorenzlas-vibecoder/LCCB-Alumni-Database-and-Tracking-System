@@ -91,7 +91,7 @@ const AlumniProfile = () => {
             email: 'N/A',
             dateOfBirth: null,
             skills: [],
-            profileImage: 'https://via.placeholder.com/150x150/9CA3AF/FFFFFF?text=Profile',
+            profileImage: '',
             bio: 'This alumni profile could not be found.',
             socialLinks: {},
             careerHistory: [],
@@ -151,7 +151,7 @@ const AlumniProfile = () => {
     contactNumber: profile.contactNumber || 'Not provided',
     currentJob: profile.currentPosition || profile.currentJob || 'Not specified',
     bio: profile.bio || `${profile.firstName || 'Alumni'} ${profile.lastName || ''} graduated from LCCB in ${profile.graduationYear || 'N/A'} with a degree in ${profile.course || 'N/A'}${profile.currentPosition ? `. Currently working as ${profile.currentPosition}` : ''}${profile.company ? ` at ${profile.company}` : ''}.`,
-    coverImage: profile.coverImage || 'https://via.placeholder.com/800x200/3B82F6/FFFFFF?text=Cover+Image',
+    coverImage: profile.coverImage || '',
     socialLinks: profile.socialLinks || {
       linkedin: profile.linkedin || '#',
       github: '#',
@@ -564,7 +564,7 @@ const AlumniProfile = () => {
               src={displayProfile.coverImage}
               alt="Cover image"
               className="w-full h-full object-cover"
-              onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/800x200/93C5FD/ffffff?text=Cover+Image'; }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
           </div>
           <div className="p-8 pt-0">

@@ -444,7 +444,7 @@ const UserLayout = ({ children }) => {
           <button
             type="button"
             onClick={openLogoutConfirm}
-            className="app-sidebar-logout-btn app-sidebar-row rounded-lg text-xs font-medium text-blue-200/75"
+            className="app-sidebar-logout-btn app-sidebar-row rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-500"
             aria-label="Log out"
             title={isDesktopCollapsed ? "Log out" : undefined}
           >

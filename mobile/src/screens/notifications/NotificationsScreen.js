@@ -6,6 +6,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
 import { notificationService } from '../../services/notificationService';
+import { realtimeClient } from '../../services/realtimeClient';
 import { formatDate } from '../../utils/formatters';
 import { theme } from '../../theme';
 
@@ -30,14 +31,38 @@ const getDateGroup = (dateStr) => {
   return 'Older';
 };
 
+const NOTIFICATION_MAX_DAYS = 61;
+
+const isWithinRetention = (dateStr) => {
+  if (!dateStr) return false;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - NOTIFICATION_MAX_DAYS * 24 * 60 * 60 * 1000);
+  return date >= cutoff;
+};
+
 export default function NotificationsScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   const loadNotifications = useCallback(async () => {
-    const data = await notificationService.getAll(false);
-    setItems(data || []);
+    setError(null);
+    try {
+      const data = await notificationService.getAll(false);
+      const filtered = (data || []).filter((n) => isWithinRetention(n.created_at));
+      setItems(filtered);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 403) {
+        setError('Your session has expired. Please log in again.');
+      } else {
+        setError('Failed to load notifications. Pull down to retry.');
+      }
+      throw err;
+    }
   }, []);
 
   useFocusEffect(
@@ -45,13 +70,18 @@ export default function NotificationsScreen({ navigation }) {
       let mounted = true;
       setLoading(true);
       loadNotifications()
-        .catch((error) => console.error('Failed to load notifications:', error?.message || error))
+        .catch(() => {})
         .finally(() => {
           if (mounted) setLoading(false);
         });
 
+      const unsubCreated = realtimeClient.subscribe('notification.created', () => {
+        if (mounted) loadNotifications().catch(() => {});
+      });
+
       return () => {
         mounted = false;
+        unsubCreated();
       };
     }, [loadNotifications])
   );
@@ -156,7 +186,19 @@ export default function NotificationsScreen({ navigation }) {
       </View>
 
       {loading ? <LoadingState label="Loading notifications" /> : null}
-      {!loading && items.length === 0 ? <EmptyState title="No notifications" /> : null}
+      {!loading && error ? (
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
+          <Text style={{ marginTop: 8, fontSize: 14, color: '#6b7280', textAlign: 'center' }}>{error}</Text>
+          <Pressable
+            style={{ marginTop: 12, backgroundColor: '#0f766e', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+            onPress={onRefresh}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {!loading && !error && items.length === 0 ? <EmptyState title="No notifications" /> : null}
 
       {!loading && items.length > 0 ? (
         <View style={styles.list}>

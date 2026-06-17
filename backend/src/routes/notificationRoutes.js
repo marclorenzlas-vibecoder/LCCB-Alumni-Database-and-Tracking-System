@@ -78,8 +78,15 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const unreadOnly = req.query.unreadOnly === 'true';
-    
-    const notifications = await notificationService.getUserNotifications(userId, unreadOnly);
+
+    // Teachers authenticate via the teacher table whose ID differs from
+    // the user-table FK used by notifications.  Resolve to the user-table ID.
+    const resolvedUserId = await resolveSenderUserTableId(req.user);
+    if (!resolvedUserId) {
+      return res.json([]);
+    }
+
+    const notifications = await notificationService.getUserNotifications(resolvedUserId, unreadOnly);
     res.json(filterNotificationsForRole(notifications, req.user.role));
   } catch (error) {
     console.error('Error fetching notifications:', error);
@@ -90,8 +97,12 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get unread notification count
 router.get('/unread-count', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const notifications = await notificationService.getUserNotifications(userId, true);
+    const resolvedUserId = await resolveSenderUserTableId(req.user);
+    if (!resolvedUserId) {
+      return res.json({ count: 0 });
+    }
+
+    const notifications = await notificationService.getUserNotifications(resolvedUserId, true);
     const count = filterNotificationsForRole(notifications, req.user.role).length;
     res.json({ count });
   } catch (error) {
@@ -123,7 +134,28 @@ const resolveSenderUserTableId = async (jwtUser) => {
     select: { id: true }
   });
 
-  return existing ? existing.id : null;
+  if (existing) return existing.id;
+
+  // No user entry yet – create one so notifications can be delivered.
+  const teacherRecord = await prisma.teacher.findUnique({
+    where: { email: teacherEmail },
+    select: { id: true, username: true, email: true, password: true }
+  });
+
+  if (!teacherRecord) return null;
+
+  const created = await prisma.user.create({
+    data: {
+      email: teacherRecord.email,
+      username: teacherRecord.username || teacherRecord.email.split('@')[0],
+      role: 'ADMIN',
+      approval_status: 'APPROVED',
+      is_active: true,
+      password: teacherRecord.password
+    }
+  });
+
+  return created.id;
 };
 
 // Send a birthday greeting to the alumni who owns the birthday notification
@@ -246,8 +278,12 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
 // Mark all notifications as read
 router.put('/read-all', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const count = await notificationService.markAllAsRead(userId);
+    const resolvedUserId = await resolveSenderUserTableId(req.user);
+    if (!resolvedUserId) {
+      return res.json({ message: 'All notifications marked as read', count: 0 });
+    }
+
+    const count = await notificationService.markAllAsRead(resolvedUserId);
     res.json({ message: 'All notifications marked as read', count });
   } catch (error) {
     console.error('Error marking all as read:', error);
@@ -270,8 +306,12 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Clear all notifications
 router.delete('/', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const count = await notificationService.deleteAllNotifications(userId);
+    const resolvedUserId = await resolveSenderUserTableId(req.user);
+    if (!resolvedUserId) {
+      return res.json({ message: 'All notifications cleared', count: 0 });
+    }
+
+    const count = await notificationService.deleteAllNotifications(resolvedUserId);
     res.json({ message: 'All notifications cleared', count });
   } catch (error) {
     console.error('Error clearing all notifications:', error);

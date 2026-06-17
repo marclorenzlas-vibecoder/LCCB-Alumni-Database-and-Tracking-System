@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
@@ -6,6 +6,7 @@ import LoadingState from '../../components/LoadingState';
 import PrimaryButton from '../../components/PrimaryButton';
 import ScreenContainer from '../../components/ScreenContainer';
 import { communityService } from '../../services/communityService';
+import { realtimeClient } from '../../services/realtimeClient';
 import { getAlumniId } from '../../utils/auth';
 import { formatDate } from '../../utils/formatters';
 import { theme } from '../../theme';
@@ -37,8 +38,21 @@ export default function CareersScreen({ user }) {
           if (mounted) setLoading(false);
         });
 
+      const unsubCreated = realtimeClient.subscribe('career.created', () => {
+        if (mounted) loadEntries().catch(() => {});
+      });
+      const unsubUpdated = realtimeClient.subscribe('career.updated', () => {
+        if (mounted) loadEntries().catch(() => {});
+      });
+      const unsubDeleted = realtimeClient.subscribe('career.deleted', () => {
+        if (mounted) loadEntries().catch(() => {});
+      });
+
       return () => {
         mounted = false;
+        unsubCreated();
+        unsubUpdated();
+        unsubDeleted();
       };
     }, [loadEntries])
   );

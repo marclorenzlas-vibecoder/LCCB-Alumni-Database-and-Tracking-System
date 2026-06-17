@@ -712,7 +712,6 @@ const Employment = () => {
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Job Posting' : 'Post a Job Opportunity'}
                 </h3>
-                <p className="mt-1 text-sm leading-6 text-gray-500">Enter the details for the {editingId ? 'job update' : 'new job posting'}. Keep it clear, specific, and easy to scan.</p>
               </div>
               <div className="mt-6 overflow-y-auto scrollbar-hide flex-1">
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -834,28 +833,6 @@ const Employment = () => {
                         placeholder="Detailed job description..."
                         rows="4"
                       />
-                    </div>
-
-                    <div className="sm:col-span-2 pt-4 border-t border-gray-200">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Posted By (Optional)
-                      </label>
-                      <p className="text-xs text-gray-500 mb-2">
-                        Select an alumni if posting on behalf of an alumni employer. Leave blank if posting for the school/organization.
-                      </p>
-                      <select
-                        name="alumni_id"
-                        value={formData.alumni_id}
-                        onChange={handleInputChange}
-                        className={selectFieldClass}
-                      >
-                        <option value="">School/Organization (No specific alumni)</option>
-                        {alumniList.map((alumni) => (
-                          <option key={alumni.id} value={alumni.id}>
-                            {alumni.first_name} {alumni.last_name} - {alumni.email}
-                          </option>
-                        ))}
-                      </select>
                     </div>
                   </div>
 

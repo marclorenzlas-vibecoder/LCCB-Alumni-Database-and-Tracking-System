@@ -258,14 +258,14 @@ const styles = StyleSheet.create({
   },
   donateBtn: {
     height: 40,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1e3a8a'
+    backgroundColor: '#2563eb'
   },
   donateBtnText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700'
   },
   actionsRow: {

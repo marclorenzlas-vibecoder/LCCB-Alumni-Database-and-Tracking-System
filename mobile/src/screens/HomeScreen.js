@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Dimensions, Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
@@ -73,7 +73,7 @@ export default function HomeScreen({ navigation, user }) {
     .sort((a, b) => new Date(b.created_at || b.application_deadline || 0) - new Date(a.created_at || a.application_deadline || 0))
     .slice(0, 3);
 
-  const topCauses = donations.slice(0, 2);
+  const topCauses = donations.slice(0, 3);
 
   const stats = useMemo(
     () => ({
@@ -122,9 +122,9 @@ export default function HomeScreen({ navigation, user }) {
 
       <View style={styles.highlightCard}>
         <Text style={styles.highlightTitle}>Platform Highlights</Text>
-        <HighlightRow icon="people" value="56+" label="Registered Alumni" />
+        <HighlightRow icon="people" value={`${stats.totalAlumni}+`} label="Registered Alumni" />
         <HighlightRow icon="briefcase" value={`${jobs.length}+`} label="Job Opportunities" />
-        <HighlightRow icon="calendar" value="20+" label="Annual Events" />
+        <HighlightRow icon="calendar" value={`${stats.upcomingEvents}+`} label="Annual Events" />
       </View>
 
       <FeatureListCard
@@ -170,48 +170,52 @@ export default function HomeScreen({ navigation, user }) {
       />
 
       <SectionHeaderRow title="Upcoming Events" subtitle="Don't miss out on our latest activities" actionLabel="View All" onPress={() => navigation.navigate('Events', { screen: 'EventsList' })} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
-        {upcomingEvents.map((item) => (
+      <CarouselSection
+        data={upcomingEvents}
+        keyPrefix="event"
+        renderItem={(item) => (
           <EntityCard
-            key={`event-${item.id}`}
             image={imageUrl(item.image, API_ORIGIN)}
             title={item.name}
             description={item.description || 'Alumni event details available inside this event page.'}
             meta={formatDate(item.date)}
             onPress={() => navigation.navigate('Events', { screen: 'EventDetail', params: { eventId: item.id } })}
-            slider={true}
           />
-        ))}
-      </ScrollView>
+        )}
+      />
 
       <SectionHeaderRow title="Recent Achievements" subtitle="Celebrating our alumni successes" actionLabel="View All" onPress={() => navigation.navigate('Achievements')} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
-        {recentAchievements.map((item) => (
+      <CarouselSection
+        data={recentAchievements}
+        keyPrefix="achievement"
+        renderItem={(item) => (
           <EntityCard
-            key={`achievement-${item.id}`}
             image={imageUrl(item.image, API_ORIGIN)}
             title={item.title}
             description={item.description || 'Achievement details available in the achievements module.'}
             meta={formatDate(item.date)}
             onPress={() => navigation.navigate('Achievements')}
-            slider={true}
           />
-        ))}
-      </ScrollView>
+        )}
+      />
 
       <SectionHeaderRow title="Career Opportunities" subtitle="Latest job postings from our network" actionLabel="View All" onPress={() => navigation.navigate('Employment')} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
-        {latestJobs.map((job) => (
-          <JobCard key={`job-${job.id}`} job={job} onPress={() => navigation.navigate('Employment', { screen: 'JobDetail', params: { jobId: job.id } })} slider={true} />
-        ))}
-      </ScrollView>
+      <CarouselSection
+        data={latestJobs}
+        keyPrefix="job"
+        renderItem={(job) => (
+          <JobCard job={job} onPress={() => navigation.navigate('Employment', { screen: 'JobDetail', params: { jobId: job.id } })} />
+        )}
+      />
 
       <SectionHeaderRow title="Support Our Causes" subtitle="Make a difference with your contribution" actionLabel="View All" onPress={() => navigation.navigate('Donations', { screen: 'DonationsList' })} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sliderContent} style={styles.slider}>
-        {topCauses.map((item) => (
-          <CauseCard key={`cause-${item.id}`} item={item} onPress={() => navigation.navigate('Donations', { screen: 'DonationDetail', params: { donationId: item.id } })} slider={true} />
-        ))}
-      </ScrollView>
+      <CarouselSection
+        data={topCauses}
+        keyPrefix="cause"
+        renderItem={(item) => (
+          <CauseCard item={item} onPress={() => navigation.navigate('Donations', { screen: 'DonationDetail', params: { donationId: item.id } })} />
+        )}
+      />
 
       <ContactCards />
     </ScreenContainer>
@@ -220,18 +224,18 @@ export default function HomeScreen({ navigation, user }) {
 
 function HeroSection({ navigation }) {
   return (
-    <View style={styles.heroWrap}>
-      <View style={styles.heroGlowOne} />
-      <View style={styles.heroGlowTwo} />
-      <Text style={styles.heroTitle}>Welcome to{`\n`}LCCB Alumni{`\n`}Network</Text>
-      <Text style={styles.heroSub}>Connect, grow, and stay updated with your fellow LCCB alumni. Our platform helps you maintain professional connections, discover career opportunities, and stay informed about alumni events.</Text>
-      <Pressable style={styles.heroPrimaryBtn} onPress={() => navigation.navigate('Alumni')}>
-        <Text style={styles.heroPrimaryText}>Explore Alumni Directory  →</Text>
-      </Pressable>
-      <Pressable style={styles.heroGhostBtn} onPress={() => navigation.navigate('Events', { screen: 'EventsList' })}>
-        <Text style={styles.heroGhostText}>View Upcoming Events  🗓</Text>
-      </Pressable>
-    </View>
+    <ImageBackground source={require('../../assets/homeimage.jpg')} style={styles.heroBg} resizeMode="cover">
+      <View style={styles.heroOverlay}>
+        <Text style={styles.heroTitle}>Welcome to LCCB{'\n'}<Text style={styles.heroTitleAccent}>Alumni Network</Text></Text>
+        <Text style={styles.heroSub}>Connect, grow, and stay updated with your fellow LCCB alumni. Our platform helps you maintain professional connections, discover career opportunities, and stay informed about alumni events.</Text>
+        <Pressable style={styles.heroPrimaryBtn} onPress={() => navigation.navigate('Alumni')}>
+          <Text style={styles.heroPrimaryText}>Explore Alumni Directory</Text>
+        </Pressable>
+        <Pressable style={styles.heroGhostBtn} onPress={() => navigation.navigate('Events', { screen: 'EventsList' })}>
+          <Text style={styles.heroGhostText}>View Upcoming Events</Text>
+        </Pressable>
+      </View>
+    </ImageBackground>
   );
 }
 
@@ -384,9 +388,70 @@ function SectionHeaderRow({ title, subtitle, actionLabel, onPress }) {
   );
 }
 
-function EntityCard({ image, title, description, meta, onPress, slider = false }) {
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CAROUSEL_ITEM_WIDTH = Math.round(SCREEN_WIDTH * 0.82);
+const CAROUSEL_GAP = 10;
+const CAROUSEL_SIDE_PAD = Math.round((SCREEN_WIDTH - CAROUSEL_ITEM_WIDTH) / 2);
+
+function PaginationDots({ count, activeIndex }) {
+  if (count <= 1) return null;
   return (
-    <Pressable style={[styles.entityCard, slider && styles.entityCardSlider]} onPress={onPress}>
+    <View style={styles.paginationRow}>
+      {Array.from({ length: count }, (_, i) => (
+        <View
+          key={i}
+          style={[styles.paginationDot, i === activeIndex && styles.paginationDotActive]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function CarouselSection({ data, renderItem, keyPrefix }) {
+  const scrollRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const onScroll = useCallback((e) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const idx = Math.round(x / CAROUSEL_ITEM_WIDTH);
+    setActiveIndex(Math.max(0, Math.min(idx, data.length - 1)));
+  }, [data.length]);
+
+  if (!data || data.length === 0) return null;
+
+  return (
+    <View style={styles.carouselWrap}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={CAROUSEL_ITEM_WIDTH + CAROUSEL_GAP}
+        snapToAlignment="start"
+        contentContainerStyle={{ paddingHorizontal: CAROUSEL_SIDE_PAD }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        {data.map((item, index) => (
+          <View
+            key={`${keyPrefix}-${item.id ?? index}`}
+            style={{
+              width: CAROUSEL_ITEM_WIDTH,
+              marginRight: index < data.length - 1 ? CAROUSEL_GAP : 0
+            }}
+          >
+            {renderItem(item, index)}
+          </View>
+        ))}
+      </ScrollView>
+      <PaginationDots count={data.length} activeIndex={activeIndex} />
+    </View>
+  );
+}
+
+function EntityCard({ image, title, description, meta, onPress }) {
+  return (
+    <Pressable style={styles.entityCard} onPress={onPress}>
       {image ? <Image source={{ uri: image }} style={styles.entityImage} /> : null}
       <View style={styles.entityBody}>
         <Text style={styles.entityTitle}>{title}</Text>
@@ -400,9 +465,9 @@ function EntityCard({ image, title, description, meta, onPress, slider = false }
   );
 }
 
-function JobCard({ job, onPress, slider = false }) {
+function JobCard({ job, onPress }) {
   return (
-    <Pressable style={[styles.jobCard, slider && styles.jobCardSlider]} onPress={onPress}>
+    <Pressable style={styles.jobCard} onPress={onPress}>
       <Text style={styles.jobTitle}>{job.job_title}</Text>
       <Text style={styles.jobCompany}>{job.company || 'Company not specified'}</Text>
       <View style={styles.jobMetaRow}><Ionicons name="location-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.location || 'Not specified'}</Text></View>
@@ -412,14 +477,14 @@ function JobCard({ job, onPress, slider = false }) {
   );
 }
 
-function CauseCard({ item, onPress, slider = false }) {
+function CauseCard({ item, onPress }) {
   const amount = Number(item.amount || 0);
   const goal = Number(item.goal || 50000);
   const progress = Math.max(0, Math.min(100, Math.round((amount / Math.max(1, goal)) * 100)));
   const image = imageUrl(item.image, API_ORIGIN);
 
   return (
-    <Pressable style={[styles.causeCard, slider && styles.causeCardSlider]} onPress={onPress}>
+    <Pressable style={styles.causeCard} onPress={onPress}>
       {image ? <Image source={{ uri: image }} style={styles.causeImage} /> : null}
       <View style={styles.causeBody}>
         <Text style={styles.causeBadge}>{item.category || 'Community'}</Text>
@@ -439,47 +504,39 @@ function CauseCard({ item, onPress, slider = false }) {
 }
 
 const styles = StyleSheet.create({
-  heroWrap: {
-    borderRadius: 0,
+  heroBg: {
     marginHorizontal: -18,
     marginTop: 0,
-    backgroundColor: '#1e3a8a',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    paddingTop: 56,
     overflow: 'hidden',
-    gap: 14
+    minHeight: 400
   },
-  heroGlowOne: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    right: -80,
-    top: -60
-  },
-  heroGlowTwo: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    left: -60,
-    bottom: -90
+  heroOverlay: {
+    backgroundColor: 'rgba(30, 58, 138, 0.55)',
+    paddingHorizontal: 20,
+    paddingVertical: 48,
+    paddingTop: 56,
+    paddingBottom: 48,
+    gap: 14,
+    justifyContent: 'center'
   },
   heroTitle: {
     color: '#ffffff',
-    fontSize: 50,
-    lineHeight: 56,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: '800',
     textAlign: 'center'
   },
+  heroTitleAccent: {
+    color: '#93c5fd'
+  },
   heroSub: {
     color: '#dbeafe',
-    fontSize: 18,
-    lineHeight: 30,
+    fontSize: 14,
+    lineHeight: 22,
     textAlign: 'center'
+  },
+  heroBtnRow: {
+    width: '100%'
   },
   heroPrimaryBtn: {
     backgroundColor: '#ffffff',
@@ -490,7 +547,7 @@ const styles = StyleSheet.create({
   heroPrimaryText: {
     color: '#1e3a8a',
     fontWeight: '700',
-    fontSize: 15
+    fontSize: 13
   },
   heroGhostBtn: {
     borderWidth: 1.5,
@@ -503,7 +560,7 @@ const styles = StyleSheet.create({
   heroGhostText: {
     color: '#ffffff',
     fontWeight: '700',
-    fontSize: 15
+    fontSize: 13
   },
   statsGrid: {
     flexDirection: 'row',
@@ -711,7 +768,7 @@ const styles = StyleSheet.create({
   entityImage: {
     width: '100%',
     height: 145,
-    backgroundColor: '#0f172a'
+    backgroundColor: '#dbeafe'
   },
   entityBody: {
     padding: 12,
@@ -772,7 +829,7 @@ const styles = StyleSheet.create({
   causeImage: {
     width: '100%',
     height: 140,
-    backgroundColor: '#111827'
+    backgroundColor: '#dbeafe'
   },
   causeBody: {
     padding: 12,
@@ -869,21 +926,24 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 14
   },
-  slider: {
-    marginHorizontal: -18,
-    paddingHorizontal: 18
+  carouselWrap: {
+    marginHorizontal: -18
   },
-  sliderContent: {
-    gap: 12,
-    paddingRight: 18
+  paginationRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10
   },
-  entityCardSlider: {
-    width: 280
+  paginationDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#cbd5e1'
   },
-  jobCardSlider: {
-    width: 280
-  },
-  causeCardSlider: {
-    width: 280
+  paginationDotActive: {
+    backgroundColor: '#1e3a8a',
+    width: 20
   }
 });

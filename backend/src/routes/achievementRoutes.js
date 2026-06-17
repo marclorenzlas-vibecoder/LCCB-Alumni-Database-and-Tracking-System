@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { broadcastUpdate } = require('../services/realtimeService');
+const { authenticateToken } = require('../middleware/auth');
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -73,42 +74,48 @@ const upload = multer({
   }
 });
 
-router.post('/', upload.single('image'), async (req, res) => {
+router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     // fields come from multipart/form-data
-    const { alumni_id, title, description, date } = req.body;
+    const { alumni_id, title, category, description, date } = req.body;
 
-    if (!alumni_id || !title) {
+    if (!title) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        required: ['alumni_id', 'title']
+        required: ['title']
       });
     }
 
     const imagePath = req.file ? `/uploads/achievements/${req.file.filename}` : null;
 
+    const createData = {
+      title: title.trim(),
+      category: category ? category.trim() : null,
+      image: imagePath,
+      description: description ? description.trim() : null,
+      date: date ? new Date(date) : null
+    };
+
+    if (alumni_id) {
+      createData.alumni_id = Number(alumni_id);
+    }
+
     const achievement = await prisma.achievement.create({
-      data: {
-        alumni_id: Number(alumni_id),
-        title: title.trim(),
-        image: imagePath,
-        description: description ? description.trim() : null,
-        date: date ? new Date(date) : null
-      },
+      data: createData,
       include: {
-        alumni: {
+        alumni: alumni_id ? {
           select: {
             first_name: true,
             last_name: true,
             email: true
           }
-        }
+        } : false
       }
     });
 
     broadcastUpdate('achievement.created', {
       achievementId: achievement.id,
-      alumniId: achievement.alumni_id
+      alumniId: achievement.alumni_id || null
     });
 
     res.status(201).json(achievement);
@@ -122,13 +129,14 @@ router.post('/', upload.single('image'), async (req, res) => {
 });
 
 // Update achievement
-router.put('/:id', upload.single('image'), async (req, res) => {
+router.put('/:id', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, date } = req.body;
+    const { title, category, description, date } = req.body;
 
     const updateData = {};
     if (title) updateData.title = title.trim();
+    if (category !== undefined) updateData.category = category ? category.trim() : null;
     if (description !== undefined) updateData.description = description ? description.trim() : null;
     if (date !== undefined) updateData.date = date ? new Date(date) : null;
 
@@ -176,7 +184,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
 });
 
 // Delete an achievement
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     

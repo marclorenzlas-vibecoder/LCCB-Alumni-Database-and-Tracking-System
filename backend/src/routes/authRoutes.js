@@ -604,6 +604,8 @@ router.get('/active-users', authMiddleware, (req, res) => {
 // Get user profile with alumni data
 router.get('/profile/:id', async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
     const userId = parseInt(req.params.id);
     
     // Check if user is a teacher or regular user
@@ -648,8 +650,10 @@ router.get('/profile/:id', async (req, res) => {
       id: user.id,
       username: user.username,
       email: user.email,
+      department: user.department || null,
       profile_image: user.profile_image,
       role: role,
+      teacherRole: teacher ? (teacher.role || 'TEACHER') : null,
       approval_status: user.approval_status || 'APPROVED',
       is_active: typeof user.is_active === 'boolean' ? user.is_active : true,
       is_blocked: typeof user.is_blocked === 'boolean' ? user.is_blocked : false,
@@ -964,6 +968,32 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
           date_of_birth: updatedAlumni.date_of_birth || null,
           skills: updatedAlumni.skills
         };
+
+        // Sync alumni_list table so the alumni directory reflects name changes
+        try {
+          const syncData = {};
+          if (updatedAlumni.firstName) syncData.first_name = updatedAlumni.firstName;
+          if (updatedAlumni.lastName) syncData.last_name = updatedAlumni.lastName;
+          if (updatedAlumni.studentId) syncData.student_id = updatedAlumni.studentId;
+          if (updatedAlumni.level) syncData.level = updatedAlumni.level;
+          if (updatedAlumni.course) syncData.course = updatedAlumni.course;
+          if (updatedAlumni.batch) syncData.batch = updatedAlumni.batch;
+          if (updatedAlumni.graduationYear) syncData.graduation_year = updatedAlumni.graduationYear;
+
+          if (Object.keys(syncData).length > 0) {
+            const existingList = await prisma.alumni_list.findFirst({
+              where: { student_id: updatedAlumni.studentId }
+            });
+            if (existingList) {
+              await prisma.alumni_list.update({
+                where: { id: existingList.id },
+                data: syncData
+              });
+            }
+          }
+        } catch (syncErr) {
+          console.warn('Failed to sync alumni_list:', syncErr?.message || syncErr);
+        }
       }
     }
 

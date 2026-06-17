@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const notificationService = require('../services/notificationService');
 const { authenticateToken } = require('../middleware/auth');
+const { broadcastUpdate } = require('../services/realtimeService');
 
 // ensure uploads/events exists
 const eventsDir = path.join(__dirname, '../../uploads/events');
@@ -133,6 +134,8 @@ router.post('/', runUpload, async (req, res) => {
       }
     }
 
+    broadcastUpdate('event.created', { eventId: event.id });
+
     res.status(201).json(event);
   } catch (error) {
     console.error('Error creating event:', error);
@@ -174,6 +177,8 @@ router.put('/:id', runUpload, async (req, res) => {
       data: updateData
     });
 
+    broadcastUpdate('event.updated', { eventId: event.id });
+
     res.json(event);
   } catch (error) {
     console.error('Error updating event:', error);
@@ -202,6 +207,8 @@ router.delete('/:id', async (req, res) => {
     await prisma.event.delete({
       where: { id: Number(id) }
     });
+
+    broadcastUpdate('event.deleted', { eventId: Number(id) });
 
     // Delete the image file if it exists
     if (eventToDelete.image) {
@@ -252,6 +259,8 @@ router.post('/:id/join', async (req, res) => {
       }
     });
 
+    broadcastUpdate('event.attendance.changed', { eventId: Number(id), alumniId: Number(alumni_id), action: 'joined' });
+
     res.json({ message: 'Successfully joined event', attendance });
   } catch (error) {
     console.error('Error joining event:', error);
@@ -279,6 +288,8 @@ router.post('/:id/leave', async (req, res) => {
     await prisma.event_attendance.delete({
       where: { id: attendance.id }
     });
+
+    broadcastUpdate('event.attendance.changed', { eventId: Number(id), alumniId: Number(alumni_id), action: 'left' });
 
     res.json({ message: 'Successfully left event' });
   } catch (error) {

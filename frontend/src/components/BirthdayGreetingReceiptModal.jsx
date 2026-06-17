@@ -41,11 +41,11 @@ const parseGreetingBody = (senderName, rawMessage) => {
 
 const BackdropDecor = () => (
   <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-    <span className="birthday-receipt-float absolute left-[8%] top-[18%] text-2xl opacity-[0.12]">🎈</span>
-    <span className="birthday-receipt-float absolute right-[10%] top-[22%] text-xl opacity-[0.1] animation-delay-300">✨</span>
+    <span className="birthday-receipt-float absolute left-[8%] top-[18%] h-3 w-3 rounded-full bg-amber-300 opacity-20" />
+    <span className="birthday-receipt-float absolute right-[10%] top-[22%] h-2 w-2 rounded-full bg-sky-300 opacity-25 animation-delay-300" />
     <span className="birthday-receipt-float absolute left-[15%] bottom-[28%] h-2 w-2 rounded-sm bg-amber-300 opacity-20 animation-delay-500" />
     <span className="birthday-receipt-float absolute right-[18%] bottom-[32%] h-1.5 w-1.5 rounded-full bg-sky-300 opacity-25 animation-delay-200" />
-    <span className="birthday-receipt-float absolute left-[42%] top-[12%] text-lg opacity-[0.08] animation-delay-600">🎉</span>
+    <span className="birthday-receipt-float absolute left-[42%] top-[12%] h-2.5 w-2.5 rounded-full bg-blue-200 opacity-15 animation-delay-600" />
     <span className="birthday-receipt-float absolute right-[32%] bottom-[18%] h-2 w-3 rounded-sm bg-pink-300 opacity-15 rotate-12 animation-delay-400" />
   </div>
 );
@@ -120,7 +120,7 @@ const BirthdayGreetingReceiptModal = ({
             id="birthday-receipt-title"
             className="mt-4 text-[1.65rem] font-extrabold leading-tight tracking-tight sm:text-[1.85rem]"
           >
-            🎉 Happy Birthday, {recipientFirstName}!
+            Happy Birthday, {recipientFirstName}!
           </h2>
           <p className="mx-auto mt-3 max-w-[320px] text-sm leading-relaxed text-blue-100">
             Wishing you happiness, success, and wonderful memories on your special day.
@@ -145,10 +145,12 @@ const BirthdayGreetingReceiptModal = ({
           <article className="relative rounded-[18px] border border-slate-100 bg-slate-50 p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
             <div className="mb-3 flex items-center gap-2">
               <span
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-base"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600"
                 aria-hidden="true"
               >
-                ✨
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                </svg>
               </span>
               <p className="text-sm font-semibold text-slate-800">Their message for you</p>
             </div>

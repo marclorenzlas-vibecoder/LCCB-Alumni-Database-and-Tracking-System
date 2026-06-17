@@ -7,6 +7,8 @@ const prisma = new PrismaClient();
 // Get all alumni from alumni_list
 router.get('/', async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
     const { search, graduation_year, batch, level } = req.query;
     
     const where = {};

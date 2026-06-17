@@ -1,5 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { authenticateToken } = require('../middleware/auth');
+const { broadcastUpdate } = require('../services/realtimeService');
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -41,7 +43,7 @@ router.get('/alumni/:alumniId', async (req, res) => {
 });
 
 // Create new career entry
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { alumni_id, company, job_title, start_date, end_date, description, is_current } = req.body;
 
@@ -64,6 +66,8 @@ router.post('/', async (req, res) => {
       }
     });
 
+    broadcastUpdate('career.created', { careerId: career.id, alumniId: career.alumni_id });
+
     res.status(201).json(career);
   } catch (error) {
     console.error('Error creating career entry:', error);
@@ -75,7 +79,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update career entry
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { company, job_title, start_date, end_date, description, is_current } = req.body;
@@ -93,6 +97,8 @@ router.put('/:id', async (req, res) => {
       data: updateData
     });
 
+    broadcastUpdate('career.updated', { careerId: career.id, alumniId: career.alumni_id });
+
     res.json(career);
   } catch (error) {
     console.error('Error updating career entry:', error);
@@ -104,12 +110,16 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete career entry
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const existing = await prisma.career_entry.findUnique({ where: { id: Number(id) }, select: { alumni_id: true } });
     await prisma.career_entry.delete({
       where: { id: Number(id) }
     });
+
+    broadcastUpdate('career.deleted', { careerId: Number(id), alumniId: existing?.alumni_id || null });
+
     res.json({ message: 'Career entry deleted successfully' });
   } catch (error) {
     console.error('Error deleting career entry:', error);

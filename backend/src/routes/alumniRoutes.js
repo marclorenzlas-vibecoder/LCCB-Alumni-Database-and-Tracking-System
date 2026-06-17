@@ -48,6 +48,8 @@ const softAuth = (req, res, next) => {
 // to preserve backward-compatibility with records created before the field existed).
 router.get("/", softAuth, async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
     const roleUpper = String(req.user?.role || "").toUpperCase();
     const isStaff = roleUpper === "TEACHER" || roleUpper === "ADMIN";
 
@@ -346,6 +348,8 @@ router.get("/birthdays/today", authMiddleware, async (req, res) => {
 // Get alumni by ID
 router.get("/:id", async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
     const { id } = req.params;
     const alumni = await prisma.alumni.findUnique({
       where: { id: Number(id) },
@@ -588,6 +592,61 @@ router.put("/:id", runProfileUpload, async (req, res) => {
 
     if (hasEducationHistoryInput && parsedEducationHistory.length > 0) {
       await replaceEducationHistory(prisma, Number(id), parsedEducationHistory);
+    }
+
+    // Sync user.username if firstName/lastName changed
+    if (existingAlumni.user_id && (updateData.first_name || updateData.last_name)) {
+      try {
+        const userUpdate = {};
+        if (updateData.first_name || updateData.last_name) {
+          const fName = updateData.first_name || existingAlumni.first_name || '';
+          const lName = updateData.last_name || existingAlumni.last_name || '';
+          const fullName = [fName, lName].filter(Boolean).join(' ');
+          if (fullName) userUpdate.username = fullName;
+        }
+        if (updateData.email && updateData.email !== existingAlumni.email) {
+          userUpdate.email = updateData.email;
+        }
+        if (Object.keys(userUpdate).length > 0) {
+          await prisma.user.update({
+            where: { id: existingAlumni.user_id },
+            data: userUpdate
+          });
+        }
+      } catch (syncErr) {
+        console.warn('Failed to sync user record:', syncErr?.message || syncErr);
+      }
+    }
+
+    // Sync alumni_list table
+    if (existingAlumni.student_id || updateData.first_name || updateData.last_name) {
+      try {
+        const syncData = {};
+        if (updateData.first_name) syncData.first_name = updateData.first_name;
+        if (updateData.last_name) syncData.last_name = updateData.last_name;
+        if (updateData.course) syncData.course = updateData.course;
+        if (updateData.level) syncData.level = updateData.level;
+        if (updateData.batch !== undefined) syncData.batch = updateData.batch;
+        if (updateData.graduation_year) syncData.graduation_year = updateData.graduation_year;
+        if (updateData.student_id) syncData.student_id = updateData.student_id;
+
+        if (Object.keys(syncData).length > 0) {
+          const lookupId = existingAlumni.student_id || updateData.student_id;
+          if (lookupId) {
+            const existingList = await prisma.alumni_list.findFirst({
+              where: { student_id: lookupId }
+            });
+            if (existingList) {
+              await prisma.alumni_list.update({
+                where: { id: existingList.id },
+                data: syncData
+              });
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.warn('Failed to sync alumni_list:', syncErr?.message || syncErr);
+      }
     }
 
     const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [

@@ -715,7 +715,6 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                       <tr key={user.id} className="hover:bg-gray-50 transition-all duration-150">
                         <td className="px-4 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{user.first_name} {user.last_name}</div>
-                          <div className="text-xs text-gray-500">({user.username})</div>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <div className="text-sm font-mono text-gray-900">{user.student_id || 'N/A'}</div>

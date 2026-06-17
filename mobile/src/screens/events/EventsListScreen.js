@@ -7,6 +7,7 @@ import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
 import { eventService } from '../../services/eventService';
+import { realtimeClient } from '../../services/realtimeClient';
 import { isTeacher } from '../../utils/auth';
 import { formatDate, imageUrl } from '../../utils/formatters';
 
@@ -103,8 +104,25 @@ export default function EventsListScreen({ navigation, route }) {
           if (mounted) setLoading(false);
         });
 
+      const unsubCreated = realtimeClient.subscribe('event.created', () => {
+        if (mounted) loadEvents().catch(() => {});
+      });
+      const unsubUpdated = realtimeClient.subscribe('event.updated', () => {
+        if (mounted) loadEvents().catch(() => {});
+      });
+      const unsubDeleted = realtimeClient.subscribe('event.deleted', () => {
+        if (mounted) loadEvents().catch(() => {});
+      });
+      const unsubAttendance = realtimeClient.subscribe('event.attendance.changed', () => {
+        if (mounted) loadEvents().catch(() => {});
+      });
+
       return () => {
         mounted = false;
+        unsubCreated();
+        unsubUpdated();
+        unsubDeleted();
+        unsubAttendance();
       };
     }, [loadEvents])
   );

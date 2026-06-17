@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import achievementService from '../services/achievementService';
+import { realtimeClient } from '../services/realtimeClient';
 import ConfirmModal from './ConfirmModal';
 import { authService } from '../services/authService';
 import UserLayout from './UserLayout';
@@ -8,12 +9,14 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
 const Achievements = () => {
   const [achievements, setAchievements] = useState([]);
+  const [alumniList, setAlumniList] = useState([]);
   const isTeacher = authService.isTeacher();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    alumni_name: '',
+    alumni_id: '',
     title: '',
+    category: '',
     description: '',
     date: '',
     image: null
@@ -38,10 +41,27 @@ const Achievements = () => {
     fetchAllAchievements();
   }, []);
 
+  // Re-fetch when achievements change via realtime events
+  useEffect(() => {
+    const unsubCreated = realtimeClient.subscribe('achievement.created', () => {
+      fetchAllAchievements();
+    });
+    const unsubUpdated = realtimeClient.subscribe('achievement.updated', () => {
+      fetchAllAchievements();
+    });
+    const unsubDeleted = realtimeClient.subscribe('achievement.deleted', () => {
+      fetchAllAchievements();
+    });
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+    };
+  }, []);
+
   const fetchAllAchievements = async () => {
     try {
       setLoading(true);
-      // Fetch all achievements from all alumni
       const data = await achievementService.getAllAchievements();
       setAchievements(data);
     } catch (err) {
@@ -51,6 +71,20 @@ const Achievements = () => {
       setLoading(false);
     }
   };
+
+  const fetchAlumniList = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/alumni`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      if (response.ok) {
+        const data = await response.json();
+        setAlumniList(data);
+      }
+    } catch (err) {
+      console.error('Error fetching alumni list:', err);
+    }
+  };
+
+  useEffect(() => { fetchAlumniList(); }, []);
 
   const handleInputChange = (e) => {
     const { name, value, files } = e.target;
@@ -74,15 +108,23 @@ const Achievements = () => {
 
     try {
       let payload = formData;
-      // If image present, send as FormData
       if (formData.image) {
         const fd = new FormData();
-        fd.append('alumni_name', formData.alumni_name);
+        fd.append('alumni_id', formData.alumni_id);
         fd.append('title', formData.title);
+        fd.append('category', formData.category);
         if (formData.description) fd.append('description', formData.description);
         if (formData.date) fd.append('date', formData.date);
         fd.append('image', formData.image);
         payload = fd;
+      } else {
+        payload = {
+          alumni_id: formData.alumni_id,
+          title: formData.title,
+          category: formData.category,
+          description: formData.description,
+          date: formData.date
+        };
       }
 
       if (editingId) {
@@ -100,8 +142,9 @@ const Achievements = () => {
       setShowModal(false);
       setEditingId(null);
       setFormData({
-        alumni_name: '',
+        alumni_id: '',
         title: '',
+        category: '',
         description: '',
         date: '',
         image: null
@@ -117,8 +160,9 @@ const Achievements = () => {
   const handleEdit = (achievement) => {
     setEditingId(achievement.id);
     setFormData({
-      alumni_name: achievement.alumni_name || (achievement.alumni ? `${achievement.alumni.first_name} ${achievement.alumni.last_name}` : ''),
+      alumni_id: achievement.alumni_id || '',
       title: achievement.title || '',
+      category: achievement.category || '',
       description: achievement.description || '',
       date: achievement.date ? achievement.date.split('T')[0] : '',
       image: null
@@ -247,13 +291,13 @@ const Achievements = () => {
                     </span>
                   </p>
                 )}
-                <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors duration-300">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors duration-300 min-h-[3.5rem]">
                   {achievement.title}
                 </h3>
-                <p className="text-gray-600 mb-4 max-h-[7.5rem] overflow-y-auto scrollbar-hide leading-relaxed">
+                <p className="text-gray-600 mb-4 h-[7.5rem] overflow-y-auto scrollbar-hide leading-relaxed">
                   {achievement.description || 'No description provided'}
                 </p>
-                <div className="border-t pt-4">
+                <div className="border-t pt-4 mt-auto">
                   <p className="text-sm text-gray-500">
                     <span className="font-medium text-gray-900">Date:</span> {achievement.date ? new Date(achievement.date).toLocaleDateString() : 'N/A'}
                   </p>
@@ -287,7 +331,6 @@ const Achievements = () => {
                 <h3 className="text-2xl font-semibold text-gray-900">
                   {editingId ? 'Edit Achievement' : 'Add New Achievement'}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">Use a strong alumni accomplishment such as leadership, public service, event hosting, or affiliate impact. Avoid education-only honors like cum laude awards.</p>
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-hide">
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -296,16 +339,20 @@ const Achievements = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Alumni Name *
                       </label>
-                      <input
-                        type="text"
-                        name="alumni_name"
-                        value={formData.alumni_name}
+                      <select
+                        name="alumni_id"
+                        value={formData.alumni_id}
                         onChange={handleInputChange}
                         required
                         className="app-input"
-                        placeholder="Type alumni name"
-                        autoComplete="off"
-                      />
+                      >
+                        <option value="">Select an alumni</option>
+                        {alumniList.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.first_name} {a.last_name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -322,6 +369,24 @@ const Achievements = () => {
                         autoComplete="off"
                         spellCheck={false}
                       />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Category
+                      </label>
+                      <select
+                        name="category"
+                        value={formData.category}
+                        onChange={handleInputChange}
+                        className="app-input"
+                      >
+                        <option value="">Select a category</option>
+                        <option value="Professional">Professional</option>
+                        <option value="Leadership">Leadership</option>
+                        <option value="Business">Business</option>
+                        <option value="Community Service">Community Service</option>
+                        <option value="Affiliate">Affiliate</option>
+                      </select>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -127,7 +127,18 @@ export default function ProfileScreen({ user, setUser }) {
       .catch((error) => console.error('Failed to refresh profile:', error));
   }, [setUser, user?.id]);
 
-  const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setField = (key, value) => {
+    setForm((prev) => {
+      if (key !== 'username') return { ...prev, [key]: value };
+      const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
+      return {
+        ...prev,
+        username: value,
+        firstName: parts[0] || '',
+        lastName: parts.slice(1).join(' '),
+      };
+    });
+  };
   const setEducationField = (index, key, value) => {
     setEducationHistory((prev) => prev.map((entry, i) => {
       if (i !== index) return entry;

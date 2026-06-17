@@ -404,7 +404,7 @@ const EventDetail = () => {
           {/* Back Button */}
           <button
             onClick={() => navigate("/events")}
-            className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur-sm text-gray-800 rounded-lg text-sm font-medium hover:bg-white transition-colors shadow"
+            className="absolute top-4 left-4 md:top-6 md:left-6 inline-flex items-center gap-2 rounded-xl bg-gray-100 border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-all"
           >
             <svg
               className="w-3.5 h-3.5"
