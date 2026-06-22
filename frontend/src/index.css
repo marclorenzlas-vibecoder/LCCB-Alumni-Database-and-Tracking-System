@@ -788,6 +788,36 @@ body::-webkit-scrollbar,
         @apply rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl;
     }
 
+    .read-more-link {
+        display: inline-block;
+        color: #1a73e8;
+        font-size: 14px;
+        font-weight: 500;
+        margin-top: 12px;
+        margin-bottom: 12px;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+    .read-more-link:hover {
+        opacity: 0.8;
+    }
+
+    .desc-clamp-4 {
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .desc-clamp-5 {
+        display: -webkit-box;
+        -webkit-line-clamp: 5;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .app-select {
         @apply mt-1 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 appearance-none;
     }

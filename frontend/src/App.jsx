@@ -17,6 +17,7 @@ import PendingApproval from './components/PendingApproval';
 import Events from './components/Events';
 import EventDetail from './components/EventDetail';
 import Achievements from './components/Achievements';
+import AchievementDetail from './components/AchievementDetail';
 import Employment from './components/Employment';
 import JobApplications from './components/JobApplications';
 import Donations from './components/Donations';
@@ -117,6 +118,11 @@ function AppContent() {
           <Route path="/achievements" element={
             <ProtectedRoute>
               <Achievements />
+            </ProtectedRoute>
+          } />
+          <Route path="/achievements/:id" element={
+            <ProtectedRoute>
+              <AchievementDetail />
             </ProtectedRoute>
           } />
           <Route path="/employment" element={

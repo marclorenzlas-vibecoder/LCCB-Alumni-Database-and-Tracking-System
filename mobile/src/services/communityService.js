@@ -25,6 +25,11 @@ export const communityService = {
     return response.data;
   },
 
+  async getAchievementById(achievementId) {
+    const response = await apiClient.get(`/achievements/${achievementId}`);
+    return response.data;
+  },
+
   async getCareers(alumniId) {
     if (alumniId) {
       const response = await apiClient.get(`/careers/alumni/${alumniId}`);

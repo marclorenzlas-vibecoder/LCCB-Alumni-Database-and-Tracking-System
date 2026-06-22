@@ -194,7 +194,9 @@ export default function HomeScreen({ navigation, user }) {
             title={item.title}
             description={item.description || 'Achievement details available in the achievements module.'}
             meta={formatDate(item.date)}
-            onPress={() => navigation.navigate('Achievements')}
+            onPress={() => navigation.navigate('Achievements', { screen: 'AchievementDetail', params: { achievement: item } })}
+            showReadMore
+            onReadMore={() => navigation.navigate('Achievements', { screen: 'AchievementDetail', params: { achievement: item } })}
           />
         )}
       />
@@ -449,13 +451,28 @@ function CarouselSection({ data, renderItem, keyPrefix }) {
   );
 }
 
-function EntityCard({ image, title, description, meta, onPress }) {
+function EntityCard({ image, title, description, meta, onPress, showReadMore, onReadMore }) {
+  const [descLines, setDescLines] = useState(4);
+
+  const handleTitleLayout = (e) => {
+    const lineHeight = 22;
+    const lines = Math.ceil(e.nativeEvent.lines.length);
+    setDescLines(lines <= 1 ? 5 : 4);
+  };
+
   return (
     <Pressable style={styles.entityCard} onPress={onPress}>
       {image ? <Image source={{ uri: image }} style={styles.entityImage} /> : null}
       <View style={styles.entityBody}>
-        <Text style={styles.entityTitle}>{title}</Text>
-        <Text style={styles.entityDesc} numberOfLines={3}>{description}</Text>
+        <Text style={styles.entityTitle} onTextLayout={handleTitleLayout}>{title}</Text>
+        <View style={{ height: 95, overflow: 'hidden' }}>
+          <Text style={styles.entityDesc} numberOfLines={descLines}>{description}</Text>
+        </View>
+        {showReadMore && onReadMore && (
+          <Pressable style={styles.readMoreBtn} onPress={onReadMore}>
+            <Text style={styles.readMoreText}>Read More</Text>
+          </Pressable>
+        )}
         <View style={styles.entityMetaRow}>
           <Ionicons name="calendar-outline" size={14} color="#64748b" />
           <Text style={styles.entityMeta}>{meta}</Text>
@@ -471,6 +488,9 @@ function JobCard({ job, onPress }) {
       <Text style={styles.jobTitle}>{job.job_title}</Text>
       <Text style={styles.jobCompany}>{job.company || 'Company not specified'}</Text>
       <View style={styles.jobMetaRow}><Ionicons name="location-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.location || 'Not specified'}</Text></View>
+      {job.department ? (
+        <View style={styles.jobMetaRow}><Ionicons name="grid-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.department}</Text></View>
+      ) : null}
       <View style={styles.jobMetaRow}><Ionicons name="time-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.job_type || 'Not specified'}</Text></View>
       <View style={styles.jobMetaRow}><Ionicons name="cash-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.salary_range || 'Not specified'}</Text></View>
     </Pressable>
@@ -763,7 +783,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 2,
-    elevation: 1
+    elevation: 1,
+    flexDirection: 'column'
   },
   entityImage: {
     width: '100%',
@@ -772,7 +793,10 @@ const styles = StyleSheet.create({
   },
   entityBody: {
     padding: 12,
-    gap: 6
+    gap: 6,
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'space-between'
   },
   entityTitle: {
     fontSize: 16,
@@ -787,12 +811,21 @@ const styles = StyleSheet.create({
   entityMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 2
+    gap: 4
   },
   entityMeta: {
     color: '#64748b',
     fontSize: 12
+  },
+  readMoreBtn: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  readMoreText: {
+    color: '#1a73e8',
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline'
   },
   jobCard: {
     borderRadius: 10,

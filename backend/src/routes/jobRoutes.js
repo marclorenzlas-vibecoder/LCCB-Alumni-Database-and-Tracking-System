@@ -63,9 +63,11 @@ router.post('/', async (req, res) => {
       job_title,
       company,
       location,
+      department,
       job_type,
       salary_range,
       requirements,
+      benefits,
       description,
       application_deadline
     } = req.body;
@@ -83,9 +85,11 @@ router.post('/', async (req, res) => {
         job_title,
         company,
         location,
+        department,
         job_type,
         salary_range,
         requirements,
+        benefits,
         description,
         application_deadline: application_deadline ? new Date(application_deadline) : null
       }
@@ -109,9 +113,11 @@ router.put('/:id', async (req, res) => {
       job_title,
       company,
       location,
+      department,
       job_type,
       salary_range,
       requirements,
+      benefits,
       description,
       application_deadline
     } = req.body;
@@ -120,9 +126,11 @@ router.put('/:id', async (req, res) => {
     if (job_title) updateData.job_title = job_title;
     if (company) updateData.company = company;
     if (location !== undefined) updateData.location = location;
+    if (department !== undefined) updateData.department = department;
     if (job_type !== undefined) updateData.job_type = job_type;
     if (salary_range !== undefined) updateData.salary_range = salary_range;
     if (requirements !== undefined) updateData.requirements = requirements;
+    if (benefits !== undefined) updateData.benefits = benefits;
     if (description !== undefined) updateData.description = description;
     if (application_deadline !== undefined) {
       updateData.application_deadline = application_deadline ? new Date(application_deadline) : null;

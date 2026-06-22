@@ -3,6 +3,7 @@ import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
+import BackButton from '../../components/BackButton';
 import PrimaryButton from '../../components/PrimaryButton';
 import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
@@ -67,7 +68,7 @@ const getPrimaryEducation = (history = []) => {
 
 const formatLevelLabel = (value) => LEVEL_LABELS[value] || value || 'Not set';
 
-export default function ProfileScreen({ user, setUser }) {
+export default function ProfileScreen({ navigation, user, setUser }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const role = String(user?.role || 'ALUMNI').toUpperCase();
   const fullName = `${user?.alumni?.firstName || user?.alumni?.first_name || ''} ${user?.alumni?.lastName || user?.alumni?.last_name || ''}`.trim() || user?.username || 'Alumni User';
@@ -317,6 +318,7 @@ export default function ProfileScreen({ user, setUser }) {
 
   return (
     <ScreenContainer>
+      <BackButton navigation={navigation} label="Back" />
       <View style={styles.heroCard}>
         <View style={styles.heroBgDot} />
         <Pressable onPress={editMode ? onPickImage : undefined} style={styles.heroAvatarWrap}>

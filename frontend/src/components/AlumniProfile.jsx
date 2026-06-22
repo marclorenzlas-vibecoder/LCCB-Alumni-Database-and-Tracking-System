@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import alumniService from '../services/alumniService';
+import donationService from '../services/donationService';
 import { authService } from '../services/authService';
 
 const levelLabelMap = {
@@ -34,6 +35,7 @@ const formatDateOfBirth = (value) => {
 
 const AlumniProfile = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,6 +45,7 @@ const AlumniProfile = () => {
   const [reportEvidenceFile, setReportEvidenceFile] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportStatusMessage, setReportStatusMessage] = useState('');
+  const [donations, setDonations] = useState([]);
 
   const handleReportDeceasedSubmit = async (event) => {
     event.preventDefault();
@@ -109,6 +112,18 @@ const AlumniProfile = () => {
     loadProfile();
   }, [id]);
 
+  useEffect(() => {
+    if (!id) return;
+    donationService.getDonationsByAlumni(id)
+      .then((data) => {
+        const sorted = (Array.isArray(data) ? data : []).sort(
+          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
+        );
+        setDonations(sorted.slice(0, 3));
+      })
+      .catch(() => setDonations([]));
+  }, [id]);
+
   // Show loading state
   if (loading) {
     return (
@@ -130,12 +145,12 @@ const AlumniProfile = () => {
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">Profile Not Found</h1>
             <p className="text-gray-600 mb-4">The requested alumni profile could not be found.</p>
-            <Link
-              to="/alumni-directory"
+            <button
+              onClick={() => navigate('/alumni')}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
             >
               Back to Alumni Directory
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -201,7 +216,8 @@ const AlumniProfile = () => {
     { id: 'experience', label: 'Experience', icon: '💼' },
     { id: 'skills', label: 'Skills', icon: '🛠️' },
     { id: 'projects', label: 'Projects', icon: '🚀' },
-    { id: 'achievements', label: 'Achievements', icon: '🏆' }
+    { id: 'achievements', label: 'Achievements', icon: '🏆' },
+    { id: 'donations', label: 'Donations', icon: '💰' }
   ];
 
   const getSkillCategoryColor = (category) => {
@@ -374,7 +390,14 @@ const AlumniProfile = () => {
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Career History</h3>
         <div className="space-y-6">
           {displayProfile.careerHistory.map((job, index) => (
-            <div key={job.id} className="relative">
+            <div
+              key={job.id}
+              className="block relative cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+              onClick={() => navigate('/employment')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/employment'); }}
+            >
               {index < displayProfile.careerHistory.length - 1 && (
                 <div className="absolute left-4 top-8 w-0.5 h-16 bg-gray-200"></div>
               )}
@@ -523,6 +546,46 @@ const AlumniProfile = () => {
     </div>
   );
 
+  const renderDonations = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-6">Donations History</h3>
+        {donations.length > 0 ? (
+          <div className="space-y-4">
+            {donations.map((donation) => (
+              <div
+                key={donation.id}
+                className="block flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
+                onClick={() => navigate('/donations')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/donations'); }}
+              >
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-lg font-semibold text-gray-900">{donation.purpose || 'Donation'}</h4>
+                  <p className="text-green-600 font-medium">PHP {Number(donation.amount || 0).toLocaleString()}</p>
+                  <p className="text-gray-500 text-sm">{donation.date ? new Date(donation.date).toLocaleDateString() : 'N/A'}</p>
+                  {donation.description && (
+                    <p className="text-gray-700 mt-2" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{donation.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <p>No donations listed yet.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const renderAchievements = () => (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -530,7 +593,14 @@ const AlumniProfile = () => {
         {displayProfile.achievements.length > 0 ? (
           <div className="space-y-4">
             {displayProfile.achievements.map((achievement) => (
-              <div key={achievement.id} className="flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+              <div
+                key={achievement.id}
+                className="block flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
+                onClick={() => navigate(`/achievements/${achievement.id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/achievements/${achievement.id}`); }}
+              >
                 <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
                   <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -540,7 +610,7 @@ const AlumniProfile = () => {
                   <h4 className="text-lg font-semibold text-gray-900">{achievement.title}</h4>
                   <p className="text-blue-600 font-medium">{achievement.issuer}</p>
                   <p className="text-gray-500 text-sm">{achievement.date}</p>
-                  <p className="text-gray-700 mt-2">{achievement.description}</p>
+                  <p className="text-gray-700 mt-2" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{achievement.description}</p>
                 </div>
               </div>
             ))}
@@ -723,19 +793,20 @@ const AlumniProfile = () => {
           {activeTab === 'skills' && renderSkills()}
           {activeTab === 'projects' && renderProjects()}
           {activeTab === 'achievements' && renderAchievements()}
+          {activeTab === 'donations' && renderDonations()}
         </div>
 
         {/* Back to Directory */}
         <div className="text-center mb-8">
-          <Link 
-            to="/alumni" 
+          <button 
+            onClick={() => navigate('/alumni')}
             className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to Alumni Directory
-          </Link>
+          </button>
         </div>
       </div>
     </div>

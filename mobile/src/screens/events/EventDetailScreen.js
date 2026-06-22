@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import EmptyState from "../../components/EmptyState";
+import BackButton from "../../components/BackButton";
 import LoadingState from "../../components/LoadingState";
 import PrimaryButton from "../../components/PrimaryButton";
 import ScreenContainer from "../../components/ScreenContainer";
@@ -22,7 +23,7 @@ import { formatDate, fullName, imageUrl } from "../../utils/formatters";
 import { toMultipartFile } from "../../utils/upload";
 import { theme } from "../../theme";
 
-export default function EventDetailScreen({ route, user }) {
+export default function EventDetailScreen({ navigation, route, user }) {
   const { eventId } = route.params;
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const alumniUser = useMemo(() => isAlumni(user), [user]);
@@ -286,6 +287,7 @@ export default function EventDetailScreen({ route, user }) {
 
   return (
     <ScreenContainer>
+      <BackButton navigation={navigation} label="Back to Events" />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Hero Image */}
         {event.image ? (

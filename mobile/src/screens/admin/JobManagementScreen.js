@@ -14,9 +14,11 @@ const initialForm = {
   job_title: '',
   company: '',
   location: '',
+  department: '',
   job_type: '',
   salary_range: '',
   requirements: '',
+  benefits: '',
   application_deadline: '',
   description: ''
 };
@@ -87,9 +89,11 @@ export default function JobManagementScreen({ user }) {
       job_title: job.job_title || '',
       company: job.company || '',
       location: job.location || '',
+      department: job.department || '',
       job_type: job.job_type || '',
       salary_range: job.salary_range || '',
       requirements: job.requirements || '',
+      benefits: job.benefits || '',
       application_deadline: job.application_deadline ? String(job.application_deadline).slice(0, 10) : '',
       description: job.description || ''
     });
@@ -111,9 +115,11 @@ export default function JobManagementScreen({ user }) {
         <TextInput style={styles.input} placeholder="Job Title" value={form.job_title} onChangeText={(v) => setField('job_title', v)} />
         <TextInput style={styles.input} placeholder="Company" value={form.company} onChangeText={(v) => setField('company', v)} />
         <TextInput style={styles.input} placeholder="Location" value={form.location} onChangeText={(v) => setField('location', v)} />
+        <TextInput style={styles.input} placeholder="Department (e.g. Technology, Marketing)" value={form.department} onChangeText={(v) => setField('department', v)} />
         <TextInput style={styles.input} placeholder="Job Type" value={form.job_type} onChangeText={(v) => setField('job_type', v)} />
         <TextInput style={styles.input} placeholder="Salary Range" value={form.salary_range} onChangeText={(v) => setField('salary_range', v)} />
         <TextInput style={[styles.input, styles.textArea]} placeholder="Requirements" multiline value={form.requirements} onChangeText={(v) => setField('requirements', v)} />
+        <TextInput style={[styles.input, styles.textArea]} placeholder="Benefits" multiline value={form.benefits} onChangeText={(v) => setField('benefits', v)} />
         <TextInput style={styles.input} placeholder="Application Deadline (YYYY-MM-DD)" value={form.application_deadline} onChangeText={(v) => setField('application_deadline', v)} />
         <TextInput style={[styles.input, styles.textArea]} placeholder="Description" multiline value={form.description} onChangeText={(v) => setField('description', v)} />
         <PrimaryButton label={saving ? 'Saving...' : editingId ? 'Update Job' : 'Create Job'} onPress={onSubmit} disabled={saving} />

@@ -21,6 +21,12 @@ const achievementService = {
     return response.data;
   },
 
+  // Get achievement by ID
+  getAchievementById: async (id) => {
+    const response = await axios.get(`${API_URL}/${id}`, { headers: getAuthHeaders() });
+    return response.data;
+  },
+
   // Create new achievement
   createAchievement: async (achievementData) => {
     if (achievementData instanceof FormData) {

@@ -10,7 +10,7 @@ export const dashboardService = {
     const [eventsResult, jobsResult, achievementsResult, donationsResult, notificationsResult, unreadCountResult, statsResult] = await Promise.allSettled([
       eventService.getAll(),
       jobService.getAllJobs(),
-      communityService.getAchievements(alumniId),
+      communityService.getAchievements(),
       donationService.getAll(),
       notificationService.getAll(false),
       notificationService.getUnreadCount(),

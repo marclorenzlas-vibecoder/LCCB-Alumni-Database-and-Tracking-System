@@ -923,7 +923,7 @@ const AlumniDirectory = () => {
                   {/* Achievements */}
                   <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
                     <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>Achievements</h3>{isTeacher && <button onClick={() => setShowAchievementModal(true)} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-700 rounded-lg hover:bg-blue-800">Add New</button>}</div>
-                    <div className="space-y-3">{achievements.length === 0 ? <p className="text-gray-500 text-sm">No achievements recorded yet.</p> : achievements.map(a => (<div key={a.id} className="rounded-2xl border border-transparent bg-transparent p-4"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">{a.title}</h4>{a.description && <p className="text-sm text-gray-600 mt-1">{a.description}</p>}{a.date && <p className="text-xs text-gray-500 mt-2">{new Date(a.date).toLocaleDateString()}</p>}</div>{isTeacher && <button onClick={() => handleDeleteAchievement(a.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
+                    <div className="space-y-3">{achievements.length === 0 ? <p className="text-gray-500 text-sm">No achievements recorded yet.</p> : achievements.map(a => (<div key={a.id} className="rounded-2xl border border-transparent bg-transparent p-4"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">{a.title}</h4>{a.description && <p className="text-sm text-gray-600 mt-1" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.description}</p>}{a.date && <p className="text-xs text-gray-500 mt-2">{new Date(a.date).toLocaleDateString()}</p>}</div>{isTeacher && <button onClick={() => handleDeleteAchievement(a.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
                   </div>
                   {/* Employment */}
                   <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
@@ -943,7 +943,7 @@ const AlumniDirectory = () => {
 
         {/* Add Alumni Modal */}
         {showAddModal && (
-          <div className="fixed inset-0 z-50 bg-slate-950/55 p-4 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
             <div className="mx-auto flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
               <div className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
                 <h3 className="text-2xl font-semibold text-slate-900">Add New Alumni</h3>
@@ -1462,6 +1462,7 @@ const AlumniDirectory = () => {
         {/* Filters */}
         <div className="border-b border-gray-200 bg-gray-50 px-4 py-4">
           <div className="flex flex-col gap-4">
+            {/* Row 1: Search Bar */}
             <div className="w-full">
               <div className="relative group">
                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
@@ -1494,6 +1495,8 @@ const AlumniDirectory = () => {
                 )}
               </div>
             </div>
+
+            {/* Row 2: Filter Dropdowns + Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 <FilterMenu
@@ -1547,6 +1550,15 @@ const AlumniDirectory = () => {
                   panelWidthClass="w-96"
                   alignClass="right-0"
                 />
+                {(selectedLevel || selectedBatch || selectedGroup) && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedLevel(''); setSelectedBatch(''); setSelectedGroup(''); setSearchTerm(''); }}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <button

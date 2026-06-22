@@ -3,115 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import eventService from '../services/eventService';
 import { realtimeClient } from '../services/realtimeClient';
 import ConfirmModal from './ConfirmModal';
+import FilterMenu from './FilterMenu';
 import { authService } from '../services/authService';
 import UserLayout from './UserLayout';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 
-const FilterMenu = ({
-  menuRef,
-  isOpen,
-  setIsOpen,
-  buttonLabel,
-  selectedLabel,
-  selectedValue,
-  icon,
-  sections,
-  onSelect,
-  panelTitle,
-  panelWidthClass = 'w-80',
-  panelMaxHeightClass = 'max-h-80',
-  alignClass = 'right-0'
-}) => {
-  const hasSelection = selectedLabel !== buttonLabel;
-
-  return (
-    <div ref={menuRef} className={`relative ${panelWidthClass}`}>
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className={`flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-white px-3 py-2.5 text-sm shadow-sm ring-1 ring-inset transition ${hasSelection ? 'ring-blue-900 text-gray-900' : 'ring-gray-300 text-gray-700'} focus:outline-none focus:ring-2 focus:ring-blue-900`}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-600">
-            {icon}
-          </span>
-          <span className="truncate text-left">{selectedLabel}</span>
-        </span>
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <div className={`dropdown-menu-panel absolute ${alignClass} top-full z-50 mt-2 ${panelWidthClass} overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl`}>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">{panelTitle}</p>
-            </div>
-          </div>
-
-          <div className={`overflow-y-auto p-2.5 scrollbar-hide ${panelMaxHeightClass}`}>
-            <div className="space-y-3.5">
-              {sections.map((section) => (
-                <div key={section.key} className="border-b border-gray-100 pb-3.5 last:border-b-0 last:pb-0">
-                  <div className="mb-2.5 flex items-center gap-3">
-                    <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500">{section.title}</span>
-                    <span className="h-px flex-1 bg-gray-100" />
-                  </div>
-                  <div className={section.gridClassName || 'grid gap-2'}>
-                    {section.items.map((item) => {
-                      const isSelected = item.value === selectedValue;
-                      return (
-                        <button
-                          key={item.value}
-                          type="button"
-                          onClick={() => onSelect(item.value)}
-                          className={`dropdown-menu-item rounded-xl border px-3 py-2 text-left transition ${isSelected ? 'border-blue-300 bg-blue-50 shadow-sm' : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/60'}`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="break-words text-sm font-semibold text-gray-900">{item.label}</div>
-                              {item.description && (
-                                <p className="mt-1 break-words text-xs leading-snug text-gray-500">{item.description}</p>
-                              )}
-                            </div>
-                            {isSelected && (
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-4 w-4 shrink-0 text-blue-700">
-                                <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.2 7.2a1 1 0 01-1.42 0l-3.2-3.2a1 1 0 111.42-1.42l2.49 2.49 6.49-6.49a1 1 0 011.42 0z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const Events = () => {
   const navigate = useNavigate();
-  // Role
   const isTeacher = authService.isTeacher();
   const currentUser = authService.getCurrentUser();
 
-  // State for events from database
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [newEvent, setNewEvent] = useState({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
 
-  // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -120,10 +28,9 @@ const Events = () => {
     type: 'danger'
   });
 
-  // Filters and menu state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [isCurrentEventsExpanded, setIsCurrentEventsExpanded] = useState(true);
   const [isUpcomingEventsExpanded, setIsUpcomingEventsExpanded] = useState(true);
@@ -136,32 +43,24 @@ const Events = () => {
   const sortMenuRef = useRef(null);
 
   const eventTypes = useMemo(() => [...new Set(events.map((event) => event.type).filter(Boolean))], [events]);
-  const selectedTypeLabel = selectedType || 'All Types';
-  const selectedStatusLabel = selectedStatus === 'all'
-    ? 'All Events'
-    : selectedStatus === 'upcoming'
-      ? 'Upcoming'
-      : selectedStatus === 'current'
-        ? 'Happening Today'
-        : 'Past Events';
-  const selectedSortLabel = sortBy === 'date' ? 'Date' : sortBy === 'name' ? 'Name' : 'Attendees';
 
   const typeMenuSections = useMemo(() => ([
     {
       key: 'EVENT_TYPES',
-      title: 'Event Types',
-      gridClassName: 'grid gap-2',
-      items: [{ value: '', label: 'All Types' }, ...eventTypes.map((type) => ({ value: type, label: type }))]
+      title: '',
+      items: [
+        { value: '', label: 'All Types' },
+        ...eventTypes.map((type) => ({ value: type, label: type }))
+      ]
     }
   ]), [eventTypes]);
 
   const statusMenuSections = [
     {
       key: 'EVENT_STATUS',
-      title: 'Status',
-      gridClassName: 'grid gap-2',
+      title: '',
       items: [
-        { value: 'all', label: 'All Events' },
+        { value: '', label: 'All Statuses' },
         { value: 'upcoming', label: 'Upcoming' },
         { value: 'current', label: 'Happening Today' },
         { value: 'past', label: 'Past Events' }
@@ -172,8 +71,7 @@ const Events = () => {
   const sortMenuSections = [
     {
       key: 'EVENT_SORT',
-      title: 'Sort By',
-      gridClassName: 'grid gap-2',
+      title: '',
       items: [
         { value: 'date', label: 'Date' },
         { value: 'name', label: 'Name' },
@@ -183,7 +81,7 @@ const Events = () => {
   ];
 
   useEffect(() => {
-    if (!showTypeMenu && !showStatusMenu) return undefined;
+    if (!showTypeMenu && !showStatusMenu && !showSortMenu) return undefined;
 
     const handlePointerDown = (event) => {
       const clickInsideType = typeMenuRef.current && typeMenuRef.current.contains(event.target);
@@ -214,12 +112,10 @@ const Events = () => {
     };
   }, [showTypeMenu, showStatusMenu, showSortMenu]);
 
-  // Load events from database
   useEffect(() => {
     loadEvents();
   }, []);
 
-  // Re-fetch when events change via realtime events
   useEffect(() => {
     const unsubCreated = realtimeClient.subscribe('event.created', () => {
       loadEvents();
@@ -267,7 +163,6 @@ const Events = () => {
     try {
       let payload = newEvent;
       
-      // If image present, send as FormData
       if (newEvent.image) {
         const fd = new FormData();
         fd.append('name', newEvent.name);
@@ -283,12 +178,10 @@ const Events = () => {
       }
       
       if (editingId) {
-        // Update existing event
         const updated = await eventService.updateEvent(editingId, payload);
         setEvents(prev => prev.map(ev => ev.id === editingId ? updated : ev));
         toast.success('Event updated successfully!');
       } else {
-        // Create new event
         const event = await eventService.createEvent(payload);
         setEvents(prev => [...prev, event]);
         toast.success('Event added successfully!');
@@ -370,7 +263,6 @@ const Events = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // 📅 STATIC EVENTS LIST (keeping for fallback)
   const categorizeEvents = () => {
     const todayKey = getEventCalendarKey(new Date());
 
@@ -408,7 +300,6 @@ const Events = () => {
 
   const categorizedEvents = categorizeEvents();
 
-  // Filter and sort events
   const filteredEvents = useMemo(() => {
     let filtered = events.filter(event => {
       const matchesSearch = 
@@ -418,21 +309,18 @@ const Events = () => {
         (event.tags && event.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
       
       const matchesType = selectedType === '' || event.type === selectedType;
-      
-      // Filter by status category
-      if (selectedStatus !== 'all') {
+      const matchesStatus = selectedStatus === '' || (() => {
         const todayKey = getEventCalendarKey(new Date());
         const eventKey = getEventCalendarKey(event.date);
-
-        if (selectedStatus === 'past' && eventKey >= todayKey) return false;
-        if (selectedStatus === 'current' && eventKey !== todayKey) return false;
-        if (selectedStatus === 'upcoming' && eventKey <= todayKey) return false;
-      }
+        if (selectedStatus === 'past') return eventKey < todayKey;
+        if (selectedStatus === 'current') return eventKey === todayKey;
+        if (selectedStatus === 'upcoming') return eventKey > todayKey;
+        return false;
+      })();
       
-      return matchesSearch && matchesType;
+      return matchesSearch && matchesType && matchesStatus;
     });
 
-    // Sort the filtered results
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'date':
@@ -452,42 +340,13 @@ const Events = () => {
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedType('');
-    setSelectedStatus('all');
+    setSelectedStatus('');
     setSortBy('date');
     setShowTypeMenu(false);
     setShowStatusMenu(false);
+    setShowSortMenu(false);
   };
 
-  useEffect(() => {
-    if (!showTypeMenu && !showStatusMenu) return undefined;
-
-    const handlePointerDown = (event) => {
-      const clickInsideType = typeMenuRef.current && typeMenuRef.current.contains(event.target);
-      const clickInsideStatus = statusMenuRef.current && statusMenuRef.current.contains(event.target);
-
-      if (!clickInsideType && !clickInsideStatus) {
-        setShowTypeMenu(false);
-        setShowStatusMenu(false);
-      }
-    };
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setShowTypeMenu(false);
-        setShowStatusMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [showTypeMenu, showStatusMenu]);
-
-  // Collapse ref and animation for past events
   const pastContentRef = useRef(null);
   const upcomingContentRef = useRef(null);
   const currentContentRef = useRef(null);
@@ -510,42 +369,9 @@ const Events = () => {
     handleAnim(currentContentRef, isCurrentEventsExpanded);
   }, [isPastEventsExpanded, isUpcomingEventsExpanded, isCurrentEventsExpanded, events.length]);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'upcoming':
-        return 'bg-green-100 text-green-800';
-      case 'past':
-        return 'bg-gray-100 text-gray-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-blue-100 text-blue-800';
-    }
-  };
-
-  const getTypeColor = (type) => {
-    switch (type) {
-      case 'Reunion':
-        return 'bg-blue-100 text-blue-800';
-      case 'Workshop':
-        return 'bg-green-100 text-green-800';
-      case 'Networking':
-        return 'bg-purple-100 text-purple-800';
-      case 'Conference':
-        return 'bg-orange-100 text-orange-800';
-      case 'Sports':
-        return 'bg-pink-100 text-pink-800';
-      case 'Competition':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   return (
     <UserLayout>
       <div className="min-h-screen bg-gray-50 py-8">
-      {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
@@ -558,7 +384,6 @@ const Events = () => {
       />
       
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header Section */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
             <div className="text-center sm:text-left">
@@ -578,138 +403,137 @@ const Events = () => {
           </div>
         </div>
 
-        {/* Search and Filter Section */}
-        <div className="bg-white rounded-2xl shadow-md p-6 mb-8 border border-gray-100">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[280px]">
-              <div className="relative group">
-                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-100 bg-blue-50">
-                    <svg className="h-4.5 w-4.5 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  id="search"
-                  placeholder="Search events by name, description, or location"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-14 pr-12 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                />
-                {searchTerm && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchTerm('')}
-                    className="absolute inset-y-0 right-3 my-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-                    aria-label="Clear search"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                      <path fillRule="evenodd" d="M10 8.586 5.707 4.293A1 1 0 0 0 4.293 5.707L8.586 10l-4.293 4.293a1 1 0 1 0 1.414 1.414L10 11.414l4.293 4.293a1 1 0 0 0 1.414-1.414L11.414 10l4.293-4.293a1 1 0 0 0-1.414-1.414L10 8.586Z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                )}
+        {/* Unified Search and Filter Card */}
+        <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm px-5 py-4">
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative group">
+              <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-100 bg-blue-50">
+                  <svg className="h-4.5 w-4.5 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </span>
               </div>
+              <input
+                type="text"
+                placeholder="Search events by name, description, or location"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-14 pr-12 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-3 my-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Clear search"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path fillRule="evenodd" d="M10 8.586 5.707 4.293A1 1 0 0 0 4.293 5.707L8.586 10l-4.293 4.293a1 1 0 1 0 1.414 1.414L10 11.414l4.293 4.293a1 1 0 0 0 1.414-1.414L11.414 10l4.293-4.293a1 1 0 0 0-1.414-1.414L10 8.586Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              )}
             </div>
+          </div>
 
+          {/* Filter Dropdowns */}
+          <div className="flex flex-wrap items-center gap-3">
             <FilterMenu
               menuRef={typeMenuRef}
               isOpen={showTypeMenu}
               setIsOpen={setShowTypeMenu}
-              buttonLabel="All Types"
-              selectedLabel={selectedTypeLabel}
+              buttonLabel="Event Type"
+              selectedLabel={selectedType || 'All Types'}
               selectedValue={selectedType}
-              panelTitle="Event Type"
-              panelWidthClass="w-72"
-              icon={(
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l7-4-7-4-7 4 7 4z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 11.5v3.5L12 18l6-3v-3.5" />
-                </svg>
-              )}
+              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
               sections={typeMenuSections}
               onSelect={(value) => {
-                setSelectedType((current) => (current === value ? '' : value));
+                setSelectedType(value);
                 setShowTypeMenu(false);
               }}
+              panelTitle="All Types"
+              panelWidthClass="w-56"
+              alignClass="right-0"
             />
 
             <FilterMenu
               menuRef={statusMenuRef}
               isOpen={showStatusMenu}
               setIsOpen={setShowStatusMenu}
-              buttonLabel="All Events"
-              selectedLabel={selectedStatusLabel}
+              buttonLabel="Status"
+              selectedLabel={selectedStatus === 'upcoming' ? 'Upcoming' : selectedStatus === 'current' ? 'Happening Today' : selectedStatus === 'past' ? 'Past Events' : 'All Statuses'}
               selectedValue={selectedStatus}
-              panelTitle="Status"
-              panelWidthClass="w-72"
-              icon={(
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 5v2m8-2v2M5 11h14" />
-                  <rect x="5" y="7" width="14" height="12" rx="2" ry="2" />
-                </svg>
-              )}
+              icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>}
               sections={statusMenuSections}
               onSelect={(value) => {
-                setSelectedStatus((current) => (current === value ? 'all' : value));
+                setSelectedStatus(value);
                 setShowStatusMenu(false);
               }}
+              panelTitle="All Statuses"
+              panelWidthClass="w-56"
+              alignClass="right-0"
             />
 
             <FilterMenu
               menuRef={sortMenuRef}
               isOpen={showSortMenu}
               setIsOpen={setShowSortMenu}
-              buttonLabel="Date"
-              selectedLabel={selectedSortLabel}
+              buttonLabel="Sort By"
+              selectedLabel={sortBy === 'date' ? 'Date' : sortBy === 'name' ? 'Name' : 'Attendees'}
               selectedValue={sortBy}
-              panelTitle="Sort By"
-              panelWidthClass="w-56"
-              icon={(
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M6 12h12M10 18h4" />
-                </svg>
-              )}
+              icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm3 7h12v2H6v-2zm3 7h6v2H9v-2z" /></svg>}
               sections={sortMenuSections}
               onSelect={(value) => {
                 setSortBy(value);
                 setShowSortMenu(false);
               }}
+              panelTitle="Sort By"
+              panelWidthClass="w-56"
+              alignClass="right-0"
             />
 
-            <button
-              onClick={clearFilters}
-              className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-            >
-              Clear Filters
-            </button>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
-            <div>Showing {filteredEvents.length} of {events.length} events</div>
-            {selectedStatus === 'all' && (
-              <div className="flex gap-4">
-                <span className="px-3 py-1 bg-blue-100 text-blue-900 rounded-full">
-                  {categorizedEvents.upcoming.length} Upcoming
-                </span>
-                <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full">
-                  {categorizedEvents.current.length} Today
-                </span>
-                <span className="px-3 py-1 bg-gray-50 text-gray-700 rounded-full">
-                  {categorizedEvents.past.length} Previous
-                </span>
-              </div>
+            {(selectedType || selectedStatus) && (
+              <button
+                onClick={clearFilters}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+              >
+                Clear Filters
+              </button>
             )}
           </div>
         </div>
 
-        {/* Events Grid - Categorized */}
-        {selectedStatus === 'all' ? (
+        {/* Stats Row */}
+        <div className="mb-8 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+          <div>Showing {filteredEvents.length} of {events.length} events</div>
+          <div className="flex gap-4">
+            <span className="px-3 py-1 bg-blue-100 text-blue-900 rounded-full">
+              {categorizedEvents.upcoming.length} Upcoming
+            </span>
+            <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full">
+              {categorizedEvents.current.length} Today
+            </span>
+            <span className="px-3 py-1 bg-gray-50 text-gray-700 rounded-full">
+              {categorizedEvents.past.length} Previous
+            </span>
+          </div>
+        </div>
+
+        {selectedStatus === '' ? (
           <div className="space-y-12">
-            {/* Upcoming Events */}
+            {loading ? (
+              <div className="text-center py-12 text-gray-500">
+                <svg className="mx-auto h-8 w-8 animate-spin text-blue-600 mb-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Loading events...
+              </div>
+            ) : (
+            <>
             {categorizedEvents.upcoming.length > 0 && (
               <div className="mb-12">
                 <div
@@ -752,7 +576,6 @@ const Events = () => {
               </div>
             )}
 
-            {/* Current Events (Happening Today) */}
             {categorizedEvents.current.length > 0 && (
               <div className="mb-12">
                   <div
@@ -795,7 +618,6 @@ const Events = () => {
               </div>
             )}
 
-            {/* Past Events - Collapsible */}
             {categorizedEvents.past.length > 0 && (
               <div className="mb-12">
                 <div 
@@ -837,9 +659,10 @@ const Events = () => {
                 </div>
               </div>
             )}
+            </>
+            )}
           </div>
         ) : (
-          /* Filtered Events Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEvents.map((event) => (
               <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
@@ -857,7 +680,6 @@ const Events = () => {
           </div>
         )}
 
-        {/* Add/Edit Event Modal */}
         {showEventModal && (
           <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
@@ -944,7 +766,6 @@ const Events = () => {
                   )}
                 </div>
 
-                {/* Send Notification Checkbox */}
                 <div className="space-y-3">
                   <div className="flex items-start">
                     <div className="flex items-center h-5">
@@ -966,7 +787,6 @@ const Events = () => {
                     </div>
                   </div>
 
-                  {/* Batch Selector - Only show when notification is enabled */}
                   {newEvent.sendNotification && (
                     <div className="ml-7 pl-3 border-l-2 border-blue-200">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1028,7 +848,6 @@ const Events = () => {
   );
 };
 
-// Event Card Component to avoid repetition
 const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent, handleDeleteEvent }) => {
   const navigate = useNavigate();
   const titleRef = React.useRef(null);
@@ -1038,27 +857,22 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
   React.useEffect(() => {
     if (titleRef.current) {
       const titleHeight = titleRef.current.offsetHeight;
-      const lineHeight = 28; // Approximate line height for text-xl
+      const lineHeight = 28;
       const lines = Math.ceil(titleHeight / lineHeight);
       setTitleLines(lines);
-      // If title is 1 line, show 4 lines of description; if 2+ lines, show 2 lines
       setDescriptionLines(lines === 1 ? 4 : 2);
     }
   }, [event.name]);
   
-  const getStatusColor = (status) => {
+  const getStatusColor = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const eventDate = new Date(event.date);
     const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
     
-    if (eventDay < today) {
-      return 'bg-gray-100 text-gray-700';
-    } else if (eventDay.getTime() === today.getTime()) {
-      return 'bg-green-100 text-green-700';
-    } else {
-      return 'bg-blue-100 text-blue-900';
-    }
+    if (eventDay < today) return 'bg-gray-100 text-gray-700';
+    if (eventDay.getTime() === today.getTime()) return 'bg-green-100 text-green-700';
+    return 'bg-blue-100 text-blue-900';
   };
 
   const getTypeColor = (type) => {
@@ -1086,21 +900,8 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
     return 'Upcoming';
   };
 
-  const canQuickJoin = () => {
-    if (!currentUser || (currentUser?.role || '').toUpperCase() === 'TEACHER') return false;
-    if (!event.date) return false;
-
-    const now = new Date();
-    const todayKey = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const eventDate = new Date(event.date);
-    const eventKey = Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate());
-
-    return eventKey >= todayKey;
-  };
-
   return (
     <div className="app-card overflow-hidden group flex h-full flex-col p-0">
-      {/* Event Image */}
       <div className="relative h-48 overflow-hidden flex-shrink-0">
         <img
           src={
@@ -1123,7 +924,6 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
         </div>
       </div>
 
-      {/* Event Content */}
       <div className="flex flex-grow flex-col px-6 pb-6 pt-5 min-h-[280px]">
         <h3 ref={titleRef} className={`text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors ${titleLines === 1 ? 'min-h-[28px] mb-4' : 'min-h-[56px] mb-2'}`}>
           {event.name}
@@ -1185,4 +985,3 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
 };
 
 export default Events;
-

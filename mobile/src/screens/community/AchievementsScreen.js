@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
@@ -14,16 +15,68 @@ import { formatDate, imageUrl } from '../../utils/formatters';
 import { toMultipartFile } from '../../utils/upload';
 import { theme } from '../../theme';
 
-export default function AchievementsScreen({ user }) {
+function AchievementCardItem({ item, teacher, navigation, onEdit, onDelete }) {
+  const [descLines, setDescLines] = useState(4);
+
+  const handleTitleLayout = (e) => {
+    const lines = e.nativeEvent.lines.length;
+    setDescLines(lines <= 1 ? 5 : 4);
+  };
+
+  return (
+    <Pressable
+      key={item.id}
+      style={styles.card}
+      onPress={() => !teacher && navigation.navigate('AchievementDetail', { achievement: item })}
+    >
+      {item.image ? <Image source={{ uri: imageUrl(item.image, API_ORIGIN) }} style={styles.preview} /> : null}
+      <View style={styles.cardBody}>
+        <View style={styles.metaRow}>
+          <Text style={styles.categoryBadge}>{item.category || 'General'}</Text>
+          <Text style={styles.yearText}>{item.date ? new Date(item.date).getFullYear() : 'N/A'}</Text>
+        </View>
+        {item.alumni ? <Text style={styles.author}>{`${item.alumni.first_name || ''} ${item.alumni.last_name || ''}`.trim()}</Text> : null}
+        <Text style={styles.title} onTextLayout={handleTitleLayout}>{item.title || 'Achievement'}</Text>
+        {item.description ? (
+          <View style={{ height: 105, overflow: 'hidden' }}>
+            <Text style={styles.body} numberOfLines={descLines}>{item.description}</Text>
+          </View>
+        ) : null}
+        {!teacher && (
+          <Pressable
+            style={styles.readMoreBtn}
+            onPress={() => navigation.navigate('AchievementDetail', { achievement: item })}
+          >
+            <Text style={styles.readMoreText}>Read More</Text>
+          </Pressable>
+        )}
+        <Text style={styles.meta}>Date: {formatDate(item.date)}</Text>
+      </View>
+      {teacher ? (
+        <View style={styles.actions}>
+          <Pressable style={styles.editBtn} onPress={() => onEdit(item)}>
+            <Text style={styles.editText}>Edit</Text>
+          </Pressable>
+          <Pressable style={styles.deleteBtn} onPress={() => onDelete(item.id)}>
+            <Text style={styles.deleteText}>Delete</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+export default function AchievementsScreen({ user, navigation }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const teacher = useMemo(() => isTeacher(user), [user]);
-  const categories = useMemo(() => ['All', 'Professional', 'Academic', 'Business', 'Community Service'], []);
+  const categories = useMemo(() => ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'], []);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [imageAsset, setImageAsset] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
     alumni_id: alumniId ? String(alumniId) : '',
     title: '',
@@ -64,9 +117,22 @@ export default function AchievementsScreen({ user }) {
   );
 
   const filteredItems = useMemo(() => {
-    if (selectedCategory === 'All') return items;
-    return items.filter((item) => String(item.category || 'General') === selectedCategory);
-  }, [items, selectedCategory]);
+    let result = selectedCategory === 'All'
+      ? items
+      : items.filter((item) => String(item.category || 'General') === selectedCategory);
+
+    const q = searchTerm.trim().toLowerCase();
+    if (q) {
+      result = result.filter((item) => {
+        const alumniName = item.alumni ? `${item.alumni.first_name || ''} ${item.alumni.last_name || ''}`.trim() : '';
+        return [item.title, item.category, item.description, alumniName]
+          .map((v) => String(v || '').toLowerCase())
+          .some((v) => v.includes(q));
+      });
+    }
+
+    return result;
+  }, [items, selectedCategory, searchTerm]);
 
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -132,31 +198,70 @@ export default function AchievementsScreen({ user }) {
     setImageAsset(null);
   };
 
-  const onDelete = async (id) => {
-    try {
-      await communityService.deleteAchievement(id);
-      await loadItems(false);
-    } catch (error) {
-      Alert.alert('Delete failed', error?.response?.data?.error || 'Unable to delete.');
-    }
+  const onDelete = (id) => {
+    Alert.alert(
+      'Delete Achievement',
+      'Are you sure you want to delete this achievement? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await communityService.deleteAchievement(id);
+              await loadItems(false);
+            } catch (error) {
+              Alert.alert('Delete failed', error?.response?.data?.error || 'Unable to delete.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
     <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.headerWrap}>
         <Text style={styles.headerTitle}>Alumni Achievements</Text>
         <Text style={styles.headerSubtitle}>Celebrating the outstanding accomplishments of our LCCB alumni across various fields</Text>
       </View>
 
-      <View style={styles.chipsWrap}>
-        {categories.map((category) => {
-          const active = selectedCategory === category;
-          return (
-            <Pressable key={category} style={[styles.chip, active && styles.chipActive]} onPress={() => setSelectedCategory(category)}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{category}</Text>
-            </Pressable>
-          );
-        })}
+      <View style={styles.statusTabRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusTabScroll}>
+          {categories.map((category) => {
+            const active = selectedCategory === category;
+            return (
+              <Pressable
+                key={category}
+                style={[styles.statusTab, active && styles.statusTabActive]}
+                onPress={() => setSelectedCategory(selectedCategory === category ? 'All' : category)}
+              >
+                <Text style={[styles.statusTabText, active && styles.statusTabTextActive]}>{category}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <View style={styles.searchWrap}>
+        <View style={styles.searchIcon}>
+          <Ionicons name="search-outline" size={18} color="#64748b" />
+        </View>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search achievements by name, title, or category..."
+          placeholderTextColor="#94a3b8"
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+          autoCorrect={false}
+        />
+        {searchTerm.length > 0 && (
+          <Pressable style={styles.clearBtn} onPress={() => setSearchTerm('')}>
+            <Ionicons name="close" size={18} color="#94a3b8" />
+          </Pressable>
+        )}
       </View>
 
       {teacher ? (
@@ -177,39 +282,28 @@ export default function AchievementsScreen({ user }) {
       {!loading && filteredItems.length === 0 ? <EmptyState title="No achievements yet" /> : null}
 
       {!loading && filteredItems.map((item) => (
-        <View key={item.id} style={styles.card}>
-          {item.image ? <Image source={{ uri: imageUrl(item.image, API_ORIGIN) }} style={styles.preview} /> : null}
-          <View style={styles.cardBody}>
-            <View style={styles.metaRow}>
-              <Text style={styles.categoryBadge}>{item.category || 'General'}</Text>
-              <Text style={styles.yearText}>{item.date ? new Date(item.date).getFullYear() : 'N/A'}</Text>
-            </View>
-            {item.alumni ? <Text style={styles.author}>{`${item.alumni.first_name || ''} ${item.alumni.last_name || ''}`.trim()}</Text> : null}
-            <Text style={styles.title}>{item.title || 'Achievement'}</Text>
-            {item.description ? <Text style={styles.body} numberOfLines={4}>{item.description}</Text> : null}
-            <Text style={styles.meta}>{formatDate(item.date)}</Text>
-          </View>
-          {teacher ? (
-            <View style={styles.actions}>
-              <Pressable style={styles.editBtn} onPress={() => onEdit(item)}>
-                <Text style={styles.editText}>Edit</Text>
-              </Pressable>
-              <Pressable style={styles.deleteBtn} onPress={() => onDelete(item.id)}>
-                <Text style={styles.deleteText}>Delete</Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </View>
+        <AchievementCardItem
+          key={item.id}
+          item={item}
+          teacher={teacher}
+          navigation={navigation}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
       ))}
+      </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 32
+  },
   headerWrap: {
     alignItems: 'flex-start',
     paddingHorizontal: 14,
-    paddingBottom: 12
+    paddingBottom: 8
   },
   headerTitle: {
     fontSize: 22,
@@ -222,32 +316,56 @@ const styles = StyleSheet.create({
     color: '#64748b',
     lineHeight: 20
   },
-  chipsWrap: {
+  searchWrap: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    marginBottom: 14
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    marginHorizontal: 14,
+    marginBottom: 30,
     borderWidth: 1,
-    borderColor: '#e2e8f0'
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    minHeight: 48
   },
-  chipActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb'
+  searchIcon: {
+    marginRight: 8
   },
-  chipText: {
-    color: '#475569',
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0f172a'
+  },
+  clearBtn: {
+    marginLeft: 8,
+    padding: 4
+  },
+  statusTabRow: {
+    paddingHorizontal: 14,
+    marginBottom: 15
+  },
+  statusTabScroll: {
+    gap: 8
+  },
+  statusTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff'
+  },
+  statusTabActive: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a'
+  },
+  statusTabText: {
     fontSize: 13,
-    fontWeight: '600'
+    fontWeight: '600',
+    color: '#475569'
   },
-  chipTextActive: {
+  statusTabTextActive: {
     color: '#ffffff'
   },
   formCard: {
@@ -367,5 +485,15 @@ const styles = StyleSheet.create({
   deleteText: {
     color: '#b91c1c',
     fontWeight: '700'
+  },
+  readMoreBtn: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  readMoreText: {
+    color: '#1a73e8',
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline'
   }
 });

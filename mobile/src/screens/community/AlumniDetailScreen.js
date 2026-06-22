@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import ScreenContainer from "../../components/ScreenContainer";
 import LoadingState from "../../components/LoadingState";
+import BackButton from "../../components/BackButton";
 import { API_ORIGIN } from "../../config/api";
 import { communityService } from "../../services/communityService";
 import { donationService } from "../../services/donationService";
@@ -155,7 +156,10 @@ export default function AlumniDetailScreen({ route, navigation }) {
           setAlumni(detail);
           setAchievements(achievementsData || []);
           setCareers(careersData || []);
-          setDonations(donationsData || []);
+          const sortedDonations = (donationsData || [])
+            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+            .slice(0, 3);
+          setDonations(sortedDonations);
         })
         .catch((error) => {
           console.error("Failed to load alumni detail:", error?.message || error);
@@ -187,12 +191,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
           <Text style={styles.errorDesc}>
             Could not load the alumni profile.
           </Text>
-          <Pressable
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>← Go Back</Text>
-          </Pressable>
+          <BackButton navigation={navigation} label="Go Back" />
         </View>
       </ScreenContainer>
     );
@@ -219,6 +218,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <BackButton navigation={navigation} label="Back" />
         {/* Header */}
         <View style={styles.header}>
           {img && !imgErrored ? (
@@ -416,20 +416,24 @@ export default function AlumniDetailScreen({ route, navigation }) {
           {achievements.length === 0 ? (
             <Text style={styles.emptyText}>No achievements yet.</Text>
           ) : (
-            achievements.map((item) => (
-              <View key={item.id} style={styles.cardItem}>
+            achievements.slice(0, 3).map((item) => (
+              <Pressable
+                key={item.id}
+                style={styles.cardItem}
+                onPress={() => navigation.navigate('AlumniAchievementDetail', { achievement: item })}
+              >
                 <Text style={styles.cardItemTitle}>
                   {item.title || "Untitled achievement"}
                 </Text>
                 {item.description ? (
-                  <Text style={styles.cardItemDesc}>{item.description}</Text>
+                  <Text style={styles.cardItemDesc} numberOfLines={3} ellipsizeMode="tail">{item.description}</Text>
                 ) : null}
                 {item.date ? (
                   <Text style={styles.cardItemMeta}>
                     {new Date(item.date).toLocaleDateString()}
                   </Text>
                 ) : null}
-              </View>
+              </Pressable>
             ))
           )}
         </View>
@@ -444,8 +448,12 @@ export default function AlumniDetailScreen({ route, navigation }) {
           {careers.length === 0 ? (
             <Text style={styles.emptyText}>No employment records yet.</Text>
           ) : (
-            careers.map((item) => (
-              <View key={item.id} style={styles.cardItem}>
+            careers.slice(0, 3).map((item) => (
+              <Pressable
+                key={item.id}
+                style={styles.cardItem}
+                onPress={() => navigation.navigate('AlumniCareerDetail', { item })}
+              >
                 <View style={styles.cardItemHeaderRow}>
                   <Text style={styles.cardItemTitle}>
                     {item.job_title || "Position"}
@@ -466,9 +474,9 @@ export default function AlumniDetailScreen({ route, navigation }) {
                   {item.company || "Company not set"}
                 </Text>
                 {item.description ? (
-                  <Text style={styles.cardItemDesc}>{item.description}</Text>
+                  <Text style={styles.cardItemDesc} numberOfLines={3} ellipsizeMode="tail">{item.description}</Text>
                 ) : null}
-              </View>
+              </Pressable>
             ))
           )}
         </View>
@@ -484,7 +492,11 @@ export default function AlumniDetailScreen({ route, navigation }) {
             <Text style={styles.emptyText}>No donations yet.</Text>
           ) : (
             donations.map((item) => (
-              <View key={item.id} style={styles.cardItem}>
+              <Pressable
+                key={item.id}
+                style={styles.cardItem}
+                onPress={() => navigation.navigate('AlumniDonationReceipt', { item })}
+              >
                 <View style={styles.cardItemHeaderRow}>
                   <Text style={styles.cardItemTitle}>
                     {item.purpose || "Donation"}
@@ -499,9 +511,9 @@ export default function AlumniDetailScreen({ route, navigation }) {
                   PHP {Number(item.amount || 0).toLocaleString()}
                 </Text>
                 {item.description ? (
-                  <Text style={styles.cardItemDesc}>{item.description}</Text>
+                  <Text style={styles.cardItemDesc} numberOfLines={3} ellipsizeMode="tail">{item.description}</Text>
                 ) : null}
-              </View>
+              </Pressable>
             ))
           )}
         </View>

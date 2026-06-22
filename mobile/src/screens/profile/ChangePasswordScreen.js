@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import BackButton from '../../components/BackButton';
 import PrimaryButton from '../../components/PrimaryButton';
 import ScreenContainer from '../../components/ScreenContainer';
 import { authService } from '../../services/authService';
 
-export default function ChangePasswordScreen({ user }) {
+export default function ChangePasswordScreen({ navigation, user }) {
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -74,6 +75,7 @@ export default function ChangePasswordScreen({ user }) {
 
   return (
     <ScreenContainer>
+      <BackButton navigation={navigation} label="Back" />
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Change Password</Text>
         <Text style={styles.heroSubtitle}>

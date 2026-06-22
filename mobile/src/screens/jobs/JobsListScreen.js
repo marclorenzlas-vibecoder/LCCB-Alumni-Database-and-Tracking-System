@@ -1,25 +1,188 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
-import SectionHeader from '../../components/SectionHeader';
 import { jobService } from '../../services/jobService';
 import { getAlumniId } from '../../utils/auth';
-import { formatDate } from '../../utils/formatters';
-import { theme } from '../../theme';
+import { timeAgo } from '../../utils/formatters';
 
-const categories = ['All', 'Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
+const departments = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
+const workTypes = ['Full-time', 'Part-time', 'Contract', 'Remote'];
+
+const STATUS_TABS = [
+  { key: '', label: 'All' },
+  { key: 'ACCEPTED', label: 'Accepted', bg: '#d1fae5', color: '#065f46' },
+  { key: 'REVIEWED', label: 'Under Review', bg: '#e0e7ff', color: '#3730a3' },
+  { key: 'REJECTED', label: 'Rejected', bg: '#fee2e2', color: '#991b1b' },
+  { key: 'SHORTLISTED', label: 'Shortlist', bg: '#dcfce7', color: '#166534' },
+];
 
 const STATUS_STYLES = {
-  PENDING: { label: 'Pending', badge: { backgroundColor: '#fef3c7' }, text: { color: '#92400e' } },
-  REVIEWED: { label: 'Under Review', badge: { backgroundColor: '#e0e7ff' }, text: { color: '#3730a3' } },
-  SHORTLISTED: { label: 'Shortlisted', badge: { backgroundColor: '#dcfce7' }, text: { color: '#166534' } },
-  ACCEPTED: { label: 'Accepted', badge: { backgroundColor: '#d1fae5' }, text: { color: '#065f46' } },
-  REJECTED: { label: 'Not Selected', badge: { backgroundColor: '#fee2e2' }, text: { color: '#991b1b' } }
+  PENDING: { label: 'Pending', bg: '#fef3c7', color: '#92400e' },
+  REVIEWED: { label: 'Under Review', bg: '#e0e7ff', color: '#3730a3' },
+  SHORTLISTED: { label: 'Shortlisted', bg: '#dcfce7', color: '#166534' },
+  ACCEPTED: { label: 'Accepted', bg: '#d1fae5', color: '#065f46' },
+  REJECTED: { label: 'Rejected', bg: '#fee2e2', color: '#991b1b' },
 };
+
+function MultiOptionPicker({ visible, title, options, selected, onToggle, onClose }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.pickerBackdrop} onPress={onClose}>
+        <Pressable style={styles.pickerCard} onPress={() => {}}>
+          <View style={styles.pickerHeader}>
+            <Text style={styles.pickerTitle}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={18} color="#334155" />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
+            {options.map((value) => {
+              const active = selected.includes(value);
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.pickerOption, active && styles.pickerOptionActive]}
+                  onPress={() => onToggle(value)}
+                >
+                  <View style={[styles.checkbox, active && styles.checkboxActive]}>
+                    {active && <Ionicons name="checkmark" size={12} color="#fff" />}
+                  </View>
+                  <Text style={[styles.pickerOptionText, active && styles.pickerOptionTextActive]}>
+                    {value}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function FilterDropdown({ visible, locations, tempLocations, tempDepartments, tempWorkTypes, toggleLocation, toggleDepartment, toggleWorkType, onApply, onClear, onClose }) {
+  const [pickerTarget, setPickerTarget] = useState(null);
+
+  const locCount = tempLocations.length;
+  const deptCount = tempDepartments.length;
+  const wtCount = tempWorkTypes.length;
+  const activeCount = locCount + deptCount + wtCount;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.dropdownBackdrop} onPress={onClose}>
+        <Pressable style={styles.dropdownPanel} onPress={() => {}}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Filters</Text>
+            {activeCount > 0 ? (
+              <View style={styles.dropdownCountBadge}>
+                <Text style={styles.dropdownCountText}>{activeCount}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.dropdownFields}>
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('location')}>
+              <Text style={styles.dropdownFieldLabel}>Location</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, locCount === 0 && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {locCount === 0 ? 'Any location' : `${locCount} selected`}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+
+            <View style={styles.dropdownDivider} />
+
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('department')}>
+              <Text style={styles.dropdownFieldLabel}>Department</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, deptCount === 0 && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {deptCount === 0 ? 'Any department' : `${deptCount} selected`}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+
+            <View style={styles.dropdownDivider} />
+
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('workType')}>
+              <Text style={styles.dropdownFieldLabel}>Work Type</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, wtCount === 0 && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {wtCount === 0 ? 'Any type' : `${wtCount} selected`}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+          </View>
+
+          <View style={styles.dropdownActions}>
+            {activeCount > 0 ? (
+              <Pressable style={styles.dropdownClearBtn} onPress={onClear}>
+                <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.dropdownClearText}>Clear Filter</Text>
+              </Pressable>
+            ) : <View style={{ flex: 1 }} />}
+            <Pressable style={styles.dropdownApplyBtn} onPress={onApply}>
+              <Text style={styles.dropdownApplyText}>Apply Filter</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+
+      <MultiOptionPicker
+        visible={pickerTarget === 'location'}
+        title="Location"
+        options={locations}
+        selected={tempLocations}
+        onToggle={toggleLocation}
+        onClose={() => setPickerTarget(null)}
+      />
+      <MultiOptionPicker
+        visible={pickerTarget === 'department'}
+        title="Department"
+        options={departments}
+        selected={tempDepartments}
+        onToggle={toggleDepartment}
+        onClose={() => setPickerTarget(null)}
+      />
+      <MultiOptionPicker
+        visible={pickerTarget === 'workType'}
+        title="Work Type"
+        options={workTypes}
+        selected={tempWorkTypes}
+        onToggle={toggleWorkType}
+        onClose={() => setPickerTarget(null)}
+      />
+    </Modal>
+  );
+}
+
+function JobRow({ job, application, onPress }) {
+  const meta = [job.location, job.department, job.job_type].filter(Boolean).join(' \u00B7 ');
+  const status = application?.status;
+  const statusStyle = status ? STATUS_STYLES[status] : null;
+
+  return (
+    <Pressable style={styles.row} onPress={onPress}>
+      <View style={styles.rowTop}>
+        <Text style={styles.rowTitle} numberOfLines={2}>{job.job_title}</Text>
+        {statusStyle ? (
+          <View style={[styles.rowBadge, { backgroundColor: statusStyle.bg }]}>
+            <Text style={[styles.rowBadgeText, { color: statusStyle.color }]}>{statusStyle.label}</Text>
+          </View>
+        ) : null}
+      </View>
+      {meta ? <Text style={styles.rowMeta}>{meta}</Text> : null}
+      <Text style={styles.rowTimestamp}>Posted {timeAgo(job.created_at)}</Text>
+    </Pressable>
+  );
+}
 
 export default function JobsListScreen({ navigation, user }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
@@ -27,78 +190,38 @@ export default function JobsListScreen({ navigation, user }) {
   const [applicationMap, setApplicationMap] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedLocations, setSelectedLocations] = useState([]);
+  const [selectedDepartments, setSelectedDepartments] = useState([]);
+  const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
-  const loadJobs = useCallback(async () => {
-    const [jobsData, applicationsData] = await Promise.all([
+  const [tempLocations, setTempLocations] = useState([]);
+  const [tempDepartments, setTempDepartments] = useState([]);
+  const [tempWorkTypes, setTempWorkTypes] = useState([]);
+
+  const loadData = useCallback(async () => {
+    const [jobsData, appsData] = await Promise.all([
       jobService.getAllJobs(),
-      alumniId ? jobService.getApplicationsByAlumni(alumniId) : Promise.resolve([])
+      alumniId ? jobService.getApplicationsByAlumni(alumniId).catch(() => []) : Promise.resolve([])
     ]);
-
     setJobs(jobsData || []);
 
     const nextMap = new Map();
-    (applicationsData || []).forEach((entry) => {
+    (appsData || []).forEach((entry) => {
       const jobId = Number(entry?.job_posting_id || entry?.job_posting?.id);
       if (!Number.isNaN(jobId)) {
-        nextMap.set(jobId, {
-          id: entry.id,
-          status: entry.status,
-          appliedAt: entry.applied_at
-        });
+        nextMap.set(jobId, { id: entry.id, status: entry.status, appliedAt: entry.applied_at });
       }
     });
     setApplicationMap(nextMap);
   }, [alumniId]);
 
-  const handleWithdraw = (applicationId) => {
-    Alert.alert(
-      'Withdraw Application',
-      'Are you sure you want to withdraw this application? You can reapply later.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Withdraw',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await jobService.withdrawApplication(applicationId);
-              await loadJobs();
-            } catch (error) {
-              Alert.alert('Withdraw failed', error?.response?.data?.error || 'Please try again later.');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const filteredJobs = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let result = jobs;
-
-    if (q) {
-      result = result.filter((job) => {
-        const hay = [job.job_title, job.company, job.location, job.description]
-          .map((value) => String(value || ''))
-          .join(' ')
-          .toLowerCase();
-        return hay.includes(q);
-      });
-    }
-
-    if (selectedCategory !== 'All') {
-      result = result.filter((job) => job.category === selectedCategory);
-    }
-
-    return result;
-  }, [jobs, query, selectedCategory]);
-
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
       setLoading(true);
-      loadJobs()
+      loadData()
         .catch((error) => console.error('Failed to load jobs:', error?.message || error))
         .finally(() => {
           if (mounted) setLoading(false);
@@ -106,47 +229,129 @@ export default function JobsListScreen({ navigation, user }) {
       return () => {
         mounted = false;
       };
-    }, [loadJobs])
+    }, [loadData])
   );
+
+  const uniqueLocations = useMemo(() => [...new Set(jobs.map(j => j.location).filter(Boolean))], [jobs]);
+
+  const filteredJobs = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let result = jobs;
+
+    if (q) {
+      result = result.filter((job) => {
+        const hay = [job.job_title, job.company, job.location, job.department]
+          .map((v) => String(v || ''))
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    if (selectedLocations.length > 0) result = result.filter((j) => selectedLocations.includes(j.location));
+    if (selectedDepartments.length > 0) result = result.filter((j) => selectedDepartments.includes(j.department));
+    if (selectedWorkTypes.length > 0) result = result.filter((j) => selectedWorkTypes.includes(j.job_type));
+
+    if (statusFilter) {
+      result = result.filter((j) => {
+        const app = applicationMap.get(Number(j.id));
+        return app?.status === statusFilter;
+      });
+    }
+
+    return result;
+  }, [jobs, query, selectedLocations, selectedDepartments, selectedWorkTypes, statusFilter, applicationMap]);
+
+  const activeFilterCount = selectedLocations.length + selectedDepartments.length + selectedWorkTypes.length;
+
+  const openFilter = () => {
+    setTempLocations([...selectedLocations]);
+    setTempDepartments([...selectedDepartments]);
+    setTempWorkTypes([...selectedWorkTypes]);
+    setShowFilterDropdown(true);
+  };
+
+  const toggleTempLocation = (v) => setTempLocations(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const toggleTempDepartment = (v) => setTempDepartments(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const toggleTempWorkType = (v) => setTempWorkTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+
+  const applyFilter = () => {
+    setSelectedLocations([...tempLocations]);
+    setSelectedDepartments([...tempDepartments]);
+    setSelectedWorkTypes([...tempWorkTypes]);
+    setShowFilterDropdown(false);
+  };
+
+  const clearFilter = () => {
+    setTempLocations([]);
+    setTempDepartments([]);
+    setTempWorkTypes([]);
+  };
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <SectionHeader title="Job Board" subtitle="Explore openings posted across alumni network." />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.screenTitle}>Job Board</Text>
+        <Text style={styles.screenSubtitle}>Explore openings posted across alumni network.</Text>
 
-        <View style={styles.searchPanel}>
-          <Text style={styles.searchTitle}>Search Jobs</Text>
+        <View style={styles.statusTabRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusTabScroll}>
+            {STATUS_TABS.map((tab) => {
+              const active = statusFilter === tab.key;
+              return (
+                <Pressable
+                  key={tab.key}
+                  style={[styles.statusTab, active && styles.statusTabActive]}
+                  onPress={() => setStatusFilter(statusFilter === tab.key ? '' : tab.key)}
+                >
+                  <Text style={[styles.statusTabText, active && styles.statusTabTextActive]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.searchRow}>
           <View style={styles.searchShell}>
             <Ionicons name="search-outline" size={18} color="#64748b" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by title, company, location"
+              placeholder="Search jobs..."
               placeholderTextColor="#94a3b8"
               value={query}
               onChangeText={setQuery}
             />
             {query ? (
-              <Pressable style={styles.searchClearButton} onPress={() => setQuery('')} hitSlop={10}>
+              <Pressable onPress={() => setQuery('')} hitSlop={10}>
                 <Ionicons name="close-circle" size={18} color="#94a3b8" />
               </Pressable>
             ) : null}
           </View>
+
+          <Pressable style={[styles.filterToggleBtn, activeFilterCount > 0 && styles.filterToggleBtnActive]} onPress={openFilter}>
+            <Ionicons name="filter-outline" size={18} color={activeFilterCount > 0 ? '#fff' : '#475569'} />
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterToggleBadge}>
+                <Text style={styles.filterToggleBadgeText}>{activeFilterCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
 
-        {/* Category Pills */}
-        <View style={styles.categoryRow}>
-          {categories.map((category) => (
-            <Pressable
-              key={category}
-              style={[styles.pill, selectedCategory === category && styles.pillActive]}
-              onPress={() => setSelectedCategory(category)}
-            >
-              <Text style={[styles.pillText, selectedCategory === category && styles.pillTextActive]}>
-                {category}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <FilterDropdown
+          visible={showFilterDropdown}
+          locations={uniqueLocations}
+          tempLocations={tempLocations}
+          tempDepartments={tempDepartments}
+          tempWorkTypes={tempWorkTypes}
+          toggleLocation={toggleTempLocation}
+          toggleDepartment={toggleTempDepartment}
+          toggleWorkType={toggleTempWorkType}
+          onApply={applyFilter}
+          onClear={clearFilter}
+          onClose={() => setShowFilterDropdown(false)}
+        />
 
         <Pressable style={styles.myAppsButton} onPress={() => navigation.navigate('MyApplications')}>
           <Text style={styles.myAppsText}>View My Applications</Text>
@@ -156,147 +361,70 @@ export default function JobsListScreen({ navigation, user }) {
         {!loading && jobs.length === 0 ? <EmptyState title="No jobs available" /> : null}
         {!loading && jobs.length > 0 && filteredJobs.length === 0 ? <EmptyState title="No matching jobs" /> : null}
 
-        {!loading && filteredJobs.map((job) => {
-          const application = applicationMap.get(Number(job.id));
-          const isApplied = !!application;
-          const status = application?.status;
-          return (
-          <View key={job.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.jobTitle}>{job.job_title || 'Job Opening'}</Text>
-                <Text style={styles.companyName}>{job.company || 'Company not specified'}</Text>
-              </View>
-              {isApplied ? (
-                <View style={[styles.statusBadge, STATUS_STYLES[status]?.badge]}>
-                  <Text style={[styles.statusBadgeText, STATUS_STYLES[status]?.text]}>
-                    {STATUS_STYLES[status]?.label || status}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.openBadge}>
-                  <Text style={styles.openBadgeText}>Open</Text>
-                </View>
-              )}
-            </View>
-
-            {job.created_at ? (
-              <Text style={styles.postedDate}>Posted {new Date(job.created_at).toLocaleDateString()}</Text>
-            ) : null}
-
-            {/* Metadata Grid */}
-            <View style={styles.metaGrid}>
-              <View style={styles.metaItem}>
-                <Ionicons name="location-outline" size={14} color="#475569" />
-                <Text style={styles.metaText}>{job.location || 'Not specified'}</Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="briefcase-outline" size={14} color="#475569" />
-                <Text style={styles.metaText}>{job.job_type || 'Not specified'}</Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="cash-outline" size={14} color="#475569" />
-                <Text style={styles.metaText}>{job.salary_range || 'Not specified'}</Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="calendar-outline" size={14} color="#475569" />
-                <Text style={styles.metaText}>Deadline: {formatDate(job.application_deadline)}</Text>
-              </View>
-            </View>
-
-            {/* Requirements */}
-            {job.requirements ? (
-              <View style={styles.sectionBox}>
-                <Text style={styles.sectionBoxTitle}>Requirements</Text>
-                <Text style={styles.sectionBoxText} numberOfLines={4}>{job.requirements}</Text>
-              </View>
-            ) : null}
-
-            {/* Description */}
-            {job.description ? (
-              <View style={styles.sectionBox}>
-                <Text style={styles.sectionBoxTitle}>Description</Text>
-                <Text style={styles.sectionBoxText} numberOfLines={3}>{job.description}</Text>
-              </View>
-            ) : null}
-
-            {/* Action */}
-            {!isApplied && (
-              <Pressable
-                style={styles.applyButton}
-                onPress={() => navigation.navigate('JobApplication', { jobId: job.id })}
-              >
-                <Text style={styles.applyButtonText}>Apply Now</Text>
-              </Pressable>
-            )}
-            {isApplied && status === 'PENDING' && (
-              <View style={styles.pendingActions}>
-                <Ionicons name="time-outline" size={16} color="#ca8a04" />
-                <Text style={styles.pendingText}>Application Pending</Text>
-                <Pressable
-                  style={styles.withdrawBtn}
-                  onPress={() => handleWithdraw(application.id)}
-                >
-                  <Text style={styles.withdrawBtnText}>Withdraw</Text>
-                </Pressable>
-              </View>
-            )}
-            {isApplied && status && status !== 'PENDING' && (
-              <View style={styles.appliedFooter}>
-                <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
-                <Text style={styles.appliedFooterText}>
-                  {status === 'SHORTLISTED' ? 'You were shortlisted!' :
-                   status === 'ACCEPTED' ? 'You were accepted!' :
-                   status === 'REJECTED' ? 'Not selected' :
-                   status === 'REVIEWED' ? 'Under review' : 'Applied'}
-                </Text>
-              </View>
-            )}
-          </View>
-        );
-        })}
+        {!loading && filteredJobs.map((job, index) => (
+          <React.Fragment key={job.id}>
+            <JobRow
+              job={job}
+              application={applicationMap.get(Number(job.id))}
+              onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}
+            />
+            {index < filteredJobs.length - 1 ? <View style={styles.divider} /> : null}
+          </React.Fragment>
+        ))}
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  myAppsButton: {
-    borderRadius: 12,
-    backgroundColor: '#dbeafe',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    padding: 12,
-    alignItems: 'center',
+  scrollContent: {
+    paddingBottom: 32
+  },
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 8
+  },
+  screenSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 4,
     marginBottom: 12
   },
-  myAppsText: {
-    color: '#1e3a8a',
-    fontWeight: '700'
+  statusTabRow: {
+    marginBottom: 12
   },
-  searchPanel: {
+  statusTabScroll: {
+    gap: 8
+  },
+  statusTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#dbe3f0',
-    backgroundColor: '#f8fbff',
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
-    marginTop: 16,
-    marginBottom: 12,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff'
   },
-  searchTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6
+  statusTabActive: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a'
+  },
+  statusTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  statusTabTextActive: {
+    color: '#ffffff'
+  },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12
   },
   searchShell: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -312,178 +440,272 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: 'transparent',
-    borderRadius: 0,
-    paddingHorizontal: 0,
     fontSize: 14,
     color: '#0f172a'
   },
-  searchClearButton: {
-    marginLeft: 8
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12
-  },
-  pill: {
-    borderRadius: 999,
+  filterToggleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    paddingVertical: 7
-  },
-  pillActive: {
-    borderColor: '#2563eb',
-    backgroundColor: '#2563eb'
-  },
-  pillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569'
-  },
-  pillTextActive: {
-    color: '#ffffff'
-  },
-  card: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#dbe3f0',
-    backgroundColor: '#fff',
-    padding: 14,
-    gap: 10,
-    marginBottom: 10,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 8
-  },
-  jobTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a'
-  },
-  companyName: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 2
-  },
-  postedDate: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontWeight: '500'
-  },
-  statusBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700'
-  },
-  openBadge: {
-    backgroundColor: '#dbeafe',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4
-  },
-  openBadgeText: {
-    color: '#1d4ed8',
-    fontSize: 11,
-    fontWeight: '700'
-  },
-  metaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6
-  },
-  metaItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    width: '48%'
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginRight: 4
   },
-  metaText: {
+  filterToggleBtnActive: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a'
+  },
+  filterToggleBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -3,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5
+  },
+  filterToggleBadgeText: {
+    color: '#fff',
     fontSize: 12,
-    color: '#475569',
-    flexShrink: 1
+    fontWeight: '700'
   },
-  sectionBox: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    padding: 10,
+  myAppsButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#dbeafe',
     borderWidth: 1,
-    borderColor: '#f1f5f9'
+    borderColor: '#bfdbfe',
+    padding: 12,
+    marginBottom: 16
   },
-  sectionBoxTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  sectionBoxText: {
-    fontSize: 13,
-    color: '#334155',
-    lineHeight: 19
-  },
-  applyButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center'
-  },
-  applyButtonText: {
-    color: '#ffffff',
+  myAppsText: {
+    color: '#1e3a8a',
     fontWeight: '700',
     fontSize: 14
   },
-  appliedFooter: {
+  row: {
+    paddingVertical: 16,
+    paddingHorizontal: 4
+  },
+  rowTop: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10
   },
-  appliedFooterText: {
-    color: '#16a34a',
-    fontWeight: '600',
-    fontSize: 13
+  rowTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2563eb',
+    lineHeight: 24
   },
-  pendingActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4
+  rowBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start'
   },
-  pendingText: {
-    color: '#ca8a04',
-    fontWeight: '600',
+  rowBadgeText: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  rowMeta: {
+    fontSize: 14,
+    color: '#475569',
+    marginTop: 4
+  },
+  rowTimestamp: {
     fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 4
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e2e8f0'
+  },
+  dropdownBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.38)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24
+  },
+  dropdownPanel: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden'
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  dropdownCountBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dropdownCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  dropdownFields: {
+    padding: 18,
+    gap: 0
+  },
+  dropdownField: {
+    paddingVertical: 14
+  },
+  dropdownFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6
+  },
+  dropdownFieldValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  dropdownFieldValueText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
     flex: 1
   },
-  withdrawBtn: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6
+  dropdownFieldValuePlaceholder: {
+    color: '#94a3b8',
+    fontWeight: '400'
   },
-  withdrawBtnText: {
-    color: '#b91c1c',
-    fontWeight: '700',
-    fontSize: 12
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9'
+  },
+  dropdownActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingBottom: 18
+  },
+  dropdownClearBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca'
+  },
+  dropdownClearText: {
+    color: '#dc2626',
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  dropdownApplyBtn: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dropdownApplyText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.38)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24
+  },
+  pickerCard: {
+    width: '100%',
+    maxHeight: '60%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    overflow: 'hidden'
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  pickerList: {
+    padding: 10
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 2
+  },
+  pickerOptionActive: {
+    backgroundColor: '#eff6ff'
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  checkboxActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
+  },
+  pickerOptionText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#334155'
+  },
+  pickerOptionTextActive: {
+    color: '#1e3a8a',
+    fontWeight: '700'
   }
 });

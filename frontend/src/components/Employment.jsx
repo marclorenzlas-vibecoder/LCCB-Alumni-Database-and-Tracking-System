@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import careerService from '../services/careerService';
 import applicationService from '../services/applicationService';
 import { authService } from '../services/authService';
 import ConfirmModal from './ConfirmModal';
+import FilterMenu from './FilterMenu';
 import UserLayout from './UserLayout';
 import { toast } from 'react-toastify';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
@@ -28,9 +29,11 @@ const Employment = () => {
     company: '',
     job_title: '',
     location: '',
+    department: '',
     type: '',
     salary: '',
     requirements: '',
+    benefits: '',
     deadline: '',
     description: ''
   });
@@ -40,6 +43,7 @@ const Employment = () => {
   // Application modal state
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [applicationTab, setApplicationTab] = useState('overview');
   const [coverLetter, setCoverLetter] = useState('');
   const [resumeFiles, setResumeFiles] = useState([]);
   const [contactMethod, setContactMethod] = useState('email');
@@ -60,9 +64,18 @@ const Employment = () => {
     cancelText: 'Cancel'
   });
 
-  const categories = ['All', 'Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
+  const categories = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLocations, setSelectedLocations] = useState([]);
+  const [selectedDepartments, setSelectedDepartments] = useState([]);
+  const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
+  const [showLocationMenu, setShowLocationMenu] = useState(false);
+  const [showDepartmentMenu, setShowDepartmentMenu] = useState(false);
+  const [showWorkTypeMenu, setShowWorkTypeMenu] = useState(false);
+  const locationMenuRef = useRef(null);
+  const departmentMenuRef = useRef(null);
+  const workTypeMenuRef = useRef(null);
 
   const fieldClass = 'mt-1 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100';
   const selectFieldClass = 'app-select';
@@ -89,6 +102,41 @@ const Employment = () => {
       fetchApplicationCounts();
     }
   }, [postedJobs.length, isTeacher]);
+
+  // Close filter menus on outside click / Escape
+  useEffect(() => {
+    if (!showLocationMenu && !showDepartmentMenu && !showWorkTypeMenu) return undefined;
+    const handlePointerDown = (event) => {
+      if (locationMenuRef.current && !locationMenuRef.current.contains(event.target)) setShowLocationMenu(false);
+      if (departmentMenuRef.current && !departmentMenuRef.current.contains(event.target)) setShowDepartmentMenu(false);
+      if (workTypeMenuRef.current && !workTypeMenuRef.current.contains(event.target)) setShowWorkTypeMenu(false);
+    };
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowLocationMenu(false);
+        setShowDepartmentMenu(false);
+        setShowWorkTypeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showLocationMenu, showDepartmentMenu, showWorkTypeMenu]);
+
+  const departments = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
+  const workTypes = ['Full-time', 'Part-time', 'Contract', 'Remote'];
+  const uniqueLocations = [...new Set(postedJobs.map(j => j.location).filter(Boolean))];
+  const locationSections = [{ key: 'locations', title: '', items: uniqueLocations.map(l => ({ value: l, label: l })) }];
+  const departmentSections = [{ key: 'departments', title: '', items: departments.map(d => ({ value: d, label: d })) }];
+  const workTypeSections = [{ key: 'worktypes', title: '', items: workTypes.map(w => ({ value: w, label: w })) }];
+
+  const selectedLocationLabel = selectedLocations.length > 0 ? `${selectedLocations.length} selected` : 'Location';
+  const selectedDepartmentLabel = selectedDepartments.length > 0 ? `${selectedDepartments.length} selected` : 'Department';
+  const selectedWorkTypeLabel = selectedWorkTypes.length > 0 ? `${selectedWorkTypes.length} selected` : 'Work type';
+  const activeFilterCount = selectedLocations.length + selectedDepartments.length + selectedWorkTypes.length;
 
   // Refresh counts when page becomes visible (user returns to tab)
   useEffect(() => {
@@ -175,6 +223,33 @@ const Employment = () => {
         className={`flex-1 ${actionBaseClass} ${config.bgColor} text-white`}>
         {config.text}
       </button>
+    );
+  };
+
+  const getInlineStatusBadge = (jobId) => {
+    const application = appliedJobs.get(jobId);
+    if (!application) return null;
+
+    const badgeStyles = {
+      REVIEWED: 'bg-purple-100 text-purple-800',
+      SHORTLISTED: 'bg-amber-100 text-amber-800',
+      ACCEPTED: 'bg-green-100 text-green-800',
+      REJECTED: 'bg-red-100 text-red-800',
+      PENDING: 'bg-yellow-100 text-yellow-800'
+    };
+
+    const badgeLabels = {
+      REVIEWED: 'Under Review',
+      SHORTLISTED: 'Shortlisted',
+      ACCEPTED: 'Accepted',
+      REJECTED: 'Rejected',
+      PENDING: 'Pending'
+    };
+
+    return (
+      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${badgeStyles[application.status] || badgeStyles.PENDING}`}>
+        {badgeLabels[application.status] || 'Pending'}
+      </span>
     );
   };
 
@@ -322,9 +397,11 @@ const Employment = () => {
         job_title: formData.job_title,
         company: formData.company,
         location: formData.location,
+        department: formData.department || null,
         job_type: formData.type,
         salary_range: formData.salary || null,
         requirements: formData.requirements || null,
+        benefits: formData.benefits || null,
         description: formData.description || null,
         application_deadline: formData.deadline ? new Date(formData.deadline).toISOString() : null
       };
@@ -348,9 +425,11 @@ const Employment = () => {
         company: '',
         job_title: '',
         location: '',
+        department: '',
         type: '',
         salary: '',
         requirements: '',
+        benefits: '',
         deadline: '',
         description: ''
       });
@@ -369,9 +448,11 @@ const Employment = () => {
       company: job.company || '',
       job_title: job.job_title || '',
       location: job.location || '',
+      department: job.department || '',
       type: job.job_type || '',
       salary: job.salary_range || '',
       requirements: job.requirements || '',
+      benefits: job.benefits || '',
       deadline: job.application_deadline ? new Date(job.application_deadline).toISOString().split('T')[0] : '',
       description: job.description || ''
     });
@@ -415,6 +496,7 @@ const Employment = () => {
     setContactMethod('email');
     setContactEmail(currentUser?.email || '');
     setContactNumber(currentUser?.alumni?.contact_number || currentUser?.contact_number || '');
+    setApplicationTab('overview');
     setShowApplicationModal(true);
   };
 
@@ -486,7 +568,9 @@ const Employment = () => {
   };
 
   const filteredJobs = postedJobs
-    .filter(job => selectedCategory === 'All' || job.category === selectedCategory)
+    .filter(job => selectedDepartments.length === 0 || selectedDepartments.includes(job.department))
+    .filter(job => selectedWorkTypes.length === 0 || selectedWorkTypes.includes(job.job_type))
+    .filter(job => selectedLocations.length === 0 || selectedLocations.includes(job.location))
     .filter(job => 
       (job.job_title && job.job_title.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (job.company && job.company.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -523,7 +607,7 @@ const Employment = () => {
             </div>
             {isTeacher && (
               <button
-                onClick={() => setShowModal(true)}
+                onClick={() => { setEditingId(null); setFormData({ alumni_id: '', company: '', job_title: '', location: '', department: '', type: '', salary: '', requirements: '', benefits: '', deadline: '', description: '' }); setError(''); setShowModal(true); }}
                 className="app-primary-button"
               >
                 Add New
@@ -533,8 +617,8 @@ const Employment = () => {
         </div>
 
         {/* Search and Filter Section */}
-        <div className="mb-8">
-          <div className="max-w-3xl mx-auto">
+        <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="px-5 py-4">
             {/* Search Bar */}
             <div className="mb-4">
               <div className="relative group">
@@ -547,7 +631,7 @@ const Employment = () => {
                 </div>
                 <input
                   type="text"
-                  placeholder="Search jobs, companies, or locations"
+                  placeholder="Search jobs..."
                   className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-14 pr-12 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -567,141 +651,175 @@ const Employment = () => {
               </div>
             </div>
 
-            {/* Category Filter */}
-            <div className="flex flex-wrap gap-2 justify-center">
-              {categories.map((category) => (
+            {/* Filter Dropdowns */}
+            <div className="flex flex-wrap items-center gap-3">
+              <FilterMenu
+                menuRef={locationMenuRef}
+                isOpen={showLocationMenu}
+                setIsOpen={setShowLocationMenu}
+                buttonLabel="Location"
+                selectedLabel={selectedLocationLabel}
+                selectedValues={selectedLocations}
+                multiSelect
+                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                sections={locationSections}
+                onSelect={(value) => {
+                  setSelectedLocations(prev => 
+                    prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+                  );
+                }}
+                panelTitle=""
+                panelWidthClass="w-56"
+                alignClass="right-0"
+              />
+              <FilterMenu
+                menuRef={departmentMenuRef}
+                isOpen={showDepartmentMenu}
+                setIsOpen={setShowDepartmentMenu}
+                buttonLabel="Department"
+                selectedLabel={selectedDepartmentLabel}
+                selectedValues={selectedDepartments}
+                multiSelect
+                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
+                sections={departmentSections}
+                onSelect={(value) => {
+                  setSelectedDepartments(prev => 
+                    prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+                  );
+                }}
+                panelTitle=""
+                panelWidthClass="w-56"
+                alignClass="right-0"
+              />
+              <FilterMenu
+                menuRef={workTypeMenuRef}
+                isOpen={showWorkTypeMenu}
+                setIsOpen={setShowWorkTypeMenu}
+                buttonLabel="Work type"
+                selectedLabel={selectedWorkTypeLabel}
+                selectedValues={selectedWorkTypes}
+                multiSelect
+                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                sections={workTypeSections}
+                onSelect={(value) => {
+                  setSelectedWorkTypes(prev => 
+                    prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+                  );
+                }}
+                panelTitle=""
+                panelWidthClass="w-56"
+                alignClass="right-0"
+              />
+              {activeFilterCount > 0 && (
                 <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`${pillClass} ${
-                    selectedCategory === category
-                      ? 'border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-700/20'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
+                  onClick={() => { setSelectedLocations([]); setSelectedDepartments([]); setSelectedWorkTypes([]); }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 transition hover:bg-red-100"
                 >
-                  {category}
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                  </svg>
+                  Clear Filter
                 </button>
-              ))}
+              )}
             </div>
           </div>
         </div>
 
         {/* Jobs List */}
-        <div className="space-y-6">
-          {loading && <div className="text-center py-8">Loading jobs...</div>}
-          {!loading && filteredJobs.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-lg shadow-md">
-              <p className="text-gray-500">No job postings found. Be the first to post a job!</p>
-            </div>
-          )}
-          {filteredJobs.map((job) => {
-            // Format dates
-            const formattedDeadline = job.application_deadline 
-              ? new Date(job.application_deadline).toLocaleDateString()
-              : null;
-            
-            return (
-              <div
-                key={job.id}
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-slate-900">{job.job_title}</h3>
-                    <p className="mt-1 text-sm font-medium text-slate-500">{job.company}</p>
-                  </div>
-                  {job.created_at && (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Posted {new Date(job.created_at).toLocaleDateString()}
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse" style={{ minWidth: isTeacher ? '820px' : '640px', tableLayout: 'fixed' }}>
+              <colgroup>
+                {isTeacher ? (
+                  <>
+                    <col style={{ width: '28%' }} />
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '14%', minWidth: '100px' }} />
+                    <col style={{ width: '26%', minWidth: '260px' }} />
+                  </>
+                ) : (
+                  <>
+                    <col style={{ width: '32%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '14%', minWidth: '100px' }} />
+                  </>
+                )}
+              </colgroup>
+              <thead>
+              <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Job Title</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Location</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Department</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Work Type</th>
+                {isTeacher && <th className="px-6 py-3 text-right text-sm font-semibold uppercase tracking-wider text-gray-500">Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={isTeacher ? 5 : 4} className="text-center py-8 text-gray-500 text-base">Loading jobs...</td>
+                </tr>
+              )}
+              {!loading && filteredJobs.length === 0 && (
+                <tr>
+                  <td colSpan={isTeacher ? 5 : 4} className="text-center py-12">
+                    <p className="text-gray-500">No job postings found.</p>
+                  </td>
+                </tr>
+              )}
+              {!loading && filteredJobs.map((job) => (
+                <tr
+                  key={job.id}
+                  onClick={() => handleApplyNow(job)}
+                  className="border-b border-gray-100 last:border-b-0 transition hover:bg-blue-50/50 cursor-pointer"
+                >
+                  <td className="px-6 py-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-lg font-semibold text-blue-600 hover:text-blue-800 transition truncate">{job.job_title}</p>
+                        {getInlineStatusBadge(job.id)}
+                      </div>
+                      <p className="text-sm text-gray-500 mt-0.5">Posted {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}</p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-base text-gray-700">{job.location || '—'}</td>
+                  <td className="px-6 py-4 text-base text-gray-700">{job.department || '—'}</td>
+                  <td className="px-6 py-4 text-base text-gray-700">
+                    <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-sm font-semibold text-gray-600 whitespace-nowrap">
+                      {job.job_type || '—'}
                     </span>
-                  )}
-                </div>
-                
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="flex items-center text-slate-600">
-                    <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {job.location || 'Not specified'}
-                  </div>
-                  <div className="flex items-center text-slate-600">
-                    <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {job.job_type || 'Not specified'}
-                  </div>
-                  <div className="flex items-center text-slate-600">
-                    <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {job.salary_range || 'Not specified'}
-                  </div>
-                  {formattedDeadline && (
-                    <div className="flex items-center text-slate-600">
-                      <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      Deadline: {formattedDeadline}
-                    </div>
-                  )}
-                </div>
-
-                {/* Requirements Section */}
-                {job.requirements && (
-                  <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-2">Requirements</h4>
-                    <div className="text-sm leading-6 text-slate-600 max-h-[7.5rem] overflow-y-auto scrollbar-hide">
-                      <div className="whitespace-pre-wrap">{job.requirements}</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Job Description Section */}
-                {job.description && (
-                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-2">Description</h4>
-                    <div className="text-sm leading-6 text-slate-600 max-h-[7.5rem] overflow-y-auto scrollbar-hide">
-                      <div className="whitespace-pre-wrap">{job.description}</div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  {!isTeacher && (
-                    appliedJobs.has(job.id) ? (
-                      getApplicationStatusButton(job.id)
-                    ) : (
-                      <button 
-                        onClick={() => handleApplyNow(job)} 
-                        className={`${primaryActionClass} flex-1`}>
-                        Apply Now
-                      </button>
-                    )
-                  )}
+                  </td>
                   {isTeacher && (
-                    <>
-                      <button 
-                        onClick={() => navigate(`/job-applications/${job.id}`)}
-                        className="flex-1 px-5 py-3 text-sm font-semibold text-white bg-blue-600 rounded-xl shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-100">
-                        View Applications ({applicationCounts[job.id] || 0})
-                      </button>
-                      <button 
-                        onClick={() => handleEdit(job)}
-                        className="flex-1 px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 shadow-sm text-sm font-medium transition-colors">
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(job.id)}
-                        className="flex-1 px-3 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 shadow-sm text-sm font-medium transition-colors">
-                        Delete
-                      </button>
-                    </>
+                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1" style={{ flexDirection: 'row', alignItems: 'center', gap: '6px', justifyContent: 'flex-start' }}>
+                        <button
+                          onClick={() => navigate(`/job-applications/${job.id}`)}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200 text-sm font-medium shadow-sm whitespace-nowrap"
+                        >
+                          Applications ({applicationCounts[job.id] || 0})
+                        </button>
+                        <button
+                          onClick={() => handleEdit(job)}
+                          className="flex-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(job.id)}
+                          className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium shadow-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
                   )}
-                </div>
-              </div>
-            );
-          })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
         </div>
 
         {/* Modal for Posting a Job */}
@@ -759,6 +877,25 @@ const Employment = () => {
                         className={fieldClass}
                         placeholder="e.g. Makati City"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Department
+                      </label>
+                      <select
+                        name="department"
+                        value={formData.department}
+                        onChange={handleInputChange}
+                        className={selectFieldClass}
+                      >
+                        <option value="">Select department</option>
+                        <option value="Technology">Technology</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Analytics">Analytics</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Education">Education</option>
+                      </select>
                     </div>
 
                     <div>
@@ -823,6 +960,20 @@ const Employment = () => {
 
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Benefits
+                      </label>
+                      <textarea
+                        name="benefits"
+                        value={formData.benefits}
+                        onChange={handleInputChange}
+                        className={`${fieldClass} resize-none`}
+                        placeholder="Describe the benefits, perks, and compensation details..."
+                        rows="4"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Job Description
                       </label>
                       <textarea
@@ -868,41 +1019,180 @@ const Employment = () => {
           </div>
         )}
 
-        {/* Application Modal */}
+        {/* Application Full Page */}
         {showApplicationModal && selectedJob && (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/55 backdrop-blur-sm">
-            <div className="relative mx-auto my-6 flex w-[min(100%-1rem,72rem)] max-w-6xl flex-col overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-2xl max-h-[calc(100vh-3rem)]">
-              <div className="sticky top-0 z-10 border-b border-blue-100 bg-gradient-to-r from-blue-50 via-white to-blue-50 px-6 py-5 sm:px-8">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                      Apply for {selectedJob.job_title}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      at {selectedJob.company}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedJob.location && (
-                      <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm">
-                        {selectedJob.location}
-                      </span>
-                    )}
-                    {selectedJob.type && (
-                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                        {selectedJob.type}
-                      </span>
-                    )}
-                    {selectedJob.salary && (
-                      <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm">
-                        {selectedJob.salary}
-                      </span>
-                    )}
-                  </div>
+          <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm">
+              <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4 sm:px-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApplicationModal(false);
+                    setSelectedJob(null);
+                    setCoverLetter('');
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-100 border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                  Back to Jobs
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setApplicationTab('overview')}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                      applicationTab === 'overview'
+                        ? 'bg-blue-700 text-white shadow-md shadow-blue-700/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setApplicationTab('application')}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                      applicationTab === 'application'
+                        ? 'bg-blue-700 text-white shadow-md shadow-blue-700/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Application
+                  </button>
                 </div>
               </div>
-              
-              <div className="flex-1 overflow-y-auto scrollbar-hide bg-slate-50/60 px-6 py-6 sm:px-8">
+            </div>
+
+            {/* Content */}
+            <div className="mx-auto max-w-5xl px-6 py-8 sm:px-8">
+              {applicationTab === 'overview' ? (
+                /* ── Overview Tab ── */
+                <div className="space-y-8">
+                  <div>
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">{selectedJob.job_title}</h1>
+                    <p className="mt-2 text-lg text-slate-500">{selectedJob.company}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {selectedJob.location && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                          {selectedJob.location}
+                        </span>
+                      )}
+                      {selectedJob.job_type && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {selectedJob.job_type}
+                        </span>
+                      )}
+                      {selectedJob.salary_range && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {selectedJob.salary_range}
+                        </span>
+                      )}
+                      {selectedJob.application_deadline && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          Deadline: {new Date(selectedJob.application_deadline).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Job Details</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Company</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedJob.company}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Location</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedJob.location || 'Not specified'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Salary Range</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedJob.salary_range || 'Not specified'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Timeline</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Posted</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedJob.created_at ? new Date(selectedJob.created_at).toLocaleDateString() : 'N/A'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Application Deadline</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedJob.application_deadline ? new Date(selectedJob.application_deadline).toLocaleDateString() : 'Open until filled'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Employment Type</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedJob.job_type || 'Not specified'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">Job Description</h2>
+                    <div className="prose prose-slate max-w-none text-base leading-7 text-slate-700 whitespace-pre-line">
+                      {selectedJob.description || 'No description provided.'}
+                    </div>
+                  </div>
+
+                  {selectedJob.requirements && (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <h2 className="text-xl font-bold text-slate-900 mb-4">Requirements & Qualifications</h2>
+                      <div className="prose prose-slate max-w-none text-base leading-7 text-slate-700 whitespace-pre-line">
+                        {selectedJob.requirements}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">Benefits</h2>
+                    <div className="prose prose-slate max-w-none text-base leading-7 text-slate-700 whitespace-pre-line">
+                      {selectedJob.benefits || 'No benefits listed.'}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* ── Application Tab ── */
                 <form id="job-application-form" onSubmit={handleSubmitApplication} className="space-y-6">
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-4 shadow-sm">
                     <div className="flex gap-3 items-center">
@@ -930,7 +1220,7 @@ const Employment = () => {
                           value={coverLetter}
                           onChange={(e) => setCoverLetter(e.target.value)}
                           className="block min-h-[28rem] flex-1 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm leading-6 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
-                          placeholder="Dear Hiring Manager,\n\nI am writing to express my interest in the position..."
+                          placeholder={"Dear Hiring Manager,\n\nI am writing to express my interest in the position..."}
                           rows="12"
                         />
                       </div>
@@ -945,7 +1235,7 @@ const Employment = () => {
                           multiple
                           accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                           onChange={(e) => setResumeFiles(e.target.files ? Array.from(e.target.files) : [])}
-                          className="block w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sml text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-amber-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-amber-900 hover:file:bg-amber-200"
+                          className="block w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-amber-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-amber-900 hover:file:bg-amber-200"
                         />
                         {resumeFiles.length > 0 && (
                           <div className="mt-2 space-y-2">
@@ -1006,9 +1296,7 @@ const Employment = () => {
                       </div>
 
                       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h4 className="text-sm font-semibold text-slate-900 mb-3">
-                          What happens next?
-                        </h4>
+                        <h4 className="text-sm font-semibold text-slate-900 mb-3">What happens next?</h4>
                         <ul className="space-y-2 text-sm leading-6 text-slate-600">
                           <li className="flex gap-2">
                             <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
@@ -1027,33 +1315,29 @@ const Employment = () => {
                     </div>
                   </div>
 
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowApplicationModal(false);
+                        setSelectedJob(null);
+                        setCoverLetter('');
+                      }}
+                      className={secondaryActionClass}
+                      disabled={applicationLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={applicationLoading}
+                      className={primaryActionClass}
+                    >
+                      {applicationLoading ? 'Submitting...' : 'Submit Application'}
+                    </button>
+                  </div>
                 </form>
-              </div>
-
-              <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] sm:px-8">
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowApplicationModal(false);
-                      setSelectedJob(null);
-                      setCoverLetter('');
-                    }}
-                    className={secondaryActionClass}
-                    disabled={applicationLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    form="job-application-form"
-                    disabled={applicationLoading}
-                    className={primaryActionClass}
-                  >
-                    {applicationLoading ? 'Submitting...' : 'Submit Application'}
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import achievementService from '../services/achievementService';
 import { realtimeClient } from '../services/realtimeClient';
@@ -6,6 +6,126 @@ import ConfirmModal from './ConfirmModal';
 import { authService } from '../services/authService';
 import UserLayout from './UserLayout';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import { Link } from 'react-router-dom';
+
+function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
+  const titleRef = useRef(null);
+  const [descLines, setDescLines] = useState(4);
+
+  const measureTitle = useCallback(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const lineHeight = 32;
+    const lines = Math.ceil(el.scrollHeight / lineHeight);
+    setDescLines(lines <= 1 ? 5 : 4);
+  }, []);
+
+  useEffect(() => {
+    measureTitle();
+    window.addEventListener('resize', measureTitle);
+    return () => window.removeEventListener('resize', measureTitle);
+  }, [measureTitle, achievement.title]);
+
+  return (
+    <div
+      key={achievement.id}
+      className="app-card overflow-hidden group flex h-full flex-col p-0"
+    >
+      <div className="relative h-48 overflow-hidden">
+        {achievement.image ? (
+          <img
+            src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+            alt={achievement.title}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-medium text-slate-500">
+            No image available
+          </div>
+        )}
+        <div className="absolute left-4 top-4 flex items-center gap-2">
+          <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-blue-900 shadow-sm backdrop-blur">
+            {achievement.category || 'General'}
+          </span>
+        </div>
+        <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
+          {achievement.date ? new Date(achievement.date).getFullYear() : 'N/A'}
+        </span>
+      </div>
+
+      <div
+        className="flex flex-col justify-between flex-1 px-6 pb-6 pt-5"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          height: '100%'
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flexGrow: 1
+        }}>
+          {(achievement.alumni_name || achievement.alumni) && (
+            <p className="text-sm text-gray-600 font-semibold mb-1">
+              {achievement.alumni_name || `${achievement.alumni.first_name} ${achievement.alumni.last_name}`}
+            </p>
+          )}
+          <h3 ref={titleRef} className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors duration-300">
+            <Link
+              to={`/achievements/${achievement.id}`}
+              className="hover:text-blue-900 transition-colors duration-300"
+            >
+              {achievement.title}
+            </Link>
+          </h3>
+          <div style={{ height: 'calc(1.4em * 5)', lineHeight: '1.4', overflow: 'hidden' }}>
+            <p
+              className={`text-gray-700 text-sm ${descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}`}
+              style={{ lineHeight: 1.4, wordBreak: 'break-word', marginBottom: 0 }}
+            >
+              {achievement.description || 'No description provided'}
+            </p>
+          </div>
+          <Link
+            to={`/achievements/${achievement.id}`}
+            className="read-more-link mt-auto"
+          >
+            Read More
+          </Link>
+        </div>
+        <div
+          className="pt-4 border-t border-gray-200"
+          style={{
+            marginTop: 'auto',
+            flexShrink: 0
+          }}
+        >
+          <p className="text-xs text-gray-600">
+            <span className="font-semibold text-gray-900">Date:</span> {achievement.date ? new Date(achievement.date).toLocaleDateString() : 'N/A'}
+          </p>
+        </div>
+        {isTeacher && (
+          <div className="mt-4 flex gap-2 pt-1">
+            <button
+              onClick={() => onEdit(achievement)}
+              className="flex-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => handleDelete(achievement.id)}
+              className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium shadow-sm"
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const Achievements = () => {
   const [achievements, setAchievements] = useState([]);
@@ -23,6 +143,7 @@ const Achievements = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState({
@@ -191,9 +312,23 @@ const Achievements = () => {
     });
   };
 
-  const filteredAchievements = selectedCategory === 'All' 
-    ? achievements 
-    : achievements.filter(a => a.category === selectedCategory);
+  const filteredAchievements = useMemo(() => {
+    let result = selectedCategory === 'All'
+      ? achievements
+      : achievements.filter(a => a.category === selectedCategory);
+
+    const q = searchTerm.trim().toLowerCase();
+    if (q) {
+      result = result.filter(a => {
+        const alumniName = a.alumni_name || (a.alumni ? `${a.alumni.first_name} ${a.alumni.last_name}` : '');
+        return [a.title, a.category, a.description, alumniName]
+          .map(v => String(v || '').toLowerCase())
+          .some(v => v.includes(q));
+      });
+    }
+
+    return result;
+  }, [achievements, selectedCategory, searchTerm]);
 
   return (
     <UserLayout>
@@ -232,94 +367,75 @@ const Achievements = () => {
         </div>
         </div>
 
-        {/* Categories Filter */}
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
-          {categories.map((category) => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                selectedCategory === category
-                  ? 'bg-blue-900 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-100'
-              } border border-gray-200`}
-            >
-              {category}
-            </button>
-          ))}
+        {/* Unified Search and Filter Card */}
+        <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm px-5 py-4">
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative group">
+              <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-100 bg-blue-50">
+                  <svg className="h-4.5 w-4.5 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </span>
+              </div>
+              <input
+                type="text"
+                placeholder="Search achievements by name, title, or category..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-14 pr-12 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-3 my-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Clear search"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path fillRule="evenodd" d="M10 8.586 5.707 4.293A1 1 0 0 0 4.293 5.707L8.586 10l-4.293 4.293a1 1 0 1 0 1.414 1.414L10 11.414l4.293 4.293a1 1 0 0 0 1.414-1.414L11.414 10l4.293-4.293a1 1 0 0 0-1.414-1.414L10 8.586Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Categories Filter */}
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
+                  selectedCategory === category
+                    ? 'bg-blue-900 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                } border border-gray-200`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Achievements Grid */}
-        <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
           {loading && <div className="col-span-full text-center">Loading...</div>}
           {error && <div className="col-span-full text-center text-red-600">{error}</div>}
           {!loading && filteredAchievements.length === 0 && (
             <div className="col-span-full text-center text-gray-500">No achievements found</div>
           )}
           {filteredAchievements.map((achievement) => (
-            <div
+            <AchievementGridCard
               key={achievement.id}
-              className="app-card overflow-hidden group flex h-full flex-col p-0"
-            >
-              <div className="relative h-48 overflow-hidden">
-                {achievement.image ? (
-                  <img
-                    src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-                    alt={achievement.title}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-medium text-slate-500">
-                    No image available
-                  </div>
-                )}
-                <div className="absolute left-4 top-4 flex items-center gap-2">
-                  <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-blue-900 shadow-sm backdrop-blur">
-                    {achievement.category || 'General'}
-                  </span>
-                </div>
-                <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
-                  {achievement.date ? new Date(achievement.date).getFullYear() : 'N/A'}
-                </span>
-              </div>
-
-              <div className="flex flex-1 flex-col px-6 pb-6 pt-5">
-                {(achievement.alumni_name || achievement.alumni) && (
-                  <p className="text-sm text-gray-600 mb-3">
-                    <span className="font-semibold text-gray-800">
-                      {achievement.alumni_name || `${achievement.alumni.first_name} ${achievement.alumni.last_name}`}
-                    </span>
-                  </p>
-                )}
-                <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors duration-300 min-h-[3.5rem]">
-                  {achievement.title}
-                </h3>
-                <p className="text-gray-600 mb-4 h-[7.5rem] overflow-y-auto scrollbar-hide leading-relaxed">
-                  {achievement.description || 'No description provided'}
-                </p>
-                <div className="border-t pt-4 mt-auto">
-                  <p className="text-sm text-gray-500">
-                    <span className="font-medium text-gray-900">Date:</span> {achievement.date ? new Date(achievement.date).toLocaleDateString() : 'N/A'}
-                  </p>
-                </div>
-                {isTeacher && (
-                  <div className="mt-4 flex gap-2 pt-1">
-                    <button
-                      onClick={() => handleEdit(achievement)}
-                      className="flex-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(achievement.id)}
-                      className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium shadow-sm"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+              achievement={achievement}
+              isTeacher={isTeacher}
+              onEdit={handleEdit}
+              handleDelete={handleDelete}
+            />
           ))}
         </div>
 

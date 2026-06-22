@@ -46,14 +46,10 @@ function CustomDrawerContent(props) {
   const { state, navigation, descriptors, user } = props;
   const insets = useSafeAreaInsets();
 
-  const topGroup = ["Notifications", "Settings"];
+  const topGroup = ["Home", "Alumni", "Events", "Achievements", "Employment", "Donations"];
   const bottomGroupOrder = [
-    "Home",
-    "Alumni",
-    "Events",
-    "Achievements",
-    "Employment",
-    "Donations",
+    "Notifications",
+    "Settings",
     "Admin",
   ];
 
@@ -177,12 +173,6 @@ export default function MainTabs({ user, setUser }) {
         ),
       })}
     >
-      <Drawer.Screen name="Notifications" options={{ headerShown: false }}>
-        {(props) => <NotificationsStack {...props} user={user} />}
-      </Drawer.Screen>
-      <Drawer.Screen name="Settings" options={{ headerShown: false }}>
-        {(props) => <SettingsStack {...props} user={user} setUser={setUser} />}
-      </Drawer.Screen>
       <Drawer.Screen name="Home" options={{ headerShown: false }}>
         {(props) => <HomeStack {...props} user={user} />}
       </Drawer.Screen>
@@ -215,6 +205,12 @@ export default function MainTabs({ user, setUser }) {
           {(props) => <AdminStack {...props} user={user} />}
         </Drawer.Screen>
       ) : null}
+      <Drawer.Screen name="Notifications" options={{ headerShown: false }}>
+        {(props) => <NotificationsStack {...props} user={user} />}
+      </Drawer.Screen>
+      <Drawer.Screen name="Settings" options={{ headerShown: false }}>
+        {(props) => <SettingsStack {...props} user={user} setUser={setUser} />}
+      </Drawer.Screen>
     </Drawer.Navigator>
   );
 }

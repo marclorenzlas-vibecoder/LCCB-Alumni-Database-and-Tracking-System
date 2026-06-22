@@ -4,8 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../../components/ScreenContainer';
 import LoadingState from '../../components/LoadingState';
+import BackButton from '../../components/BackButton';
 import { donationService } from '../../services/donationService';
 import { isAlumni, isTeacher } from '../../utils/auth';
+import { safeGoBack } from '../../utils/safeGoBack';
 
 const CURRENCY_OPTIONS = [
   { value: 'PHP', label: 'Philippine Peso (PHP)' },
@@ -294,7 +296,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
   };
   const goBack = () => {
     if (currentStep > 1) setCurrentStep(s => s - 1);
-    else navigation.goBack();
+    else safeGoBack(navigation);
   };
 
   const handleSubmit = async () => {
@@ -344,9 +346,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         <View style={styles.errorWrap}>
           <Ionicons name="alert-circle-outline" size={48} color="#dc2626" />
           <Text style={styles.errorTitle}>Campaign Not Found</Text>
-          <Pressable style={styles.errorBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.errorBtnText}>Go Back</Text>
-          </Pressable>
+          <BackButton navigation={navigation} label="Go Back" />
         </View>
       </ScreenContainer>
     );
@@ -422,14 +422,14 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           </View>
 
           <View style={styles.successActions}>
-            <Pressable style={styles.successBtnOutline} onPress={() => navigation.goBack()}>
+            <Pressable style={styles.successBtnOutline} onPress={() => safeGoBack(navigation)}>
               <Text style={styles.successBtnOutlineText}>Back to Campaigns</Text>
             </Pressable>
             <Pressable style={styles.successBtnSolid} onPress={() => {
               setSuccessState(null);
               setCurrentStep(1);
               setAmount('');
-              navigation.goBack();
+              safeGoBack(navigation);
             }}>
               <Text style={styles.successBtnSolidText}>Done</Text>
             </Pressable>

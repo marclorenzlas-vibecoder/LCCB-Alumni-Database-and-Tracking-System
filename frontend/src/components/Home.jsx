@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import eventService from '../services/eventService';
 import achievementService from '../services/achievementService';
@@ -10,6 +10,72 @@ import NotificationPermissionPopup from './NotificationPermissionPopup';
 import UserLayout from './UserLayout';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { extractDonationMeta } from '../utils/donationMeta';
+
+function AchievementHomeCard({ achievement }) {
+  const titleRef = useRef(null);
+  const [descLines, setDescLines] = useState(4);
+
+  const measureTitle = useCallback(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const lineHeight = 28;
+    const lines = Math.ceil(el.scrollHeight / lineHeight);
+    setDescLines(lines <= 1 ? 5 : 4);
+  }, []);
+
+  useEffect(() => {
+    measureTitle();
+    window.addEventListener('resize', measureTitle);
+    return () => window.removeEventListener('resize', measureTitle);
+  }, [measureTitle, achievement.title]);
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
+      {achievement.image ? (
+        <img
+          src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+          alt={achievement.title}
+          className="w-full h-40 object-cover rounded-lg mb-4"
+        />
+      ) : (
+        <div className="w-full h-40 bg-blue-100 rounded-lg mb-4 flex items-center justify-center">
+          <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </div>
+      )}
+      <div className="flex-1 flex flex-col">
+        <h3 ref={titleRef} className="text-lg font-semibold text-gray-900 mb-2">{achievement.title}</h3>
+        <div style={{ height: 'calc(1.4em * 5)', lineHeight: '1.4', overflow: 'hidden' }}>
+          <p
+            className={`text-gray-600 text-sm ${descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}`}
+            style={{ lineHeight: 1.4, wordBreak: 'break-word' }}
+          >
+            {achievement.description || 'No description provided'}
+          </p>
+        </div>
+        <Link
+          to={`/achievements/${achievement.id}`}
+          className="read-more-link mt-auto"
+        >
+          Read More
+        </Link>
+      </div>
+      {achievement.date && (
+        <div
+          className="mt-auto pt-3 flex items-center text-gray-500 text-sm"
+          style={{
+            marginTop: 'auto',
+            flexShrink: 0
+          }}
+        >
+          <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          {new Date(achievement.date).toLocaleDateString()}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const Home = () => {
   const navigate = useNavigate();
@@ -493,31 +559,9 @@ const Home = () => {
           ) : achievements.length === 0 ? (
             <div className="text-center py-8 text-gray-500">No achievements available</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
               {achievements.map((achievement) => (
-                <div key={achievement.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
-                  {achievement.image ? (
-                    <img
-                      src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-                      alt={achievement.title}
-                      className="w-full h-40 object-cover rounded-lg mb-4"
-                    />
-                  ) : (
-                    <div className="w-full h-40 bg-blue-100 rounded-lg mb-4 flex items-center justify-center">
-                      <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </div>
-                  )}
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{achievement.title}</h3>
-                  <p className="text-gray-600 text-sm line-clamp-3">{achievement.description}</p>
-                  {achievement.date && (
-                    <div className="mt-3 flex items-center text-gray-500 text-sm">
-                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      {new Date(achievement.date).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
+                <AchievementHomeCard key={achievement.id} achievement={achievement} />
               ))}
             </div>
           )}

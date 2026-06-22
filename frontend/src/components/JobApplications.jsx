@@ -540,17 +540,6 @@ const JobApplications = () => {
                 </div>
 
                 {/* Action Buttons - Removed from detail modal */}
-                <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-                  <button
-                    onClick={() => {
-                      setShowDetailModal(false);
-                      setSelectedApplication(null);
-                    }}
-                    className="px-6 py-2.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 font-medium"
-                  >
-                    Close
-                  </button>
-                </div>
               </div>
             </div>
           </div>

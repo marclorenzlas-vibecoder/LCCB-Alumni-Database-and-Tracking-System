@@ -5,9 +5,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../../components/ScreenContainer';
 import LoadingState from '../../components/LoadingState';
+import BackButton from '../../components/BackButton';
 import { jobService } from '../../services/jobService';
 import { getAlumniId } from '../../utils/auth';
 import { formatDate } from '../../utils/formatters';
+import { safeGoBack } from '../../utils/safeGoBack';
 
 export default function JobApplicationScreen({ route, navigation, user }) {
   const { jobId } = route.params || {};
@@ -156,12 +158,7 @@ export default function JobApplicationScreen({ route, navigation, user }) {
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={48} color="#dc2626" />
           <Text style={styles.errorTitle}>Job Not Found</Text>
-          <Pressable
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </Pressable>
+          <BackButton navigation={navigation} label="Go Back" />
         </View>
       </ScreenContainer>
     );
@@ -330,7 +327,7 @@ export default function JobApplicationScreen({ route, navigation, user }) {
         <View style={styles.actions}>
           <Pressable
             style={styles.cancelBtn}
-            onPress={() => navigation.goBack()}
+            onPress={() => safeGoBack(navigation)}
             disabled={submitting}
           >
             <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -343,10 +340,7 @@ export default function JobApplicationScreen({ route, navigation, user }) {
             {submitting ? (
               <Text style={styles.submitBtnText}>Submitting...</Text>
             ) : (
-              <>
-                <Ionicons name="send-outline" size={15} color="#ffffff" />
-                <Text style={styles.submitBtnText}>Submit Application</Text>
-              </>
+              <Text style={styles.submitBtnText}>Submit Application</Text>
             )}
           </Pressable>
         </View>
@@ -596,10 +590,8 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flex: 1.5,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
     backgroundColor: '#2563eb',
     borderRadius: 10,
     paddingVertical: 13

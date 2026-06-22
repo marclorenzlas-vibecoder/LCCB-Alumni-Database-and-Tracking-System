@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import BackButton from '../../components/BackButton';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
@@ -14,10 +15,10 @@ const STATUS_CONFIG = {
   REVIEWED: { label: 'Under Review', bg: '#e0e7ff', text: '#3730a3', icon: 'eye-outline' },
   SHORTLISTED: { label: 'Shortlisted', bg: '#dcfce7', text: '#166534', icon: 'star-outline' },
   ACCEPTED: { label: 'Accepted', bg: '#d1fae5', text: '#065f46', icon: 'checkmark-circle-outline' },
-  REJECTED: { label: 'Not Selected', bg: '#fee2e2', text: '#991b1b', icon: 'close-circle-outline' }
+  REJECTED: { label: 'Rejected', bg: '#fee2e2', text: '#991b1b', icon: 'close-circle-outline' }
 };
 
-export default function MyApplicationsScreen({ user }) {
+export default function MyApplicationsScreen({ navigation, user }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +71,7 @@ export default function MyApplicationsScreen({ user }) {
 
   return (
     <ScreenContainer>
+      <BackButton navigation={navigation} label="Back to Jobs" />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {loading ? <LoadingState label="Loading applications" /> : null}
         {!loading && items.length === 0 ? <EmptyState title="No applications yet" /> : null}
