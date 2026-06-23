@@ -851,25 +851,29 @@ const Events = () => {
 const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent, handleDeleteEvent }) => {
   const navigate = useNavigate();
   const titleRef = React.useRef(null);
-  const [descriptionLines, setDescriptionLines] = React.useState(2);
-  const [titleLines, setTitleLines] = React.useState(1);
-  
+  const [descLines, setDescLines] = React.useState(4);
+
   React.useEffect(() => {
-    if (titleRef.current) {
-      const titleHeight = titleRef.current.offsetHeight;
-      const lineHeight = 28;
-      const lines = Math.ceil(titleHeight / lineHeight);
-      setTitleLines(lines);
-      setDescriptionLines(lines === 1 ? 4 : 2);
-    }
+    const el = titleRef.current;
+    if (!el) return;
+    const measure = () => {
+      // card-title-container font-size=18px, line-height=1.4 → ~25.2px per line
+      const lineHeight = 18 * 1.4;
+      const lines = Math.round(el.scrollHeight / lineHeight);
+      // 1-sentence title (1 line) → 5 desc lines; 2-sentence title (2 lines) → 4 desc lines
+      setDescLines(lines <= 1 ? 5 : 4);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, [event.name]);
-  
+
   const getStatusColor = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const eventDate = new Date(event.date);
     const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-    
+
     if (eventDay < today) return 'bg-gray-100 text-gray-700';
     if (eventDay.getTime() === today.getTime()) return 'bg-green-100 text-green-700';
     return 'bg-blue-100 text-blue-900';
@@ -894,7 +898,7 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const eventDate = new Date(event.date);
     const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-    
+
     if (eventDay < today) return 'Past';
     if (eventDay.getTime() === today.getTime()) return 'Today';
     return 'Upcoming';
@@ -905,7 +909,7 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
       <div className="relative h-48 overflow-hidden flex-shrink-0">
         <img
           src={
-            event.image 
+            event.image
               ? (event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image)
               : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=250&fit=crop'
           }
@@ -924,60 +928,66 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
         </div>
       </div>
 
-      <div className="flex flex-grow flex-col px-6 pb-6 pt-5 min-h-[280px]">
-        <h3 ref={titleRef} className={`text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors ${titleLines === 1 ? 'min-h-[28px] mb-4' : 'min-h-[56px] mb-2'}`}>
+      <div className="flex flex-grow flex-col px-6 pb-6 pt-5">
+        {/* Title — bounding to 2-line visual footprint */}
+        <h3 ref={titleRef} className="card-title-container group-hover:text-blue-900 transition-colors">
           {event.name}
         </h3>
-        
-        <div className="space-y-2 mb-4 min-h-[52px]">
-          {event.date && (
-            <div className="flex items-center text-sm text-gray-600">
-              <svg className="h-4 w-4 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              {new Date(event.date).toLocaleDateString()}
-            </div>
-          )}
-          {event.location && (
-            <div className="flex items-center text-sm text-gray-600">
-              <svg className="h-4 w-4 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              {event.location}
-            </div>
-          )}
-        </div>
 
+        {/* Description — JS sentence-limit (4 if 2-line title, 5 if 1-line title) */}
         {event.description && (
-          <p className={`text-gray-600 text-sm mb-4 ${descriptionLines === 4 ? 'min-h-[80px] line-clamp-4' : 'min-h-[60px] line-clamp-2'}`}>
-            {event.description}
-          </p>
+          <div className="card-description-container">
+            <p className={descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}>
+              {event.description}
+            </p>
+          </div>
         )}
 
-        <div className="flex gap-2 mt-auto pt-4">
-          <button
-            onClick={() => navigate(`/events/${event.id}`)}
-            className="app-primary-button-sm flex-1"
-          >
-            View Details
-          </button>
-          {isTeacher && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
-                className="px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 shadow-sm text-sm font-medium"
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                className="px-3 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 shadow-sm text-sm font-medium"
-              >
-                Delete
-              </button>
-            </>
-          )}
+        {/* Footer — anchored to bottom via mt-auto */}
+        <div className="card-footer-wrapper">
+          <div className="space-y-1 text-sm text-gray-600">
+            {event.date && (
+              <div className="flex items-center">
+                <svg className="h-4 w-4 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {new Date(event.date).toLocaleDateString()}
+              </div>
+            )}
+            {event.location && (
+              <div className="flex items-center">
+                <svg className="h-4 w-4 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {event.location}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 pt-3 border-t border-gray-100 mt-1">
+            <button
+              onClick={() => navigate(`/events/${event.id}`)}
+              className="app-primary-button-sm flex-1"
+            >
+              View Details
+            </button>
+            {isTeacher && (
+              <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
+                  className="px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 shadow-sm text-sm font-medium"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+                  className="px-3 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 shadow-sm text-sm font-medium"
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

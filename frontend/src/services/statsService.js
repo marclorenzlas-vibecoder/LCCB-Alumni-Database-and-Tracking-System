@@ -9,6 +9,11 @@ const statsService = {
     return response.data;
   },
 
+  async getHomeSnapshot() {
+    const response = await axios.get(`${API_URL}/home-snapshot`);
+    return response.data;
+  },
+
   async getAdminStats() {
     const response = await axios.get(`${API_URL}/admin`);
     return response.data;

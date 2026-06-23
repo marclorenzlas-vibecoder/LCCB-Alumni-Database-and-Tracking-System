@@ -15,8 +15,9 @@ function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
   const measureTitle = useCallback(() => {
     const el = titleRef.current;
     if (!el) return;
-    const lineHeight = 32;
-    const lines = Math.ceil(el.scrollHeight / lineHeight);
+    // card-title-container: font-size 18px, line-height 1.4 → ~25.2px per line
+    const lineHeight = 18 * 1.4;
+    const lines = Math.round(el.scrollHeight / lineHeight);
     setDescLines(lines <= 1 ? 5 : 4);
   }, []);
 
@@ -53,59 +54,48 @@ function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
         </span>
       </div>
 
-      <div
-        className="flex flex-col justify-between flex-1 px-6 pb-6 pt-5"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          height: '100%'
-        }}
-      >
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          flexGrow: 1
-        }}>
-          {(achievement.alumni_name || achievement.alumni) && (
-            <p className="text-sm text-gray-600 font-semibold mb-1">
-              {achievement.alumni_name || `${achievement.alumni.first_name} ${achievement.alumni.last_name}`}
-            </p>
-          )}
-          <h3 ref={titleRef} className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors duration-300">
-            <Link
-              to={`/achievements/${achievement.id}`}
-              className="hover:text-blue-900 transition-colors duration-300"
-            >
-              {achievement.title}
-            </Link>
-          </h3>
-          <div style={{ height: 'calc(1.4em * 5)', lineHeight: '1.4', overflow: 'hidden' }}>
-            <p
-              className={`text-gray-700 text-sm ${descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}`}
-              style={{ lineHeight: 1.4, wordBreak: 'break-word', marginBottom: 0 }}
-            >
-              {achievement.description || 'No description provided'}
-            </p>
-          </div>
+      <div className="flex flex-col flex-1 px-6 pb-6 pt-5">
+        {(achievement.alumni_name || achievement.alumni) && (
+          <p className="text-sm text-gray-600 font-semibold mb-1">
+            {achievement.alumni_name || `${achievement.alumni.first_name} ${achievement.alumni.last_name}`}
+          </p>
+        )}
+
+        {/* Title — bounding to 2-line visual footprint */}
+        <h3 ref={titleRef} className="card-title-container group-hover:text-blue-900 transition-colors duration-300">
           <Link
             to={`/achievements/${achievement.id}`}
-            className="read-more-link mt-auto"
+            className="hover:text-blue-900 transition-colors duration-300"
+          >
+            {achievement.title}
+          </Link>
+        </h3>
+
+        {/* Description — JS sentence-limit (4 or 5 lines based on title height) */}
+        <div className="card-description-container">
+          <p
+            className={descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}
+            style={{ lineHeight: 1.5, wordBreak: 'break-word' }}
+          >
+            {achievement.description || 'No description provided'}
+          </p>
+        </div>
+
+        {/* Footer — Read More + date anchored to bottom */}
+        <div className="card-footer-wrapper">
+          <Link
+            to={`/achievements/${achievement.id}`}
+            className="read-more-link"
           >
             Read More
           </Link>
+          <div className="pt-4 border-t border-gray-200">
+            <p className="text-xs text-gray-600">
+              <span className="font-semibold text-gray-900">Date:</span> {achievement.date ? new Date(achievement.date).toLocaleDateString() : 'N/A'}
+            </p>
+          </div>
         </div>
-        <div
-          className="pt-4 border-t border-gray-200"
-          style={{
-            marginTop: 'auto',
-            flexShrink: 0
-          }}
-        >
-          <p className="text-xs text-gray-600">
-            <span className="font-semibold text-gray-900">Date:</span> {achievement.date ? new Date(achievement.date).toLocaleDateString() : 'N/A'}
-          </p>
-        </div>
+
         {isTeacher && (
           <div className="mt-4 flex gap-2 pt-1">
             <button

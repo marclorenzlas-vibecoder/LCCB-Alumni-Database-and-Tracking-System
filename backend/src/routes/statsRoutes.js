@@ -99,6 +99,113 @@ router.get('/home', async (req, res) => {
   }
 });
 
+router.get('/home-snapshot', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const alumniDirectoryWhere = {
+      NOT: {
+        OR: [
+          { email: { endsWith: '@lccbonline.com' } },
+          { user: { is: { email: { endsWith: '@lccbonline.com' } } } }
+        ]
+      }
+    };
+
+    const [
+      alumniCount,
+      upcomingEventsCount,
+      openJobsCount,
+      events,
+      achievements,
+      jobs,
+      donations
+    ] = await Promise.all([
+      prisma.alumni.count({ where: alumniDirectoryWhere }),
+      prisma.event.count({
+        where: {
+          OR: [
+            { date: { gte: today } },
+            { status: { in: [event_status.UPCOMING, event_status.CURRENT] } }
+          ]
+        }
+      }),
+      prisma.job_posting.count(),
+      
+      // Top 3 events
+      prisma.event.findMany({
+        orderBy: { date: 'desc' },
+        take: 3
+      }),
+      
+      // Top 3 achievements
+      prisma.achievement.findMany({
+        include: {
+          alumni: {
+            select: {
+              first_name: true,
+              last_name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { date: 'desc' },
+        take: 3
+      }),
+      
+      // Top 3 jobs
+      prisma.job_posting.findMany({
+        include: {
+          alumni: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { created_at: 'desc' },
+        take: 3
+      }),
+      
+      // Top 3 donations
+      prisma.donation.findMany({
+        include: {
+          alumni: {
+            select: {
+              first_name: true,
+              last_name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { date: 'desc' },
+        take: 3
+      })
+    ]);
+
+    const activeMembers = getLimiterStatus().activeAlumniUsers;
+
+    res.json({
+      events,
+      achievements,
+      jobs,
+      donations,
+      stats: {
+        totalAlumni: alumniCount,
+        activeMembers,
+        upcomingEvents: upcomingEventsCount,
+        jobOpportunities: openJobsCount
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching home snapshot:', error);
+    res.status(500).json({ error: 'Failed to fetch home snapshot' });
+  }
+});
+
 router.get('/admin', async (req, res) => {
   try {
     const today = new Date();

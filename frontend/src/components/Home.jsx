@@ -18,8 +18,9 @@ function AchievementHomeCard({ achievement }) {
   const measureTitle = useCallback(() => {
     const el = titleRef.current;
     if (!el) return;
-    const lineHeight = 28;
-    const lines = Math.ceil(el.scrollHeight / lineHeight);
+    // card-title-container: font-size 18px, line-height 1.4
+    const lineHeight = 18 * 1.4;
+    const lines = Math.round(el.scrollHeight / lineHeight);
     setDescLines(lines <= 1 ? 5 : 4);
   }, []);
 
@@ -30,49 +31,194 @@ function AchievementHomeCard({ achievement }) {
   }, [measureTitle, achievement.title]);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
       {achievement.image ? (
         <img
           src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
           alt={achievement.title}
-          className="w-full h-40 object-cover rounded-lg mb-4"
+          className="w-full h-40 object-cover"
         />
       ) : (
-        <div className="w-full h-40 bg-blue-100 rounded-lg mb-4 flex items-center justify-center">
+        <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
           <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         </div>
       )}
-      <div className="flex-1 flex flex-col">
-        <h3 ref={titleRef} className="text-lg font-semibold text-gray-900 mb-2">{achievement.title}</h3>
-        <div style={{ height: 'calc(1.4em * 5)', lineHeight: '1.4', overflow: 'hidden' }}>
+      <div className="flex-1 flex flex-col p-5">
+        {/* Title — 2-line cap */}
+        <h3 ref={titleRef} className="card-title-container">
+          {achievement.title}
+        </h3>
+        {/* Description — JS sentence-limit */}
+        <div className="card-description-container">
           <p
-            className={`text-gray-600 text-sm ${descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}`}
-            style={{ lineHeight: 1.4, wordBreak: 'break-word' }}
+            className={descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}
+            style={{ wordBreak: 'break-word' }}
           >
             {achievement.description || 'No description provided'}
           </p>
         </div>
-        <Link
-          to={`/achievements/${achievement.id}`}
-          className="read-more-link mt-auto"
-        >
-          Read More
-        </Link>
+        {/* Footer — Read More + date anchored to bottom */}
+        <div className="card-footer-wrapper">
+          <Link
+            to={`/achievements/${achievement.id}`}
+            className="read-more-link"
+          >
+            Read More
+          </Link>
+          {achievement.date && (
+            <div className="flex items-center text-gray-500 text-sm pt-3 border-t border-gray-100">
+              <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {new Date(achievement.date).toLocaleDateString()}
+            </div>
+          )}
+        </div>
       </div>
-      {achievement.date && (
-        <div
-          className="mt-auto pt-3 flex items-center text-gray-500 text-sm"
-          style={{
-            marginTop: 'auto',
-            flexShrink: 0
-          }}
-        >
-          <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          {new Date(achievement.date).toLocaleDateString()}
+    </div>
+  );
+}
+
+function EventHomeCard({ event }) {
+  const titleRef = useRef(null);
+  const [descLines, setDescLines] = useState(4);
+
+  const measureTitle = useCallback(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const lineHeight = 18 * 1.4;
+    const lines = Math.round(el.scrollHeight / lineHeight);
+    setDescLines(lines <= 1 ? 5 : 4);
+  }, []);
+
+  useEffect(() => {
+    measureTitle();
+    window.addEventListener('resize', measureTitle);
+    return () => window.removeEventListener('resize', measureTitle);
+  }, [measureTitle, event.name]);
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
+      {event.image ? (
+        <img
+          src={event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image}
+          alt={event.name}
+          className="w-full h-40 object-cover"
+        />
+      ) : (
+        <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
+          <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
         </div>
       )}
+      <div className="flex-1 flex flex-col p-5">
+        {/* Title — 2-line cap */}
+        <h3 ref={titleRef} className="card-title-container">
+          {event.name}
+        </h3>
+        {/* Description — JS sentence-limit */}
+        {event.description && (
+          <div className="card-description-container">
+            <p className={descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}>
+              {event.description}
+            </p>
+          </div>
+        )}
+        {/* Footer — meta + CTA anchored to bottom */}
+        <div className="card-footer-wrapper">
+          <div className="space-y-1 text-sm text-gray-500">
+            <div className="flex items-center">
+              <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {event.date ? new Date(event.date).toLocaleDateString() : 'TBA'}
+            </div>
+            {event.location && (
+              <div className="flex items-center">
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                </svg>
+                {event.location}
+              </div>
+            )}
+          </div>
+          <Link to="/events" className="w-full inline-flex items-center justify-center rounded-md bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-700/20 transition-all hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-lg">
+            View Details
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DonationHomeCard({ donation, formatAmount }) {
+  const titleRef = useRef(null);
+  const [descLines, setDescLines] = useState(4);
+
+  const measureTitle = useCallback(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const lineHeight = 18 * 1.4;
+    const lines = Math.round(el.scrollHeight / lineHeight);
+    setDescLines(lines <= 1 ? 5 : 4);
+  }, []);
+
+  useEffect(() => {
+    measureTitle();
+    window.addEventListener('resize', measureTitle);
+    return () => window.removeEventListener('resize', measureTitle);
+  }, [measureTitle, donation.purpose]);
+
+  const { cleanDescription } = extractDonationMeta(donation.description || '');
+  const progress = donation.goal ? Math.min((donation.amount / donation.goal) * 100, 100) : 0;
+
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
+      {donation.image ? (
+        <img
+          src={donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image}
+          alt={donation.purpose}
+          className="w-full h-40 object-cover"
+        />
+      ) : (
+        <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
+          <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+        </div>
+      )}
+      <div className="flex-1 flex flex-col p-5">
+        <span className="px-3 py-1 text-xs font-medium text-blue-900 bg-blue-100 rounded-full self-start mb-3">
+          {donation.category || 'General'}
+        </span>
+        {/* Title — 2-line cap */}
+        <h3 ref={titleRef} className="card-title-container">
+          {donation.purpose}
+        </h3>
+        {/* Description — JS sentence-limit */}
+        {cleanDescription && (
+          <div className="card-description-container">
+            <p className={descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}>
+              {cleanDescription}
+            </p>
+          </div>
+        )}
+        {/* Footer — progress + date anchored to bottom */}
+        <div className="card-footer-wrapper">
+          {donation.goal && (
+            <div>
+              <div className="flex justify-between text-xs text-gray-600 mb-1">
+                <span>{formatAmount(donation.amount)}</span>
+                <span>{formatAmount(donation.goal)}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-900 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">{Math.round(progress)}% Complete</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -93,24 +239,18 @@ const Home = () => {
 
   const fetchPreviewData = async () => {
     try {
-      const [eventsData, achievementsData, jobsData, donationsData, homeStats] = await Promise.all([
-        eventService.getAllEvents(),
-        achievementService.getAllAchievements(),
-        careerService.getAllCareers(),
-        donationService.getAllDonations(),
-        statsService.getHomeStats()
-      ]);
+      const snapshot = await statsService.getHomeSnapshot();
       
-      setEvents(eventsData.slice(0, 3));
-      setAchievements(achievementsData.slice(0, 3));
-      setJobs(jobsData.slice(0, 3));
-      setDonations(donationsData.slice(0, 3));
+      setEvents(snapshot.events || []);
+      setAchievements(snapshot.achievements || []);
+      setJobs(snapshot.jobs || []);
+      setDonations(snapshot.donations || []);
 
       setTotals({
-        alumni: Number(homeStats?.totalAlumni || 0),
-        active: Number(homeStats?.activeMembers || 0),
-        events: Number(homeStats?.upcomingEvents || 0),
-        jobs: Number(homeStats?.jobOpportunities || 0)
+        alumni: Number(snapshot.stats?.totalAlumni || 0),
+        active: Number(snapshot.stats?.activeMembers || 0),
+        events: Number(snapshot.stats?.upcomingEvents || 0),
+        jobs: Number(snapshot.stats?.jobOpportunities || 0)
       });
     } catch (err) {
       console.error('Error fetching preview data:', err);
@@ -496,40 +636,7 @@ const Home = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
               {events.map((event) => (
-                <div key={event.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
-                  {event.image ? (
-                    <img
-                      src={event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image}
-                      alt={event.name}
-                      className="w-full h-40 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
-                      <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    </div>
-                  )}
-                  <div className="p-5 flex-1 flex flex-col">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{event.name}</h3>
-                    <p className="text-gray-600 text-sm line-clamp-3">{event.description}</p>
-                    <div className="mt-3 flex items-center text-gray-500 text-sm">
-                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      {event.date ? new Date(event.date).toLocaleDateString() : 'TBA'}
-                    </div>
-                    <div className="mt-2 flex items-center text-gray-500 text-sm">
-                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      </svg>
-                      {event.location || 'TBA'}
-                    </div>
-                    <div className="mt-auto pt-4">
-                      <Link to="/events" className="w-full inline-flex items-center justify-center rounded-md bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-700/20 transition-all hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-lg">
-                        View Details
-                      </Link>
-                    </div>
-                  </div>
-                </div>
+                <EventHomeCard key={event.id} event={event} />
               ))}
             </div>
           )}
@@ -653,51 +760,10 @@ const Home = () => {
           ) : donations.length === 0 ? (
             <div className="text-center py-8 text-gray-500">No campaigns available</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {donations.map((donation) => {
-                const progress = donation.goal ? Math.min((donation.amount / donation.goal) * 100, 100) : 0;
-                const { cleanDescription } = extractDonationMeta(donation.description || '');
-                
-                return (
-                  <div key={donation.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                    {donation.image ? (
-                      <img
-                        src={donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image}
-                        alt={donation.purpose}
-                        className="w-full h-40 object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
-                        <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                      </div>
-                    )}
-                    <div className="p-5">
-                      <span className="px-3 py-1 text-xs font-medium text-blue-900 bg-blue-100 rounded-full">
-                        {donation.category || 'General'}
-                      </span>
-                      <h3 className="text-lg font-semibold text-gray-900 mt-3 mb-2">{donation.purpose}</h3>
-                      {cleanDescription && (
-                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{cleanDescription}</p>
-                      )}
-                      {donation.goal && (
-                        <div className="mb-3">
-                          <div className="flex justify-between text-xs text-gray-600 mb-1">
-                            <span>{formatAmount(donation.amount)}</span>
-                            <span>{formatAmount(donation.goal)}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-900 h-2 rounded-full transition-all duration-500"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">{Math.round(progress)}% Complete</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              {donations.map((donation) => (
+                <DonationHomeCard key={donation.id} donation={donation} formatAmount={formatAmount} />
+              ))}
             </div>
           )}
         </div>

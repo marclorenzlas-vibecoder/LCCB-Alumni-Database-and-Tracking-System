@@ -7,34 +7,24 @@ import { statsService } from './statsService';
 
 export const dashboardService = {
   async getSnapshot(alumniId) {
-    const [eventsResult, jobsResult, achievementsResult, donationsResult, notificationsResult, unreadCountResult, statsResult] = await Promise.allSettled([
-      eventService.getAll(),
-      jobService.getAllJobs(),
-      communityService.getAchievements(),
-      donationService.getAll(),
+    const [snapshotResult, notificationsResult, unreadCountResult] = await Promise.allSettled([
+      statsService.getHomeSnapshot(),
       notificationService.getAll(false),
-      notificationService.getUnreadCount(),
-      statsService.getHomeStats()
+      notificationService.getUnreadCount()
     ]);
 
-    const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
-    const jobs = jobsResult.status === 'fulfilled' ? jobsResult.value : [];
-    const achievements = achievementsResult.status === 'fulfilled' ? achievementsResult.value : [];
-    const donations = donationsResult.status === 'fulfilled' ? donationsResult.value : [];
+    const snapshot = snapshotResult.status === 'fulfilled' ? snapshotResult.value : {};
     const notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : [];
     const unreadCount = unreadCountResult.status === 'fulfilled' ? unreadCountResult.value : { count: 0 };
-    const stats = statsResult.status === 'fulfilled'
-      ? statsResult.value
-      : { totalAlumni: 0, activeMembers: 0, upcomingEvents: 0, jobOpportunities: 0 };
 
     return {
-      events,
-      jobs,
-      achievements,
-      donations,
+      events: snapshot.events || [],
+      jobs: snapshot.jobs || [],
+      achievements: snapshot.achievements || [],
+      donations: snapshot.donations || [],
       notifications,
       unreadCount: unreadCount?.count || 0,
-      stats
+      stats: snapshot.stats || { totalAlumni: 0, activeMembers: 0, upcomingEvents: 0, jobOpportunities: 0 }
     };
   }
 };

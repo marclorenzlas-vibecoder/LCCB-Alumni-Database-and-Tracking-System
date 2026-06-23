@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import donationService from '../services/donationService';
@@ -8,6 +8,133 @@ import UserLayout from './UserLayout';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import { extractDonationMeta, withDonationMeta } from '../utils/donationMeta';
+
+function DonationCard({ donation, isTeacher, onEdit, onDelete, onDonate, onShare, formatAmount, calculateProgress }) {
+  const titleRef = useRef(null);
+  const [descLines, setDescLines] = useState(4);
+  const navigate = useNavigate();
+
+  const measureTitle = useCallback(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    // card-title-container: font-size 18px, line-height 1.4
+    const lineHeight = 18 * 1.4;
+    const lines = Math.round(el.scrollHeight / lineHeight);
+    setDescLines(lines <= 1 ? 5 : 4);
+  }, []);
+
+  useEffect(() => {
+    measureTitle();
+    window.addEventListener('resize', measureTitle);
+    return () => window.removeEventListener('resize', measureTitle);
+  }, [measureTitle, donation.purpose]);
+
+  const { cleanDescription, meta } = extractDonationMeta(donation.description || '');
+  const progress = calculateProgress(donation.amount, donation.goal);
+
+  return (
+    <div className="app-card overflow-hidden group flex h-full flex-col p-0">
+      <div className="relative h-48 overflow-hidden">
+        <img
+          src={
+            donation.image
+              ? (donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image)
+              : 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Donation+Campaign'
+          }
+          alt={donation.purpose}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        <div className="absolute left-4 top-4 flex items-center gap-2">
+          <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-blue-900 shadow-sm backdrop-blur">
+            {donation.category || 'General'}
+          </span>
+        </div>
+        <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
+          {donation.date ? `Ends ${new Date(donation.date).toLocaleDateString()}` : ''}
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col px-6 pb-6 pt-5">
+        {/* Title — bounding to 2-line visual footprint */}
+        <h3 ref={titleRef} className="card-title-container group-hover:text-blue-900 transition-colors">
+          {donation.purpose}
+        </h3>
+
+        {/* Description — JS sentence-limit (4 if 2-line title, 5 if 1-line title) */}
+        {cleanDescription && (
+          <div className="card-description-container">
+            <p className={descLines === 5 ? 'desc-clamp-5' : 'desc-clamp-4'}>
+              {cleanDescription}
+            </p>
+          </div>
+        )}
+
+        {/* Progress Bar */}
+        {donation.goal && (
+          <div className="mb-4">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>Raised: {formatAmount(donation.amount)}</span>
+              <span>Goal: {formatAmount(donation.goal)}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-900 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="text-right text-sm text-gray-600 mt-1">
+              {Math.round(progress)}% Complete
+            </div>
+          </div>
+        )}
+
+        {/* Footer — Read More + actions anchored to bottom */}
+        <div className="card-footer-wrapper">
+          <button
+            onClick={() => navigate(`/donate/${donation.id}`)}
+            className="read-more-link"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            Read More
+          </button>
+          <div className={`grid gap-2 ${isTeacher ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
+            {isTeacher && (
+              <>
+                <button
+                  onClick={() => onEdit(donation)}
+                  className="w-full bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => onDelete(donation.id)}
+                  className="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium shadow-sm"
+                >
+                  Delete
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => navigate(`/donate/${donation.id}`)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 text-sm flex items-center justify-center gap-2"
+            >
+              Donate
+            </button>
+            <button
+              onClick={() => onShare(donation)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 text-sm flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              Share
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const Donations = () => {
   const navigate = useNavigate();
@@ -362,105 +489,20 @@ const Donations = () => {
         {/* Campaign Cards */}
         {loading && <div className="text-center">Loading...</div>}
         {error && <div className="text-center text-red-600">{error}</div>}
-        
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
           {filteredDonations.map((donation) => (
-            <div
+            <DonationCard
               key={donation.id}
-              className="app-card overflow-hidden group flex h-full flex-col p-0"
-            >
-              <div className="relative h-48 overflow-hidden">
-                <img
-                  src={
-                    donation.image
-                      ? (donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image)
-                      : 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Donation+Campaign'
-                  }
-                  alt={donation.purpose}
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                />
-                <div className="absolute left-4 top-4 flex items-center gap-2">
-                  <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-blue-900 shadow-sm backdrop-blur">
-                    {donation.category || 'General'}
-                  </span>
-                </div>
-                <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
-                  {donation.date ? `Ends ${new Date(donation.date).toLocaleDateString()}` : ''}
-                </span>
-              </div>
-
-              <div className="flex flex-1 flex-col justify-between px-6 pb-6 pt-5">
-                {(() => {
-                  const { cleanDescription, meta } = extractDonationMeta(donation.description || '');
-                  const paymentNumber = meta.paymentNumber || '0912-345-678-9';
-
-                  return (
-                    <>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                        {donation.purpose}
-                      </h3>
-                      {cleanDescription && (
-                        <p className="text-gray-600 mb-4 text-sm max-h-[7.5rem] overflow-y-auto scrollbar-hide leading-relaxed">
-                          {cleanDescription}
-                        </p>
-                      )}
-
-                      {/* Progress Bar */}
-                      {donation.goal && (
-                        <div className="mb-4">
-                          <div className="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Raised: {formatAmount(donation.amount)}</span>
-                            <span>Goal: {formatAmount(donation.goal)}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-900 h-2 rounded-full transition-all duration-500"
-                              style={{ width: `${calculateProgress(donation.amount, donation.goal)}%` }}
-                            />
-                          </div>
-                          <div className="text-right text-sm text-gray-600 mt-1">
-                            {Math.round(calculateProgress(donation.amount, donation.goal))}% Complete
-                          </div>
-                        </div>
-                      )}
-
-                    </>
-                  );
-                })()}
-
-                {/* Action Buttons */}
-                <div className={`mt-4 grid gap-2 ${isTeacher ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
-                  {isTeacher && (
-                    <>
-                      <button 
-                        onClick={() => handleEdit(donation)}
-                        className="w-full bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm">
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(donation.id)}
-                        className="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium shadow-sm">
-                        Delete
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => navigate(`/donate/${donation.id}`)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 text-sm flex items-center justify-center gap-2"
-                  >
-                    Donate
-                  </button>
-                  <button 
-                    onClick={() => handleShare(donation)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 text-sm flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                    </svg>
-                    Share
-                  </button>
-                </div>
-              </div>
-            </div>
+              donation={donation}
+              isTeacher={isTeacher}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onDonate={(d) => navigate(`/donate/${d.id}`)}
+              onShare={handleShare}
+              formatAmount={formatAmount}
+              calculateProgress={calculateProgress}
+            />
           ))}
         </div>
 

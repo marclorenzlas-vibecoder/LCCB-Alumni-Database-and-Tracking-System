@@ -54,15 +54,8 @@ export default function HomeScreen({ navigation, user }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const upcomingEvents = events
-    .filter((item) => {
-      if (!item?.date) return false;
-      const date = new Date(item.date);
-      if (Number.isNaN(date.getTime())) return false;
-      date.setHours(0, 0, 0, 0);
-      return date >= today;
-    })
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
+  const upcomingEvents = [...events]
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
     .slice(0, 3);
 
   const recentAchievements = [...achievements]
@@ -409,20 +402,30 @@ function PaginationDots({ count, activeIndex }) {
   );
 }
 
-function CarouselSection({ data, renderItem, keyPrefix }) {
+function CarouselSection({ data, renderItem, keyPrefix, initialIndex }) {
   const scrollRef = useRef(null);
-  const [activeIndex, setActiveIndex] = useState(0);
+  // Default to middle card (index 1) when there are 3 items
+  const startIndex = initialIndex !== undefined ? initialIndex : (data && data.length >= 3 ? 1 : 0);
+  const [activeIndex, setActiveIndex] = useState(startIndex);
 
   const onScroll = useCallback((e) => {
     const x = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(x / CAROUSEL_ITEM_WIDTH);
+    const idx = Math.round(x / (CAROUSEL_ITEM_WIDTH + CAROUSEL_GAP));
     setActiveIndex(Math.max(0, Math.min(idx, data.length - 1)));
   }, [data.length]);
+
+  // Scroll to the middle card after layout
+  const handleLayout = useCallback(() => {
+    if (startIndex > 0 && scrollRef.current) {
+      const offset = startIndex * (CAROUSEL_ITEM_WIDTH + CAROUSEL_GAP);
+      scrollRef.current.scrollTo({ x: offset, animated: false });
+    }
+  }, [startIndex]);
 
   if (!data || data.length === 0) return null;
 
   return (
-    <View style={styles.carouselWrap}>
+    <View style={styles.carouselWrap} onLayout={handleLayout}>
       <ScrollView
         ref={scrollRef}
         horizontal

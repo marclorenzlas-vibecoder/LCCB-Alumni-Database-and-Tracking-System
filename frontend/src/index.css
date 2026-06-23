@@ -1245,3 +1245,79 @@ body::-webkit-scrollbar,
         animation: none !important;
     }
 }
+
+/* ============================================================
+   Card Grid Layout Bounding — Events, Achievements, Donations
+   Applied to: Events page, Achievements page, Donations page,
+               and Home page preview sections (excl. Jobs).
+   ============================================================ */
+
+/* Outer card shell — participates in full-height grid rows */
+.base-card-component {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Title — adapts naturally to text content, NO artificial gaps */
+.card-title-container {
+    font-size: 18px;
+    line-height: 1.4;
+    margin-bottom: 8px; /* Tight space before description, no forced height */
+    font-weight: 700;
+    color: #111827;
+}
+
+/* Description — flows naturally; JS desc-clamp-4/5 handles sentence truncation */
+.card-description-container {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    color: #4b5563;
+}
+
+/* Footer — mt-auto safely anchors buttons to the bottom of the card */
+.card-footer-wrapper {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Description sentence clamps — driven by dynamic JS sentence-limit logic */
+.desc-clamp-4 {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.desc-clamp-5 {
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Read More link — consistent across all targeted cards */
+.read-more-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d4ed8;
+    text-decoration: none;
+    transition: color 0.15s ease, gap 0.15s ease;
+    margin-top: 4px;
+}
+
+.read-more-link:hover {
+    color: #1e3a8a;
+    gap: 8px;
+}
+
+.read-more-link::after {
+    content: "→";
+    font-size: 13px;
+}
