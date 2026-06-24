@@ -21,6 +21,18 @@ async function createNotifications({ type, title, message, link, eventId = null,
       is_blocked: false
     };
 
+    // Filter by specific notification categories if applicable
+    if (type === 'EVENT') {
+      userQuery.notify_events = true;
+    } else if (type === 'ACHIEVEMENT') {
+      userQuery.notify_achievements = true;
+    } else if (type === 'DONATION') {
+      userQuery.notify_donations = true;
+    } else if (type === 'JOB_APPLICATION') {
+      userQuery.notify_jobs = true;
+    }
+
+
     // If batch is specified, filter by batch
     let usersToNotify;
     if (batch) {

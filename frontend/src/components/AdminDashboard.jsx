@@ -374,6 +374,13 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   };
 
   const formatDonationSummary = (rawText = '', donation = {}) => {
+    // If the donation has a clean title (no embedded structured labels), use it directly.
+    // This prevents the live-event message (which may contain "Donor: X" as prose) from
+    // polluting the summary line.
+    const STRUCTURED_LABEL_RE = /(?:^|\n)\s*(donor|alumniid|amount|recorded|donation for)\s*:/i;
+    const titleText = String(donation.title || '').trim();
+    const hasCleanTitle = titleText.length > 0 && !STRUCTURED_LABEL_RE.test(titleText);
+
     const details = parseDonationDetailsText(rawText || '');
     const find = (re) => {
       for (const k of Object.keys(details)) {
@@ -381,16 +388,22 @@ const AdminDashboard = ({ pendingOnly = false }) => {
       }
       return '';
     };
-    const rawDonor = find(/^donor$/i) || donation.senderName || '';
-    const donor = rawDonor.trim();
-    const amount = find(/amount/i) || '';
-    const donationFor = find(/donation\s*for|donation$/i) || '';
-    // Build a concise summary even if amount missing
-    let summary = 'New donation received';
-    if (donor && donationFor && amount) summary = `${donor} donated ${amount} to ${donationFor}`;
-    else if (donor && donationFor) summary = `${donor} donated to ${donationFor}`;
-    else if (donor && amount) summary = `${donor} donated ${amount}`;
-    else if (rawText) summary = rawText.split('\n')[0];
+
+    let summary;
+    if (hasCleanTitle) {
+      // Trust the title field directly — it is always set to the clean sentence by the backend
+      summary = titleText;
+    } else {
+      const rawDonor = find(/^donor$/i) || donation.senderName || '';
+      const donor = rawDonor.trim();
+      const amount = find(/amount/i) || '';
+      const donationFor = find(/donation\s*for|donation$/i) || '';
+      if (donor && donationFor && amount) summary = `${donor} donated ${amount} to ${donationFor}`;
+      else if (donor && donationFor) summary = `${donor} donated to ${donationFor}`;
+      else if (donor && amount) summary = `${donor} donated ${amount}`;
+      else summary = rawText.split('\n')[0] || 'New donation received';
+    }
+
     const payment = find(/payment/i) || '';
     const country = find(/country/i) || '';
     let address = find(/address/i) || '';
@@ -521,6 +534,9 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                     </div>
                     <div className="min-w-0 flex-1">
                       {(() => {
+                        // Parse message for structured subtext details (payment, country, address).
+                        // Pass the full donation object so formatDonationSummary can prefer
+                        // donation.title as the clean summary instead of re-parsing message prose.
                         const raw = stripDonationMeta(donation.message || donation.title || '');
                         const { summary, subtext, recorded } = formatDonationSummary(raw, donation);
                         return (

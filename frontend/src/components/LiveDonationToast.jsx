@@ -3,7 +3,7 @@ import { realtimeClient } from '../services/realtimeClient';
 import { authService } from '../services/authService';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import {
-  areNotificationsEnabled,
+  isShowDonationToastsEnabled,
   NOTIFICATION_PREFERENCE_EVENT
 } from '../utils/notificationPreferences';
 const getInitials = (name) => {
@@ -81,7 +81,7 @@ const LiveDonationToast = () => {
     if (!userId) return undefined;
 
     const syncPreference = () => {
-      setNotificationsEnabled(areNotificationsEnabled(userId));
+      setNotificationsEnabled(isShowDonationToastsEnabled(userId));
     };
 
     syncPreference();
@@ -93,7 +93,11 @@ const LiveDonationToast = () => {
     };
 
     const onStorageChange = (event) => {
-      if (!event.key || event.key === `notifications_enabled_${userId}`) {
+      if (
+        !event.key ||
+        event.key === `show_donation_toasts_${userId}` ||
+        event.key === `notifications_enabled_${userId}`
+      ) {
         syncPreference();
       }
     };
@@ -120,7 +124,7 @@ const LiveDonationToast = () => {
     const handler = (payload) => {
       try {
         const user = authService.getCurrentUser();
-        if (!user?.id || !areNotificationsEnabled(user.id)) return;
+        if (!user?.id || !isShowDonationToastsEnabled(user.id)) return;
 
         const type =
           payload?.type ||

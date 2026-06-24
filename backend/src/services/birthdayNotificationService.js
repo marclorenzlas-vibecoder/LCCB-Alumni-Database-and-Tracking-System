@@ -26,21 +26,17 @@ const buildBirthdayMessage = (alumni, isBirthdayAlumni = false) => (
 
 async function sendBirthdayNotifications() {
   const today = new Date();
-  const birthdays = await prisma.alumni.findMany({
-    where: {
-      date_of_birth: { not: null }
-    },
-    select: {
-      id: true,
-      user_id: true,
-      first_name: true,
-      last_name: true,
-      email: true,
-      date_of_birth: true
-    }
-  });
+  const currentMonth = today.getUTCMonth() + 1;
+  const currentDay = today.getUTCDate();
 
-  const todaysBirthdays = birthdays.filter((alumni) => isBirthdayToday(alumni.date_of_birth, today));
+  const todaysBirthdays = await prisma.$queryRaw`
+    SELECT id, user_id, first_name, last_name, email, date_of_birth
+    FROM alumni
+    WHERE date_of_birth IS NOT NULL
+      AND (status IS NULL OR status != 'DECEASED')
+      AND MONTH(date_of_birth) = ${currentMonth}
+      AND DAY(date_of_birth) = ${currentDay}
+  `;
   const eligibleRecipients = await prisma.user.findMany({
     where: {
       notification_enabled: true,

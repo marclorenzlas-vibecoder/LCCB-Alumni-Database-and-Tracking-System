@@ -246,6 +246,13 @@ model user {
   is_blocked              Boolean?         @default(false)
   notification_enabled    Boolean?         @default(true)
   notification_prompt_shown Boolean?       @default(false)
+  notify_events           Boolean?         @default(true)
+  notify_achievements     Boolean?         @default(true)
+  notify_donations        Boolean?         @default(true)
+  notify_jobs             Boolean?         @default(true)
+  show_donation_toasts    Boolean?         @default(true)
+  notify_pending_registrations Boolean?    @default(true)
+  notify_job_applications Boolean?        @default(true)
   created_at              DateTime?        @default(now()) @db.DateTime(0)
   updated_at              DateTime?        @default(now()) @db.DateTime(0)
   alumni                  alumni?

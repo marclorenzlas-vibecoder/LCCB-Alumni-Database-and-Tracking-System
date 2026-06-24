@@ -1265,10 +1265,56 @@ router.put('/users/:userId/block', async (req, res) => {
   }
 });
 
+// Get notification preferences
+router.get('/notification-preference/:userId', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: 'Valid User ID is required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        notification_enabled: true,
+        notification_prompt_shown: true,
+        notify_events: true,
+        notify_achievements: true,
+        notify_donations: true,
+        notify_jobs: true,
+        show_donation_toasts: true,
+        notify_pending_registrations: true,
+        notify_job_applications: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching notification preference:', error);
+    res.status(500).json({ error: 'Failed to fetch notification preference' });
+  }
+});
+
 // Update notification preference
 router.put('/notification-preference', async (req, res) => {
   try {
-    const { userId, notificationEnabled, promptShown } = req.body;
+    const {
+      userId,
+      notificationEnabled,
+      promptShown,
+      notifyEvents,
+      notifyAchievements,
+      notifyDonations,
+      notifyJobs,
+      showDonationToasts,
+      notifyPendingRegistrations,
+      notifyJobApplications
+    } = req.body;
     
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
@@ -1280,6 +1326,27 @@ router.put('/notification-preference', async (req, res) => {
     }
     if (typeof promptShown !== 'undefined') {
       updateData.notification_prompt_shown = promptShown;
+    }
+    if (typeof notifyEvents !== 'undefined') {
+      updateData.notify_events = notifyEvents;
+    }
+    if (typeof notifyAchievements !== 'undefined') {
+      updateData.notify_achievements = notifyAchievements;
+    }
+    if (typeof notifyDonations !== 'undefined') {
+      updateData.notify_donations = notifyDonations;
+    }
+    if (typeof notifyJobs !== 'undefined') {
+      updateData.notify_jobs = notifyJobs;
+    }
+    if (typeof showDonationToasts !== 'undefined') {
+      updateData.show_donation_toasts = showDonationToasts;
+    }
+    if (typeof notifyPendingRegistrations !== 'undefined') {
+      updateData.notify_pending_registrations = notifyPendingRegistrations;
+    }
+    if (typeof notifyJobApplications !== 'undefined') {
+      updateData.notify_job_applications = notifyJobApplications;
     }
 
     // Check if user exists first

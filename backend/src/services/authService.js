@@ -77,7 +77,9 @@ async function registerUser(userData) {
         where: {
           role: 'ADMIN',
           is_active: true,
-          is_blocked: false
+          is_blocked: false,
+          notification_enabled: true,
+          notify_pending_registrations: true
         },
         select: { id: true, email: true }
       });
@@ -97,7 +99,12 @@ async function registerUser(userData) {
 
         let teacherUser = await prisma.user.findUnique({
           where: { email: teacher.email },
-          select: { id: true, email: true }
+          select: {
+            id: true,
+            email: true,
+            notification_enabled: true,
+            notify_pending_registrations: true
+          }
         });
 
         if (!teacherUser) {
@@ -112,6 +119,11 @@ async function registerUser(userData) {
               password: teacher.password
             }
           });
+        } else {
+          // Skip if teacher user disabled notifications or registrations alerts
+          if (teacherUser.notification_enabled === false || teacherUser.notify_pending_registrations === false) {
+            continue;
+          }
         }
 
         adminUsers.push(teacherUser);

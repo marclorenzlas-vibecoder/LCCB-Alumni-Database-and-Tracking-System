@@ -5,8 +5,7 @@ import UserLayout from "./UserLayout";
 import { authService } from "../services/authService";
 import { API_BASE_URL } from "../config/apiBaseUrl";
 import {
-  areNotificationsEnabled,
-  setNotificationEnabled,
+  setPreferences,
 } from "../utils/notificationPreferences";
 
 const SETTINGS_TABS = [
@@ -180,7 +179,18 @@ const Settings = () => {
   const [saveStatus, setSaveStatus] = useState("idle");
   const [loadingPreferences, setLoadingPreferences] = useState(true);
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  // The backend normalizes ADMIN role → 'TEACHER' on login, so we check both
+  const isAdmin = ['ADMIN', 'TEACHER'].includes((user?.role || '').toUpperCase());
+
+  const [prefNotificationsEnabled, setPrefNotificationsEnabled] = useState(true);
+  const [prefNotifyEvents, setPrefNotifyEvents] = useState(true);
+  const [prefNotifyAchievements, setPrefNotifyAchievements] = useState(true);
+  const [prefNotifyDonations, setPrefNotifyDonations] = useState(true);
+  const [prefNotifyJobs, setPrefNotifyJobs] = useState(true);
+  const [prefShowDonationToasts, setPrefShowDonationToasts] = useState(true);
+  // Admin-only
+  const [prefNotifyPendingRegistrations, setPrefNotifyPendingRegistrations] = useState(true);
+  const [prefNotifyJobApplications, setPrefNotifyJobApplications] = useState(true);
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -202,12 +212,51 @@ const Settings = () => {
     let cancelled = false;
 
     const loadPreferences = async () => {
-      if (!cancelled) {
-        setNotificationsEnabled(areNotificationsEnabled(userId));
-      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/notification-preference/${userId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (!cancelled) {
+            setPrefNotificationsEnabled(data.notification_enabled ?? true);
+            setPrefNotifyEvents(data.notify_events ?? true);
+            setPrefNotifyAchievements(data.notify_achievements ?? true);
+            setPrefNotifyDonations(data.notify_donations ?? true);
+            setPrefNotifyJobs(data.notify_jobs ?? true);
+            setPrefShowDonationToasts(data.show_donation_toasts ?? true);
+            setPrefNotifyPendingRegistrations(data.notify_pending_registrations ?? true);
+            setPrefNotifyJobApplications(data.notify_job_applications ?? true);
 
-      if (!cancelled) {
-        setLoadingPreferences(false);
+            // Sync to local storage
+            setPreferences(userId, {
+              notificationEnabled: data.notification_enabled ?? true,
+              notifyEvents: data.notify_events ?? true,
+              notifyAchievements: data.notify_achievements ?? true,
+              notifyDonations: data.notify_donations ?? true,
+              notifyJobs: data.notify_jobs ?? true,
+              showDonationToasts: data.show_donation_toasts ?? true
+            });
+          }
+        } else {
+          // Fallback to local storage if API error
+          if (!cancelled) {
+            setPrefNotificationsEnabled(localStorage.getItem(`notifications_enabled_${userId}`) !== 'false');
+            setPrefNotifyEvents(localStorage.getItem(`notify_events_${userId}`) !== 'false');
+            setPrefNotifyAchievements(localStorage.getItem(`notify_achievements_${userId}`) !== 'false');
+            setPrefNotifyDonations(localStorage.getItem(`notify_donations_${userId}`) !== 'false');
+            setPrefNotifyJobs(localStorage.getItem(`notify_jobs_${userId}`) !== 'false');
+            setPrefShowDonationToasts(localStorage.getItem(`show_donation_toasts_${userId}`) !== 'false');
+          }
+        }
+      } catch (err) {
+        console.error("Error loading notification preferences:", err);
+      } finally {
+        if (!cancelled) {
+          setLoadingPreferences(false);
+        }
       }
     };
 
@@ -217,13 +266,6 @@ const Settings = () => {
       cancelled = true;
     };
   }, [token, user?.alumni?.id, user?.alumniId, userId]);
-
-  const handleNotificationsToggle = (nextValue) => {
-    setNotificationsEnabled(nextValue);
-    if (userId) {
-      setNotificationEnabled(userId, nextValue);
-    }
-  };
 
   useEffect(() => {
     if (saveStatus !== "success") return undefined;
@@ -264,8 +306,17 @@ const Settings = () => {
         },
         body: JSON.stringify({
           userId: user.id,
-          notificationEnabled: notificationsEnabled,
+          notificationEnabled: prefNotificationsEnabled,
           promptShown: true,
+          notifyEvents: prefNotifyEvents,
+          notifyAchievements: prefNotifyAchievements,
+          notifyDonations: prefNotifyDonations,
+          notifyJobs: prefNotifyJobs,
+          showDonationToasts: prefShowDonationToasts,
+          ...(isAdmin && {
+            notifyPendingRegistrations: prefNotifyPendingRegistrations,
+            notifyJobApplications: prefNotifyJobApplications
+          })
         }),
       },
     );
@@ -279,7 +330,18 @@ const Settings = () => {
       );
     }
 
-    setNotificationEnabled(user.id, notificationsEnabled);
+    setPreferences(user.id, {
+      notificationEnabled: prefNotificationsEnabled,
+      notifyEvents: prefNotifyEvents,
+      notifyAchievements: prefNotifyAchievements,
+      notifyDonations: prefNotifyDonations,
+      notifyJobs: prefNotifyJobs,
+      showDonationToasts: prefShowDonationToasts,
+      ...(isAdmin && {
+        notifyPendingRegistrations: prefNotifyPendingRegistrations,
+        notifyJobApplications: prefNotifyJobApplications
+      })
+    });
     localStorage.setItem(`notification_prompt_shown_${user.id}`, "true");
   };
 
@@ -484,18 +546,85 @@ const Settings = () => {
           Notification Preferences
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Control how you stay informed about activity across the alumni
-          network.
+          {isAdmin
+            ? 'Manage exactly what admin alerts you want to receive about platform activity.'
+            : 'Control how you stay informed about activity across the alumni network.'}
         </p>
       </div>
 
       <ToggleSwitch
         id="system-alerts-toggle"
-        enabled={notificationsEnabled}
-        onChange={handleNotificationsToggle}
-        label="System alerts"
-        description="Receive real-time system alerts regarding new alumni events, directory updates, network announcements, and live donation toasts in the bottom-left corner when someone contributes."
+        enabled={prefNotificationsEnabled}
+        onChange={setPrefNotificationsEnabled}
+        label="System Alerts (Master Switch)"
+        description="Enable or disable all real-time system notifications and alerts across the platform."
       />
+
+      <div className={`space-y-4 border-t border-slate-100 pt-6 transition-all duration-300 ${prefNotificationsEnabled ? 'opacity-100' : 'pointer-events-none opacity-40'}`}>
+        {isAdmin ? (
+          // Admin-specific notification toggles
+          <>
+            <ToggleSwitch
+              id="pending-registrations-toggle"
+              enabled={prefNotificationsEnabled && prefNotifyPendingRegistrations}
+              onChange={setPrefNotifyPendingRegistrations}
+              label="Pending Registration Requests"
+              description="Get notified when a new alumnus submits a registration and is waiting for your approval."
+            />
+
+            <ToggleSwitch
+              id="job-applications-toggle"
+              enabled={prefNotificationsEnabled && prefNotifyJobApplications}
+              onChange={setPrefNotifyJobApplications}
+              label="Job Applications"
+              description="Receive an alert when an alumnus applies to a job posting so you can review their application."
+            />
+
+            <ToggleSwitch
+              id="event-updates-toggle"
+              enabled={prefNotificationsEnabled && prefNotifyEvents}
+              onChange={setPrefNotifyEvents}
+              label="Event Updates"
+              description="Get notified about new events, schedule changes, and reminders."
+            />
+          </>
+        ) : (
+          // Alumni-specific notification toggles
+          <>
+            <ToggleSwitch
+              id="donation-toasts-toggle"
+              enabled={prefNotificationsEnabled && prefShowDonationToasts}
+              onChange={setPrefShowDonationToasts}
+              label="Live Donation Toasts"
+              description="Show a popup alert in the bottom-left corner when another alumnus makes a donation."
+            />
+
+            <ToggleSwitch
+              id="event-updates-toggle"
+              enabled={prefNotificationsEnabled && prefNotifyEvents}
+              onChange={setPrefNotifyEvents}
+              label="Event Updates"
+              description="Get notified about new events, schedule changes, and reminders."
+            />
+
+            <ToggleSwitch
+              id="achievements-toggle"
+              enabled={prefNotificationsEnabled && prefNotifyAchievements}
+              onChange={setPrefNotifyAchievements}
+              label="Network Achievements"
+              description="Receive updates about alumni honors, promotions, and achievements."
+            />
+
+            <ToggleSwitch
+              id="jobs-toggle"
+              enabled={prefNotificationsEnabled && prefNotifyJobs}
+              onChange={setPrefNotifyJobs}
+              label="Job Opportunities"
+              description="Get notified when new jobs matching your profile are posted."
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 

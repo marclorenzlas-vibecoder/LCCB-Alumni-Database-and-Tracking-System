@@ -172,7 +172,7 @@ const toLiveDonationActivity = (notification) => {
   };
 };
 
-const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), alumniMap = new Map()) => {
+const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), alumniMap = new Map(), alumniMapById = new Map()) => {
   const { cleanDescription } = parseDescriptionMeta(entry.description || '');
   const matchedNotifications = notificationMap.get(`/donate/${entry.id}`) || [];
   const latestNotification = matchedNotifications[0] || null;
@@ -213,7 +213,8 @@ const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), al
     .filter((block) => block.includes('Donor:'))
     .map((block, index) => {
       const donorName = extractLineValue(block, 'Donor') || latestNotification?.sender_name || fallbackSenderName || 'Alumnus';
-      const cleanDonorName = donorName.replace(/^(mr|ms|mrs|dr|mr\.|ms\.|mrs\.|dr\.)\s+/i, '').trim();
+      // Always strip honorific prefix for consistent display (frontend no longer sends them)
+      const displayName = donorName.replace(/^(mr|ms|mrs|dr|mr\.|ms\.|mrs\.|dr\.)\s+/i, '').trim();
       const amountLabel = extractLineValue(block, 'Amount');
       const donationKind = inferDonationKind(block);
       const donationLabel = amountLabel || (donationKind === 'items' ? 'an item donation' : 'a donation');
@@ -222,19 +223,24 @@ const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), al
         ? new Date(createdAtRaw)
         : latestNotification?.created_at || entry.date || new Date();
 
-      const clean = donorName.replace(/^(mr|ms|mrs|dr)\.?\s+/i, '').trim().toLowerCase();
-      let matchedAlumni = alumniMap.get(clean);
+      // Prefer the stored AlumniId for O(1) profile image lookup; fall back to fuzzy name matching for older blocks
+      const storedAlumniId = Number(extractLineValue(block, 'AlumniId') || 0);
+      let matchedAlumni = storedAlumniId ? alumniMapById.get(storedAlumniId) : null;
       if (!matchedAlumni) {
-        for (const [key, value] of alumniMap.entries()) {
-          const cleanWords = clean.split(/\s+/).filter(w => w.length > 1);
-          if (cleanWords.length >= 2 && cleanWords.every(word => key.includes(word))) {
-            matchedAlumni = value;
-            break;
-          }
-          const keyWords = key.split(/\s+/).filter(w => w.length > 1);
-          if (keyWords.length >= 2 && keyWords.every(word => clean.includes(word))) {
-            matchedAlumni = value;
-            break;
+        const clean = displayName.toLowerCase();
+        matchedAlumni = alumniMap.get(clean);
+        if (!matchedAlumni) {
+          for (const [key, value] of alumniMap.entries()) {
+            const cleanWords = clean.split(/\s+/).filter(w => w.length > 1);
+            if (cleanWords.length >= 2 && cleanWords.every(word => key.includes(word))) {
+              matchedAlumni = value;
+              break;
+            }
+            const keyWords = key.split(/\s+/).filter(w => w.length > 1);
+            if (keyWords.length >= 2 && keyWords.every(word => clean.includes(word))) {
+              matchedAlumni = value;
+              break;
+            }
           }
         }
       }
@@ -242,10 +248,10 @@ const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), al
 
       return {
         id: `donation-${entry.id}-${index}`,
-        title: `${cleanDonorName} donated ${donationLabel} to ${purpose}`,
+        title: `${displayName} donated ${donationLabel} to ${purpose}`,
         message: block,
         link: '/donations',
-        senderName: cleanDonorName,
+        senderName: displayName,
         senderProfileImage,
         amountLabel,
         campaignName: purpose,
@@ -255,7 +261,7 @@ const parseDonationActivitiesFromEntry = (entry, notificationMap = new Map(), al
     });
 };
 
-const buildLiveDonationActivityFeed = ({ notifications = [], donations = [], alumniMap = new Map() } = {}) => {
+const buildLiveDonationActivityFeed = ({ notifications = [], donations = [], alumniMap = new Map(), alumniMapById = new Map() } = {}) => {
   const notificationsByLink = new Map();
 
   for (const notification of notifications) {
@@ -274,7 +280,7 @@ const buildLiveDonationActivityFeed = ({ notifications = [], donations = [], alu
   const activity = [];
   const candidates = [
     ...notifications.map(toLiveDonationActivity),
-    ...donations.flatMap((entry) => parseDonationActivitiesFromEntry(entry, notificationsByLink, alumniMap))
+    ...donations.flatMap((entry) => parseDonationActivitiesFromEntry(entry, notificationsByLink, alumniMap, alumniMapById))
   ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
   for (const item of candidates) {
@@ -313,6 +319,7 @@ const extractLineValue = (text = '', label = '') => {
 const buildContributionBlock = ({
   campaignPurpose,
   donorName,
+  alumniId,
   amountLabel,
   recordedAt,
   donorDetailsText = ''
@@ -324,10 +331,15 @@ const buildContributionBlock = ({
     `Recorded: ${recordedAt.toISOString()}`
   ];
 
+  // Store alumni_id so the activity feed can do an O(1) lookup instead of fuzzy matching
+  if (alumniId && Number.isFinite(Number(alumniId))) {
+    lines.push(`AlumniId: ${Number(alumniId)}`);
+  }
+
   const extraLines = String(donorDetailsText || '')
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && !/^donor:/i.test(line));
+    .filter((line) => line && !/^donor:/i.test(line) && !/^alumniid:/i.test(line));
 
   return [...lines, ...extraLines].join('\n');
 };
@@ -454,6 +466,7 @@ const handleRecentDonationActivity = async (req, res) => {
       }),
       prisma.alumni.findMany({
         select: {
+          id: true,
           first_name: true,
           last_name: true,
           profile_image: true
@@ -462,12 +475,14 @@ const handleRecentDonationActivity = async (req, res) => {
     ]);
 
     const alumniMap = new Map();
+    const alumniMapById = new Map();
     for (const alumni of alumniRows) {
       const key = `${alumni.first_name || ''} ${alumni.last_name || ''}`.trim().toLowerCase();
       if (key) alumniMap.set(key, alumni);
+      if (alumni.id) alumniMapById.set(alumni.id, alumni);
     }
 
-    const activity = buildLiveDonationActivityFeed({ notifications, donations, alumniMap });
+    const activity = buildLiveDonationActivityFeed({ notifications, donations, alumniMap, alumniMapById });
 
     res.json(activity);
   } catch (error) {
@@ -693,10 +708,15 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
     }
 
     const donorNameFromForm = extractLineValue(cleanDescription, 'Donor');
-    const donorName = donorNameFromForm || await getDonorDisplayName(req);
+    const rawDonorName = donorNameFromForm || await getDonorDisplayName(req);
+    // Strip any honorific (Mr/Ms/Mrs/Dr) — frontend no longer sends them, but strip defensively for older submissions
+    const donorName = rawDonorName.replace(/^(mr|ms|mrs|dr|mr\.|ms\.|mrs\.|dr\.)\s+/i, '').trim() || rawDonorName;
+    // Capture alumni_id so the activity feed can resolve profile images in O(1)
+    const contributorAlumniId = Number(req.user?.alumniId || 0) || null;
     const contributionBlock = buildContributionBlock({
       campaignPurpose: existingCampaign.purpose || 'a donation campaign',
       donorName,
+      alumniId: contributorAlumniId,
       amountLabel: contributionAmountLabel,
       recordedAt: new Date(),
       donorDetailsText: cleanDescription
@@ -718,13 +738,21 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
 
     try {
       const senderProfileImage = await getDonorProfileImage(req);
-      const { cleanDescription: donorNotes, meta } = parseDescriptionMeta(description || '');
+      const { cleanDescription: rawDonorNotes } = parseDescriptionMeta(description || '');
+      // Strip structured label lines so they don't appear in the live broadcast message
+      const STRUCTURED_LINE_RE = /^(donor|alumniid|amount|recorded|donation for)\s*:/i;
+      const humanNotes = rawDonorNotes
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l && !STRUCTURED_LINE_RE.test(l))
+        .join(' ')
+        .trim();
       const donationKind = contributionDonationKind;
       const amountLabel = contributionAmountLabel;
 
       const donationTitle = `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}`;
-      const donationMessage = donorNotes
-        ? `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}. ${donorNotes}`
+      const donationMessage = humanNotes
+        ? `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}. ${humanNotes}`
         : `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}.`;
 
       const liveDonationPayload = {

@@ -88,15 +88,8 @@ function DonationCard({ donation, isTeacher, onEdit, onDelete, onDonate, onShare
           </div>
         )}
 
-        {/* Footer — Read More + actions anchored to bottom */}
+        {/* Footer — actions anchored to bottom */}
         <div className="card-footer-wrapper">
-          <button
-            onClick={() => navigate(`/donate/${donation.id}`)}
-            className="read-more-link"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
-            Read More
-          </button>
           <div className={`grid gap-2 ${isTeacher ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
             {isTeacher && (
               <>

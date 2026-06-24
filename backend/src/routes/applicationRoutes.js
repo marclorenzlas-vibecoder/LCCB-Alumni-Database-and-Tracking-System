@@ -265,6 +265,36 @@ router.post('/', runResumeUpload, async (req, res) => {
         link: `/job-applications/${application.job_posting_id}`
       });
       console.log('✅ Notification created successfully:', notification.id);
+
+      // Also create notification for Admins who have notify_job_applications enabled
+      try {
+        const adminsToNotify = await prisma.user.findMany({
+          where: {
+            role: 'ADMIN',
+            is_active: true,
+            is_blocked: false,
+            notification_enabled: true,
+            notify_job_applications: true
+          },
+          select: { id: true }
+        });
+
+        console.log(`📧 Notifying ${adminsToNotify.length} admins about job application`);
+
+        for (const admin of adminsToNotify) {
+          // Skip if the admin is also the job poster to avoid duplicate alerts
+          if (admin.id === jobPoster.user.id) continue;
+
+          await notificationService.createUserNotification(admin.id, {
+            type: 'JOB_APPLICATION',
+            title: 'Alumni Job Application Alert (Admin)',
+            message: `${application.applicant.first_name} ${application.applicant.last_name} applied for the job "${application.job_posting.job_title}" at "${application.job_posting.company}"`,
+            link: `/job-applications/${application.job_posting_id}`
+          });
+        }
+      } catch (adminNotifError) {
+        console.error('❌ Failed to notify admins about job application:', adminNotifError.message);
+      }
     } catch (notifError) {
       console.error('❌ Failed to create notification:', notifError.message);
       console.error('Error details:', notifError);

@@ -11,59 +11,98 @@ const notificationService = require('./notificationService');
 async function updateEventStatuses() {
   try {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    // Get all events
-    const events = await prisma.event.findMany({
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+    // Define filter for ongoing (CURRENT) events:
+    // date <= today AND (end_date >= today OR (end_date is null AND date = today))
+    const currentEventsFilter = {
+      OR: [
+        {
+          date: { lte: today },
+          end_date: { gte: today }
+        },
+        {
+          date: today,
+          end_date: null
+        }
+      ]
+    };
+
+    // Define filter for past (PREVIOUS) events:
+    // end_date < today OR (date < today AND end_date is null)
+    const previousEventsFilter = {
+      OR: [
+        {
+          end_date: { lt: today }
+        },
+        {
+          date: { lt: today },
+          end_date: null
+        }
+      ]
+    };
+
+    // Find upcoming events that are transitioning to CURRENT and need notification
+    const upcomingToCurrent = await prisma.event.findMany({
       where: {
-        date: { not: null }
+        status: 'UPCOMING',
+        notified_current: false,
+        ...currentEventsFilter
       }
     });
 
-    let upcomingToCurrent = [];
-    let currentToPrevious = [];
+    // Find current events that are transitioning to PREVIOUS (for logging/counters)
+    const currentToPrevious = await prisma.event.findMany({
+      where: {
+        status: 'CURRENT',
+        ...previousEventsFilter
+      },
+      select: { id: true }
+    });
 
-    for (const event of events) {
-      const eventDate = new Date(event.date);
-      const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-      
-      let newStatus = event.status;
-      
-      // Determine end date
-      const endDate = event.end_date 
-        ? new Date(event.end_date)
-        : eventDateOnly;
-      const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-
-      // Check status
-      if (today < eventDateOnly) {
-        // Event is in the future
-        newStatus = 'UPCOMING';
-      } else if (today >= eventDateOnly && today <= endDateOnly) {
-        // Event is happening now
-        newStatus = 'CURRENT';
-        if (event.status === 'UPCOMING' && !event.notified_current) {
-          upcomingToCurrent.push(event);
-        }
-      } else {
-        // Event has ended
-        newStatus = 'PREVIOUS';
-        if (event.status === 'CURRENT') {
-          currentToPrevious.push(event);
-        }
+    // 1. Bulk update to UPCOMING
+    const upcomingResult = await prisma.event.updateMany({
+      where: {
+        date: { gt: today },
+        status: { not: 'UPCOMING' }
+      },
+      data: {
+        status: 'UPCOMING'
       }
+    });
 
-      // Update if status changed
-      if (newStatus !== event.status) {
-        await prisma.event.update({
-          where: { id: event.id },
-          data: { 
-            status: newStatus,
-            notified_current: newStatus === 'CURRENT' ? true : event.notified_current
-          }
-        });
-        console.log(`Event "${event.name}" status updated: ${event.status} -> ${newStatus}`);
+    // 2. Bulk update to CURRENT
+    const currentResult = await prisma.event.updateMany({
+      where: {
+        status: { not: 'CURRENT' },
+        ...currentEventsFilter
+      },
+      data: {
+        status: 'CURRENT',
+        notified_current: true
       }
+    });
+
+    // 3. Bulk update to PREVIOUS
+    const previousResult = await prisma.event.updateMany({
+      where: {
+        status: { not: 'PREVIOUS' },
+        ...previousEventsFilter
+      },
+      data: {
+        status: 'PREVIOUS'
+      }
+    });
+
+    // Log the transitions if any
+    if (upcomingResult.count > 0) {
+      console.log(`Event status update: ${upcomingResult.count} events transitioned/reset to UPCOMING`);
+    }
+    if (currentResult.count > 0) {
+      console.log(`Event status update: ${currentResult.count} events transitioned to CURRENT`);
+    }
+    if (previousResult.count > 0) {
+      console.log(`Event status update: ${previousResult.count} events transitioned to PREVIOUS`);
     }
 
     // Send notifications for events that became current
@@ -82,10 +121,16 @@ async function updateEventStatuses() {
       }
     }
 
+    const totalProcessed = await prisma.event.count({
+      where: {
+        date: { not: null }
+      }
+    });
+
     return {
       upcomingToCurrent: upcomingToCurrent.length,
       currentToPrevious: currentToPrevious.length,
-      totalProcessed: events.length
+      totalProcessed
     };
   } catch (error) {
     console.error('Error updating event statuses:', error);

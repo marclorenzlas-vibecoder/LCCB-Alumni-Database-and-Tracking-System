@@ -229,7 +229,6 @@ const DonatePage = () => {
     donationType: 'money',
     amount: '',
     date: new Date().toISOString().split('T')[0],
-    title: '',
     firstName: '',
     lastName: '',
     email: '',
@@ -631,7 +630,7 @@ const DonatePage = () => {
   };
 
   const getDonorDisplayName = () => {
-    const fullName = [formData.title, formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
+    const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
     return fullName || user?.username || 'Anonymous donor';
   };
 
@@ -700,7 +699,7 @@ const DonatePage = () => {
       };
 
       const donorSummary = [
-        `Donor: ${[formData.title, formData.firstName, formData.lastName].filter(Boolean).join(' ')}`,
+        `Donor: ${[formData.firstName, formData.lastName].filter(Boolean).join(' ')}`,
         `Country: ${formData.country}`,
         `Address: ${formData.address}`,
         formData.phone ? `Phone: ${formData.phone}` : null,
@@ -772,7 +771,7 @@ const DonatePage = () => {
     );
   }
 
-  const donorNameForReview = [formData.title, formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
+  const donorNameForReview = [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
   const contactPreferenceForReview = formData.allowContact
     ? [formData.contactByEmail ? 'Email' : null, formData.contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
     : 'Do not contact';
@@ -1227,17 +1226,6 @@ const DonatePage = () => {
                       <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Complete your details</p>
                       <h2 className="text-2xl font-bold text-slate-900">Complete your details to make a donation</h2>
                       <p className="text-sm text-slate-600">Please fill in the details below so we can process your donation and keep you informed.</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Title</label>
-                      <input
-                        name="title"
-                        value={formData.title}
-                        onChange={handleInputChange}
-                        placeholder="e.g. Mr or Ms"
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                      />
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">

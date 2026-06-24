@@ -281,42 +281,27 @@ router.post("/", runProfileUpload, async (req, res) => {
 router.get("/birthdays/today", authMiddleware, async (req, res) => {
   try {
     const today = new Date();
-    const birthdays = await prisma.alumni.findMany({
-      where: {
-        date_of_birth: {
-          not: null,
-        },
-        status: {
-          not: "DECEASED",
-        },
-      },
-      include: {
-        user: {
-          select: {
-            email: true,
-            username: true,
-          },
-        },
-      },
-    });
+    const currentMonth = today.getUTCMonth() + 1;
+    const currentDay = today.getUTCDate();
 
-    const birthdayList = birthdays
-      .filter((entry) => {
-        const dob = new Date(entry.date_of_birth);
-        return (
-          !Number.isNaN(dob.getTime()) &&
-          dob.getUTCDate() === today.getUTCDate() &&
-          dob.getUTCMonth() === today.getUTCMonth()
-        );
-      })
-      .map((entry) => ({
-        id: entry.id,
-        firstName: entry.first_name,
-        lastName: entry.last_name,
-        profileImage: entry.profile_image,
-        dateOfBirth: entry.date_of_birth,
-        email: entry.email || entry.user?.email || null,
-      }));
+    const birthdays = await prisma.$queryRaw`
+      SELECT a.id, a.first_name, a.last_name, a.profile_image, a.date_of_birth, a.email, u.email as user_email
+      FROM alumni a
+      LEFT JOIN user u ON a.user_id = u.id
+      WHERE a.date_of_birth IS NOT NULL
+        AND (a.status IS NULL OR a.status != 'DECEASED')
+        AND MONTH(a.date_of_birth) = ${currentMonth}
+        AND DAY(a.date_of_birth) = ${currentDay}
+    `;
+
+    const birthdayList = birthdays.map((entry) => ({
+      id: entry.id,
+      firstName: entry.first_name,
+      lastName: entry.last_name,
+      profileImage: entry.profile_image,
+      dateOfBirth: entry.date_of_birth,
+      email: entry.email || entry.user_email || null,
+    }));
 
     const currentAlumni = await prisma.alumni.findFirst({
       where: {
