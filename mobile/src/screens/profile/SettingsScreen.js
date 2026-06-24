@@ -15,6 +15,7 @@ import PrimaryButton from "../../components/PrimaryButton";
 import ScreenContainer from "../../components/ScreenContainer";
 import { authService } from "../../services/authService";
 import { communityService } from "../../services/communityService";
+import apiClient from "../../services/apiClient";
 import { theme } from "../../theme";
 import {
   areNotificationsEnabled,
@@ -137,15 +138,29 @@ export default function SettingsScreen({ navigation, user, setUser }) {
   const statusMeta = getStatusLabel(user);
   const [activeSection, setActiveSection] = useState(null);
 
+  // Admin/Teacher share the same role token due to backend normalisation
+  const isAdmin = ['ADMIN', 'TEACHER'].includes(
+    String(user?.role || '').toUpperCase()
+  );
+
   const [loadingPreferences, setLoadingPreferences] = useState(true);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const [savingNotifications, setSavingNotifications] = useState(false);
 
+  // Granular preference state
+  const [prefNotifyEvents, setPrefNotifyEvents] = useState(true);
+  const [prefNotifyAchievements, setPrefNotifyAchievements] = useState(true);
+  const [prefNotifyDonations, setPrefNotifyDonations] = useState(true);
+  const [prefNotifyJobs, setPrefNotifyJobs] = useState(true);
+  const [prefShowDonationToasts, setPrefShowDonationToasts] = useState(true);
+  // Admin-only
+  const [prefNotifyPendingRegistrations, setPrefNotifyPendingRegistrations] = useState(true);
+  const [prefNotifyJobApplications, setPrefNotifyJobApplications] = useState(true);
+
   const activeMeta =
     SETTINGS_OPTIONS.find((option) => option.key === activeSection) || null;
 
-  // Reset to the root 4-option list every time the Settings screen comes into focus.
-  // This covers: navigating away via the sidebar and returning, switching drawer tabs, etc.
+  // Reset to the root option list every time the Settings screen comes into focus.
   useFocusEffect(
     React.useCallback(() => {
       setActiveSection(null);
@@ -153,8 +168,6 @@ export default function SettingsScreen({ navigation, user, setUser }) {
   );
 
   // Intercept the hardware back button while Settings is focused.
-  // If inside a sub-section, collapse back to the root options list.
-  // If already at root, let the global AppBackHandler take over.
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
@@ -172,22 +185,36 @@ export default function SettingsScreen({ navigation, user, setUser }) {
   );
 
   useEffect(() => {
+    if (!userId) {
+      setLoadingPreferences(false);
+      return;
+    }
+
     let mounted = true;
 
     const loadPreferences = async () => {
       setLoadingPreferences(true);
       try {
-        const storedNotificationSetting =
-          typeof user?.notification_enabled === "boolean"
-            ? user.notification_enabled
-            : typeof user?.notificationEnabled === "boolean"
-              ? user.notificationEnabled
-              : await areNotificationsEnabled(userId);
-
+        const response = await apiClient.get(
+          `/auth/notification-preference/${userId}`
+        );
+        const data = response.data;
         if (mounted) {
-          setNotificationsEnabledState(Boolean(storedNotificationSetting));
+          setNotificationsEnabledState(data.notification_enabled ?? true);
+          setPrefNotifyEvents(data.notify_events ?? true);
+          setPrefNotifyAchievements(data.notify_achievements ?? true);
+          setPrefNotifyDonations(data.notify_donations ?? true);
+          setPrefNotifyJobs(data.notify_jobs ?? true);
+          setPrefShowDonationToasts(data.show_donation_toasts ?? true);
+          setPrefNotifyPendingRegistrations(data.notify_pending_registrations ?? true);
+          setPrefNotifyJobApplications(data.notify_job_applications ?? true);
         }
       } catch (error) {
+        // Fallback: read master switch from local storage
+        try {
+          const fallback = await areNotificationsEnabled(userId);
+          if (mounted) setNotificationsEnabledState(Boolean(fallback));
+        } catch (_) {}
         console.error(
           "Failed to load mobile settings preferences:",
           error?.message || error,
@@ -202,7 +229,7 @@ export default function SettingsScreen({ navigation, user, setUser }) {
     return () => {
       mounted = false;
     };
-  }, [user?.notificationEnabled, user?.notification_enabled, userId]);
+  }, [userId]);
 
   const persistUser = async (nextUser) => {
     setUser?.(nextUser);
@@ -220,6 +247,15 @@ export default function SettingsScreen({ navigation, user, setUser }) {
       await authService.updateNotificationPreference(userId, {
         notificationEnabled: notificationsEnabled,
         promptShown: true,
+        notifyEvents: prefNotifyEvents,
+        notifyAchievements: prefNotifyAchievements,
+        notifyDonations: prefNotifyDonations,
+        notifyJobs: prefNotifyJobs,
+        showDonationToasts: prefShowDonationToasts,
+        ...(isAdmin && {
+          notifyPendingRegistrations: prefNotifyPendingRegistrations,
+          notifyJobApplications: prefNotifyJobApplications,
+        }),
       });
       await setNotificationEnabled(userId, notificationsEnabled);
 
@@ -317,7 +353,9 @@ export default function SettingsScreen({ navigation, user, setUser }) {
           <>
             {renderPanelHeader(
               "Notifications",
-              "Control how you stay informed about events, updates, and announcements.",
+              isAdmin
+                ? "Manage exactly what admin alerts you want to receive about platform activity."
+                : "Control how you stay informed about events, updates, and announcements.",
               "notifications-outline",
             )}
 
@@ -331,12 +369,74 @@ export default function SettingsScreen({ navigation, user, setUser }) {
             ) : (
               <>
                 <PreferenceRow
-                  title="System alerts"
-                  description="Receive real-time alerts about alumni events, directory updates, announcements, and donation notifications."
+                  title="System Alerts (Master Switch)"
+                  description="Enable or disable all real-time system notifications and alerts across the platform."
                   enabled={notificationsEnabled}
                   onToggle={() => setNotificationsEnabledState((prev) => !prev)}
                   disabled={savingNotifications}
                 />
+
+                <View style={styles.divider} />
+
+                {isAdmin ? (
+                  // Admin-specific toggles
+                  <>
+                    <PreferenceRow
+                      title="Pending Registration Requests"
+                      description="Get notified when a new alumnus submits a registration and is waiting for your approval."
+                      enabled={notificationsEnabled && prefNotifyPendingRegistrations}
+                      onToggle={() => setPrefNotifyPendingRegistrations((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                    <PreferenceRow
+                      title="Job Applications"
+                      description="Receive an alert when an alumnus applies to a job posting so you can review their application."
+                      enabled={notificationsEnabled && prefNotifyJobApplications}
+                      onToggle={() => setPrefNotifyJobApplications((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                    <PreferenceRow
+                      title="Event Updates"
+                      description="Get notified about new events, schedule changes, and reminders."
+                      enabled={notificationsEnabled && prefNotifyEvents}
+                      onToggle={() => setPrefNotifyEvents((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                  </>
+                ) : (
+                  // Alumni-specific toggles
+                  <>
+                    <PreferenceRow
+                      title="Live Donation Toasts"
+                      description="Show a popup alert when another alumnus makes a donation."
+                      enabled={notificationsEnabled && prefShowDonationToasts}
+                      onToggle={() => setPrefShowDonationToasts((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                    <PreferenceRow
+                      title="Event Updates"
+                      description="Get notified about new events, schedule changes, and reminders."
+                      enabled={notificationsEnabled && prefNotifyEvents}
+                      onToggle={() => setPrefNotifyEvents((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                    <PreferenceRow
+                      title="Network Achievements"
+                      description="Receive updates about alumni honors, promotions, and achievements."
+                      enabled={notificationsEnabled && prefNotifyAchievements}
+                      onToggle={() => setPrefNotifyAchievements((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                    <PreferenceRow
+                      title="Job Opportunities"
+                      description="Get notified when new jobs matching your profile are posted."
+                      enabled={notificationsEnabled && prefNotifyJobs}
+                      onToggle={() => setPrefNotifyJobs((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                  </>
+                )}
+
                 <PrimaryButton
                   label={
                     savingNotifications ? "Saving..." : "Save Notifications"
@@ -596,6 +696,11 @@ const styles = StyleSheet.create({
     borderColor: "#e2e8f0",
     backgroundColor: "#f8fafc",
     padding: 14,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#e2e8f0",
+    marginVertical: 4,
   },
   preferenceCopy: {
     flex: 1,
