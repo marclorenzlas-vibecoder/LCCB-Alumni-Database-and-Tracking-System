@@ -764,7 +764,7 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
     const { id } = req.params;
     const { amount, description, donation_type, item_name, item_description } = req.body;
     const contributionAmount = parseFloat(amount) || 0;
-    const donationType = donation_type === 'item' ? 'item' : 'money';
+    const donationType = ['item', 'items'].includes(String(donation_type || '').toLowerCase()) ? 'item' : 'money';
 
     const existingCampaign = await prisma.donation.findUnique({
       where: { id: Number(id) }

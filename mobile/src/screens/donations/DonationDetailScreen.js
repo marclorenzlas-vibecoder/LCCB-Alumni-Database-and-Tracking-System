@@ -244,7 +244,8 @@ export default function DonationDetailScreen({ route, navigation, user }) {
   const [address, setAddress] = useState('');
   const [country, setCountry] = useState('Philippines');
   const [allowContact, setAllowContact] = useState(true);
-  const [contactMethod, setContactMethod] = useState('email');
+  const [contactByEmail, setContactByEmail] = useState(true);
+  const [contactByPhone, setContactByPhone] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(true);
 
   const [paymentMethod, setPaymentMethod] = useState('card');
@@ -280,8 +281,8 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           { number: '4', title: 'Complete' }
         ]
       : [
-          { number: '1', title: 'Items' },
-          { number: '2', title: 'Verify' },
+          { number: '1', title: 'Select Items' },
+          { number: '2', title: 'Verify Details' },
           { number: '3', title: 'Delivery' },
           { number: '4', title: 'Complete' }
         ]
@@ -319,7 +320,8 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     setAddress((prev) => prev || user.alumni?.location || user.location || '');
     setAgreeTerms(true);
     setAllowContact(true);
-    setContactMethod('email');
+    setContactByEmail(true);
+    setContactByPhone(false);
   }, [user]);
 
   const donationInfo = campaign ? extractDonationMeta(campaign.description || '') : { cleanDescription: '', meta: {} };
@@ -336,6 +338,21 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     const num = parseFloat(val) || 0;
     return `${getSymbol(cur)}${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
+
+  const donorNameForReview = useMemo(
+    () => [firstName, lastName].filter(Boolean).join(' ').trim() || user?.username || '',
+    [firstName, lastName, user]
+  );
+  const contactPreferenceForReview = allowContact
+    ? [contactByEmail ? 'Email' : null, contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
+    : 'Do not contact';
+  const displayRole = String(user?.role || role || 'User').toLowerCase();
+  const verifiedChecks = useMemo(() => ([
+    { label: 'Account signed in', value: user?.username || user?.email || 'Unknown account', ok: Boolean(user) },
+    { label: 'Donation permission', value: canDonate ? `${displayRole} account can donate` : 'Role cannot donate', ok: canDonate },
+    { label: 'Donor name', value: donorNameForReview || 'Name not found', ok: Boolean(donorNameForReview) },
+    { label: 'Email address', value: email || 'Email not found', ok: Boolean(email) }
+  ]), [user, canDonate, displayRole, donorNameForReview, email]);
 
   const pickItemImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -370,12 +387,8 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       return true;
     }
     if (step === 2) {
-      if (!canDonate) {
-        Alert.alert('Donation unavailable', 'Only alumni or admin accounts can make donations.');
-        return false;
-      }
-      if (!firstName.trim() || !lastName.trim() || !email.trim() || !address.trim() || !agreeTerms) {
-        Alert.alert('Incomplete', 'Please fill in your name, email, address, and accept the terms.');
+      if (!user || !canDonate) {
+        Alert.alert('Donation unavailable', 'Please log in with an alumni or admin account to donate.');
         return false;
       }
       return true;
@@ -393,15 +406,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         return true;
       }
       if (paymentMethod === 'card') {
-        const required = [
-          cardholderName,
-          cardId,
-          cardNumber,
-          expiryMonth,
-          expiryYear,
-          cardCvv
-        ];
-        if (required.some((value) => !String(value || '').trim())) {
+        if (!String(cardNumber || '').trim() || !String(expiryMonth || '').trim() || !String(cardCvv || '').trim()) {
           Alert.alert('Card Details Required', 'Please complete your debit card details before continuing.');
           return false;
         }
@@ -433,8 +438,8 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     donorName: getDonorDisplayName(),
     campaignName: campaign?.purpose || 'Donation Campaign',
     donationTypeLabel: donationType === 'item' ? `Item: ${itemName}` : 'Money',
-    amountLabel: donationType === 'item' ? 'Physical Item' : formatAmount(amount, currency),
-    paymentMethod: donationType === 'item' ? 'Physical Item' : (PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Debit / credit card')
+    amountLabel: donationType === 'item' ? 'Item' : formatAmount(amount, currency),
+    paymentMethod: donationType === 'item' ? 'Item' : (PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Debit / credit card')
   });
 
   const handleSubmit = async () => {
@@ -446,7 +451,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     setCurrentStep(4);
 
     if (donationType === 'money' && amount && parseFloat(amount) > 0) {
-      donationService.broadcastDonationToast?.(campaign.id, {
+      donationService.broadcastDonationToast(campaign.id, {
         amount,
         currency,
         note: ''
@@ -474,7 +479,9 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           ].join('\n')
         : `Payment method: ${paymentLabel}\nCurrency: ${currency}`;
 
-      const contactPreference = allowContact ? (contactMethod === 'phone' ? 'Phone' : 'Email') : 'Do not contact';
+      const contactPreference = allowContact
+        ? [contactByEmail ? 'Email' : null, contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
+        : 'Do not contact';
       const donationMeta = {
         donationMode: donationType === 'item' ? 'item' : 'money',
         paymentCurrency: currency,
@@ -490,7 +497,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         `Agreement: ${agreeTerms ? 'Accepted' : 'Not accepted'}`,
         donationType === 'item'
           ? [
-              'Donation type: Physical Item',
+              'Donation type: Item',
               `Item quantity: ${itemQuantity}`,
               `Item category: ${itemCategory || 'General'}`,
               `Item condition: ${itemCondition}`,
@@ -504,7 +511,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       let payload;
       if (donationType === 'item') {
         const fd = new FormData();
-        fd.append('donation_type', 'items');
+        fd.append('donation_type', 'item');
         fd.append('item_name', itemName);
         if (itemDescription) fd.append('item_description', itemDescription);
         fd.append('description', withDonationMeta(donorSummary, donationMeta));
@@ -682,7 +689,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                 onPress={() => setDonationType('item')}
               >
                 <Ionicons name="cube-outline" size={18} color={donationType === 'item' ? '#fff' : '#475569'} />
-                <Text style={[styles.typeToggleText, donationType === 'item' && styles.typeToggleTextActive]}>Physical Item</Text>
+                <Text style={[styles.typeToggleText, donationType === 'item' && styles.typeToggleTextActive]}>Item</Text>
               </Pressable>
             </View>
 
@@ -712,6 +719,28 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Item Name *</Text>
                   <TextInput style={styles.textInput} placeholder="e.g. Books, Laptop, Chair" placeholderTextColor="#94a3b8" value={itemName} onChangeText={setItemName} />
+                </View>
+
+                <View style={styles.row2}>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Quantity *</Text>
+                    <TextInput style={styles.textInput} placeholder="e.g. 1" placeholderTextColor="#94a3b8" keyboardType="number-pad" value={itemQuantity} onChangeText={setItemQuantity} />
+                  </View>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Category *</Text>
+                    <Pressable style={styles.currencyBtn} onPress={() => setShowItemCategoryPicker(true)}>
+                      <Text style={styles.countryValue}>{itemCategory || 'Select category'}</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#64748b" />
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Condition *</Text>
+                  <Pressable style={styles.currencyBtn} onPress={() => setShowItemConditionPicker(true)}>
+                    <Text style={styles.countryValue}>{itemCondition}</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#64748b" />
+                  </Pressable>
                 </View>
 
                 <View style={styles.fieldGroup}>
@@ -744,134 +773,153 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           </View>
         )}
 
-        {/* Step 2: Details */}
+        {/* Step 2: Verify */}
         {currentStep === 2 && (
-          <View style={styles.stepCard}>
-            <Text style={styles.stepCardTitle}>Complete your details</Text>
-            <Text style={styles.stepCardSub}>Please fill in the details below so we can process your donation and keep you informed.</Text>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Title</Text>
-              <TextInput style={styles.textInput} placeholder="e.g. Mr or Ms" placeholderTextColor="#94a3b8" value={title} onChangeText={setTitle} />
-            </View>
-
-            <View style={styles.row2}>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={styles.fieldLabel}>First Name *</Text>
-                <TextInput style={styles.textInput} placeholder="First name" placeholderTextColor="#94a3b8" value={firstName} onChangeText={setFirstName} />
+          <View style={styles.verifySection}>
+            <View style={styles.verifyHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.verifyEyebrow}>Verify details</Text>
+                <Text style={styles.verifyTitle}>Review your donation details</Text>
+                <Text style={styles.verifySub}>Make sure your details, and contribution summary are correct before continuing.</Text>
               </View>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={styles.fieldLabel}>Last Name *</Text>
-                <TextInput style={styles.textInput} placeholder="Last name" placeholderTextColor="#94a3b8" value={lastName} onChangeText={setLastName} />
+              <View style={[styles.verifyBadge, user && canDonate ? styles.verifyBadgeOk : styles.verifyBadgeWarn]}>
+                <Text style={[styles.verifyBadgeText, user && canDonate ? styles.verifyBadgeTextOk : styles.verifyBadgeTextWarn]}>
+                  {user && canDonate ? 'Verified' : 'Needs login'}
+                </Text>
               </View>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Where do you live?</Text>
-              <Pressable style={styles.currencyBtn} onPress={() => { setCountrySearch(''); setShowCountryPicker(true); }}>
-                <Text style={styles.countryValue}>{country || 'Select country'}</Text>
-                <Ionicons name="chevron-forward" size={16} color="#64748b" />
-              </Pressable>
+            <View style={styles.verifyChecksGrid}>
+              {verifiedChecks.map((check) => (
+                <View key={check.label} style={styles.verifyCheckCard}>
+                  <View style={styles.verifyCheckRow}>
+                    <View style={[styles.verifyCheckIcon, check.ok ? styles.verifyCheckIconOk : styles.verifyCheckIconWarn]}>
+                      <Ionicons name={check.ok ? 'checkmark' : 'warning'} size={14} color={check.ok ? '#047857' : '#b45309'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.verifyCheckLabel}>{check.label}</Text>
+                      <Text style={styles.verifyCheckValue}>{check.value}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
             </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Find your address *</Text>
-              <TextInput style={styles.textInput} placeholder="Start typing your address" placeholderTextColor="#94a3b8" value={address} onChangeText={setAddress} />
-            </View>
+            <View style={styles.verifyCampaignCard}>
+              <View style={styles.verifyCampaignHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.verifyCampaignName}>{campaign.purpose}</Text>
+                  <Text style={styles.verifyCampaignSub}>Campaign selected for this donation</Text>
+                </View>
+                <View style={[styles.verifyTypeBadge, isMoneyPath ? styles.verifyTypeBadgeMoney : styles.verifyTypeBadgeItem]}>
+                  <Text style={[styles.verifyTypeBadgeText, isMoneyPath ? styles.verifyTypeBadgeTextMoney : styles.verifyTypeBadgeTextItem]}>
+                    {isMoneyPath ? 'Money' : 'Items'}
+                  </Text>
+                </View>
+              </View>
 
-            <View style={styles.row2}>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={styles.fieldLabel}>Email address *</Text>
-                <TextInput style={styles.textInput} placeholder="name@example.com" placeholderTextColor="#94a3b8" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
-              </View>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={styles.fieldLabel}>Phone (optional)</Text>
-                <TextInput style={styles.textInput} placeholder="+63 9XX XXX XXXX" placeholderTextColor="#94a3b8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
-              </View>
-            </View>
-
-            <View style={styles.contactSection}>
-              <Text style={styles.fieldLabel}>Contact preferences</Text>
-              <View style={styles.contactToggle}>
-                <Pressable style={[styles.contactToggleBtn, allowContact && styles.contactToggleActive]} onPress={() => setAllowContact(true)}>
-                  <Text style={[styles.contactToggleText, allowContact && styles.contactToggleTextActive]}>I'm happy to be contacted</Text>
-                </Pressable>
-                <View style={{ height: 1, backgroundColor: '#e2e8f0' }} />
-                <Pressable style={[styles.contactToggleBtn, !allowContact && styles.contactToggleActive]} onPress={() => { setAllowContact(false); setContactMethod('email'); }}>
-                  <Text style={[styles.contactToggleText, !allowContact && styles.contactToggleTextActive]}>Don't contact me</Text>
-                </Pressable>
-              </View>
-              {allowContact && (
-                <View style={styles.contactChecks}>
-                  <Pressable style={styles.checkRow} onPress={() => setContactMethod('email')}>
-                    <Ionicons name={contactMethod === 'email' ? 'radio-button-on' : 'radio-button-off'} size={20} color={contactMethod === 'email' ? '#1d4ed8' : '#94a3b8'} />
-                    <Text style={styles.checkLabel}>Email updates</Text>
-                  </Pressable>
-                  <Pressable style={styles.checkRow} onPress={() => setContactMethod('phone')}>
-                    <Ionicons name={contactMethod === 'phone' ? 'radio-button-on' : 'radio-button-off'} size={20} color={contactMethod === 'phone' ? '#1d4ed8' : '#94a3b8'} />
-                    <Text style={styles.checkLabel}>Phone updates</Text>
-                  </Pressable>
+              {isMoneyPath ? (
+                <View style={styles.verifyAmountBox}>
+                  <Text style={styles.verifyAmountLabel}>Amount</Text>
+                  <Text style={styles.verifyAmountValue}>{formatAmount(amount, currency)}</Text>
+                  <Text style={styles.verifyAmountMeta}>Currency: {currency}</Text>
+                </View>
+              ) : (
+                <View style={styles.verifyItemPreview}>
+                  <Text style={styles.verifyAmountLabel}>Item Preview</Text>
+                  <Text style={styles.verifyItemName}>{itemName}</Text>
+                  <View style={styles.verifyItemMetaRow}>
+                    <Text style={styles.verifyItemMeta}><Text style={styles.verifyItemMetaStrong}>Quantity:</Text> {itemQuantity}</Text>
+                    <Text style={styles.verifyItemMeta}><Text style={styles.verifyItemMetaStrong}>Category:</Text> {itemCategory || 'General'}</Text>
+                    <Text style={styles.verifyItemMeta}><Text style={styles.verifyItemMetaStrong}>Condition:</Text> {itemCondition}</Text>
+                  </View>
+                  {itemImages.length > 0 && (
+                    <View style={styles.verifyItemPhotos}>
+                      {itemImages.map((img, idx) => (
+                        <Image key={idx} source={{ uri: img.uri }} style={styles.verifyItemPhoto} />
+                      ))}
+                    </View>
+                  )}
                 </View>
               )}
             </View>
 
-            <Pressable style={styles.checkRow} onPress={() => setAgreeTerms(!agreeTerms)}>
-              <Ionicons name={agreeTerms ? 'checkbox' : 'square-outline'} size={20} color={agreeTerms ? '#1d4ed8' : '#94a3b8'} />
-              <Text style={styles.checkLabel}>I have read and agree to the terms & conditions and privacy policy.</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Step 3: Verify */}
-        {currentStep === 3 && (
-          <View style={styles.stepCard}>
-            <Text style={styles.stepCardTitle}>Review Your Donation</Text>
-            <Text style={styles.stepCardSub}>Make sure your details and contribution summary are correct.</Text>
-
-            <View style={styles.verifyCard}>
-              <View style={styles.verifyRow}>
-                <Ionicons name="person-outline" size={18} color="#475569" />
-                <View style={{ flex: 1 }}><Text style={styles.verifyLabel}>Donor</Text><Text style={styles.verifyValue}>{[title, firstName, lastName].filter(Boolean).join(' ')}</Text></View>
-              </View>
-              <View style={styles.verifyRow}>
-                <Ionicons name="mail-outline" size={18} color="#475569" />
-                <View style={{ flex: 1 }}><Text style={styles.verifyLabel}>Email</Text><Text style={styles.verifyValue}>{email}</Text></View>
-              </View>
-              <View style={styles.verifyRow}>
-                <Ionicons name="call-outline" size={18} color="#475569" />
-                <View style={{ flex: 1 }}><Text style={styles.verifyLabel}>Phone</Text><Text style={styles.verifyValue}>{phone || 'Not provided'}</Text></View>
-              </View>
-              {address ? (
-                <View style={styles.verifyRow}>
-                  <Ionicons name="location-outline" size={18} color="#475569" />
-                  <View style={{ flex: 1 }}><Text style={styles.verifyLabel}>Address</Text><Text style={styles.verifyValue}>{address}{country ? `, ${country}` : ''}</Text></View>
+            {isMoneyPath && (
+              <View style={styles.verifyInfoRow}>
+                <View style={[styles.verifyInfoCard, { flex: 1 }]}>
+                  <Text style={styles.verifyInfoTitle}>Donor contact</Text>
+                  <Text style={styles.verifyInfoText}>{email}</Text>
+                  <Text style={styles.verifyInfoText}>{phone || 'No phone number provided'}</Text>
+                  <Text style={styles.verifyInfoMeta}>{contactPreferenceForReview}</Text>
                 </View>
-              ) : null}
-            </View>
+                <View style={[styles.verifyInfoCard, { flex: 1 }]}>
+                  <Text style={styles.verifyInfoTitle}>Campaign payment details</Text>
+                  <Text style={styles.verifyInfoText}>Number: {paymentNumber}</Text>
+                  <Text style={styles.verifyInfoText}>Methods: {paymentMethods}</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
-            <View style={styles.verifyCard}>
-              <View style={styles.verifyRow}>
-                <Ionicons name="heart-outline" size={18} color="#475569" />
-                <View style={{ flex: 1 }}><Text style={styles.verifyLabel}>Campaign</Text><Text style={styles.verifyValue}>{campaign.purpose}</Text></View>
+        {/* Step 3: Delivery or Pay */}
+        {currentStep === 3 && !isMoneyPath && (
+          <View style={styles.stepCard}>
+            <Text style={styles.verifyEyebrow}>Delivery details</Text>
+            <Text style={styles.stepCardTitle}>Delivery Information</Text>
+            <Text style={styles.stepCardSub}>Please choose how you would like to deliver the donated items to us.</Text>
+
+            <Text style={styles.fieldLabel}>Delivery Method</Text>
+            <Pressable
+              style={[styles.deliveryOption, deliveryMethod === 'dropoff' && styles.deliveryOptionActive]}
+              onPress={() => setDeliveryMethod('dropoff')}
+            >
+              <Ionicons name={deliveryMethod === 'dropoff' ? 'radio-button-on' : 'radio-button-off'} size={20} color={deliveryMethod === 'dropoff' ? '#1d4ed8' : '#94a3b8'} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deliveryOptionTitle}>Drop-off</Text>
+                <Text style={styles.deliveryOptionSub}>Deliver the items directly to the school administration office.</Text>
               </View>
-              <View style={styles.verifyRow}>
-                <Ionicons name="cash-outline" size={18} color="#475569" />
-                <View style={{ flex: 1 }}><Text style={styles.verifyLabel}>Amount</Text><Text style={styles.verifyValue}>{formatAmount(amount, currency)}</Text></View>
+            </Pressable>
+            <Pressable
+              style={[styles.deliveryOption, deliveryMethod === 'pickup' && styles.deliveryOptionActive]}
+              onPress={() => setDeliveryMethod('pickup')}
+            >
+              <Ionicons name={deliveryMethod === 'pickup' ? 'radio-button-on' : 'radio-button-off'} size={20} color={deliveryMethod === 'pickup' ? '#1d4ed8' : '#94a3b8'} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deliveryOptionTitle}>Pickup</Text>
+                <Text style={styles.deliveryOptionSub}>Request our team to pick up the items from your address.</Text>
               </View>
+            </Pressable>
+
+            {deliveryMethod === 'pickup' && (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Pickup Address *</Text>
+                <TextInput style={styles.textInput} placeholder="Enter pickup address" placeholderTextColor="#94a3b8" value={deliveryAddress} onChangeText={setDeliveryAddress} />
+              </View>
+            )}
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Preferred Schedule / Date & Time *</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Mondays 9:00 AM - 12:00 PM, or July 10, 2026"
+                placeholderTextColor="#94a3b8"
+                value={deliverySchedule}
+                onChangeText={setDeliverySchedule}
+              />
             </View>
           </View>
         )}
 
-        {/* Step 4: Pay */}
-        {currentStep === 4 && (
+        {currentStep === 3 && isMoneyPath && (
           <View style={styles.stepCard}>
-            <Text style={styles.stepCardTitle}>Select Payment Method</Text>
-            <Text style={styles.stepCardSub}>Choose how you would like to pay.</Text>
-
             <View style={styles.paymentSummary}>
-              <Text style={styles.paymentSummaryLabel}>Amount to pay</Text>
-              <Text style={styles.paymentSummaryAmount}>{formatAmount(amount, currency)}</Text>
+              <Text style={styles.paymentSummaryLabel}>Payment summary</Text>
+              <Text style={styles.verifyInfoText}>Amount: {formatAmount(amount, currency)}</Text>
+              <Text style={styles.verifyInfoText}>Currency: {currency}</Text>
             </View>
+
+            <Text style={styles.stepCardTitle}>Please select a payment method:</Text>
 
             <View style={styles.paymentMethods}>
               {PAYMENT_METHODS.map(method => (
@@ -886,16 +934,28 @@ export default function DonationDetailScreen({ route, navigation, user }) {
             {paymentMethod === 'card' && (
               <View style={styles.cardForm}>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Card Number</Text>
+                  <Text style={styles.fieldLabel}>Card Number *</Text>
                   <TextInput style={styles.textInput} placeholder="1234 5678 9012 3456" placeholderTextColor="#94a3b8" keyboardType="number-pad" maxLength={19} value={cardNumber} onChangeText={setCardNumber} />
                 </View>
                 <View style={styles.row2}>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Expiry</Text>
-                    <TextInput style={styles.textInput} placeholder="MM/YY" placeholderTextColor="#94a3b8" keyboardType="number-pad" maxLength={5} value={cardExpiry} onChangeText={setCardExpiry} />
+                    <Text style={styles.fieldLabel}>Expiration date *</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="MM/YY"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="number-pad"
+                      maxLength={5}
+                      value={expiryMonth}
+                      onChangeText={(text) => {
+                        setExpiryMonth(text);
+                        const yr = text.split('/')[1];
+                        if (yr) setExpiryYear(yr);
+                      }}
+                    />
                   </View>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>CVV</Text>
+                    <Text style={styles.fieldLabel}>Security code *</Text>
                     <TextInput style={styles.textInput} placeholder="123" placeholderTextColor="#94a3b8" keyboardType="number-pad" maxLength={4} secureTextEntry value={cardCvv} onChangeText={setCardCvv} />
                   </View>
                 </View>
@@ -916,13 +976,13 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           <Pressable style={styles.cancelBtn} onPress={goBack} disabled={submitting}>
             <Text style={styles.cancelBtnText}>{currentStep === 1 ? 'Cancel' : 'Back'}</Text>
           </Pressable>
-          {currentStep < 4 ? (
-            <Pressable style={[styles.nextBtn, submitting && styles.btnDisabled]} onPress={goNext} disabled={submitting}>
+          {currentStep < 3 ? (
+            <Pressable style={[styles.nextBtn, (submitting || !user || !canDonate) && styles.btnDisabled]} onPress={goNext} disabled={submitting || !user || !canDonate}>
               <Text style={styles.nextBtnText}>Next</Text>
             </Pressable>
           ) : (
-            <Pressable style={[styles.nextBtn, submitting && styles.btnDisabled]} onPress={handleSubmit} disabled={submitting}>
-              <Text style={styles.nextBtnText}>{submitting ? 'Processing...' : 'Pay'}</Text>
+            <Pressable style={[styles.nextBtn, (submitting || !user || !canDonate) && styles.btnDisabled]} onPress={handleSubmit} disabled={submitting || !user || !canDonate}>
+              <Text style={styles.nextBtnText}>{submitting ? 'Processing...' : isMoneyPath ? 'Pay' : 'Submit Donation Request'}</Text>
             </Pressable>
           )}
         </View>
@@ -966,6 +1026,44 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               ))}
             </ScrollView>
             <Pressable style={styles.modalCancel} onPress={() => setShowCountryPicker(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showItemCategoryPicker} transparent animationType="slide" onRequestClose={() => setShowItemCategoryPicker(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowItemCategoryPicker(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Select Category</Text>
+            <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
+              {ITEM_CATEGORIES.map((cat) => (
+                <Pressable key={cat} style={[styles.modalOption, itemCategory === cat && styles.modalOptionActive]} onPress={() => { setItemCategory(cat); setShowItemCategoryPicker(false); }}>
+                  <Text style={[styles.modalOptionText, itemCategory === cat && styles.modalOptionTextActive]}>{cat}</Text>
+                  {itemCategory === cat && <Ionicons name="checkmark" size={16} color="#1d4ed8" />}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.modalCancel} onPress={() => setShowItemCategoryPicker(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showItemConditionPicker} transparent animationType="slide" onRequestClose={() => setShowItemConditionPicker(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowItemConditionPicker(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Select Condition</Text>
+            <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
+              {ITEM_CONDITIONS.map((cond) => (
+                <Pressable key={cond} style={[styles.modalOption, itemCondition === cond && styles.modalOptionActive]} onPress={() => { setItemCondition(cond); setShowItemConditionPicker(false); }}>
+                  <Text style={[styles.modalOptionText, itemCondition === cond && styles.modalOptionTextActive]}>{cond}</Text>
+                  {itemCondition === cond && <Ionicons name="checkmark" size={16} color="#1d4ed8" />}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.modalCancel} onPress={() => setShowItemConditionPicker(false)}>
               <Text style={styles.modalCancelText}>Cancel</Text>
             </Pressable>
           </Pressable>
@@ -1032,6 +1130,55 @@ const styles = StyleSheet.create({
   verifyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   verifyLabel: { fontSize: 11, color: '#64748b', fontWeight: '600' },
   verifyValue: { fontSize: 14, color: '#0f172a', fontWeight: '600' },
+  verifySection: { backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 12, gap: 14 },
+  verifyHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  verifyEyebrow: { fontSize: 11, fontWeight: '700', color: '#64748b', letterSpacing: 1.2, textTransform: 'uppercase' },
+  verifyTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginTop: 4 },
+  verifySub: { fontSize: 13, color: '#64748b', marginTop: 4, lineHeight: 19 },
+  verifyBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  verifyBadgeOk: { backgroundColor: '#d1fae5' },
+  verifyBadgeWarn: { backgroundColor: '#ffe4e6' },
+  verifyBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
+  verifyBadgeTextOk: { color: '#047857' },
+  verifyBadgeTextWarn: { color: '#be123c' },
+  verifyChecksGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  verifyCheckCard: { width: '48%', backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
+  verifyCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  verifyCheckIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  verifyCheckIconOk: { backgroundColor: '#d1fae5' },
+  verifyCheckIconWarn: { backgroundColor: '#fef3c7' },
+  verifyCheckLabel: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  verifyCheckValue: { fontSize: 12, color: '#64748b', marginTop: 2, lineHeight: 17 },
+  verifyCampaignCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 14 },
+  verifyCampaignHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  verifyCampaignName: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  verifyCampaignSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  verifyTypeBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  verifyTypeBadgeMoney: { backgroundColor: '#dbeafe' },
+  verifyTypeBadgeItem: { backgroundColor: '#fef3c7' },
+  verifyTypeBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
+  verifyTypeBadgeTextMoney: { color: '#1d4ed8' },
+  verifyTypeBadgeTextItem: { color: '#b45309' },
+  verifyAmountBox: { marginTop: 12, backgroundColor: '#f8fafc', borderRadius: 10, padding: 12 },
+  verifyAmountLabel: { fontSize: 10, fontWeight: '700', color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase' },
+  verifyAmountValue: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginTop: 4 },
+  verifyAmountMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  verifyItemPreview: { marginTop: 12, backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, gap: 4 },
+  verifyItemName: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginTop: 2 },
+  verifyItemMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  verifyItemMeta: { fontSize: 12, color: '#64748b', flexGrow: 1, minWidth: '30%' },
+  verifyItemMetaStrong: { fontWeight: '700', color: '#475569' },
+  verifyItemPhotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  verifyItemPhoto: { width: 48, height: 48, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  verifyInfoRow: { flexDirection: 'column', gap: 10 },
+  verifyInfoCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
+  verifyInfoTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  verifyInfoText: { fontSize: 12, color: '#475569', marginTop: 6 },
+  verifyInfoMeta: { fontSize: 12, color: '#64748b', marginTop: 6 },
+  deliveryOption: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 14, backgroundColor: '#fff' },
+  deliveryOptionActive: { borderColor: '#1e3a8a', backgroundColor: '#eff6ff' },
+  deliveryOptionTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  deliveryOptionSub: { fontSize: 12, color: '#64748b', marginTop: 2, lineHeight: 17 },
   paymentSummary: { backgroundColor: '#f1f5f9', borderRadius: 10, padding: 14, alignItems: 'center', gap: 2 },
   paymentSummaryLabel: { fontSize: 11, color: '#64748b', fontWeight: '600' },
   paymentSummaryAmount: { fontSize: 24, fontWeight: '800', color: '#0f172a' },

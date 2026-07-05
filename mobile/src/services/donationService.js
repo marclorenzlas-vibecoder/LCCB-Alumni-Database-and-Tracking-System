@@ -40,6 +40,11 @@ export const donationService = {
     return response.data;
   },
 
+  async broadcastDonationToast(donationId, data = {}) {
+    const response = await apiClient.post(`/donations/${donationId}/broadcast-toast`, data);
+    return response.data;
+  },
+
   async getContributions(campaignId) {
     const response = await apiClient.get(`/donations/${campaignId}/contributions`);
     return response.data;
