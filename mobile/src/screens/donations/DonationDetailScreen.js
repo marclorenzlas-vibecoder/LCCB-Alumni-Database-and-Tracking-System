@@ -455,7 +455,9 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         amount,
         currency,
         note: ''
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('Failed to broadcast donation toast:', err?.response?.data || err?.message || err);
+      });
     }
 
     if (donationType === 'money' && (paymentMethod === 'gcash' || paymentMethod === 'paymaya')) {
