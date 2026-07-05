@@ -243,6 +243,18 @@ const DonatePage = () => {
     paymentMethod: 'card'
   });
 
+  const [itemName, setItemName] = useState('');
+  const [itemDescription, setItemDescription] = useState('');
+  const [itemImages, setItemImages] = useState([]);
+
+  const [itemQuantity, setItemQuantity] = useState('1');
+  const [itemCategory, setItemCategory] = useState('');
+  const [itemCondition, setItemCondition] = useState('New');
+
+  const [deliveryMethod, setDeliveryMethod] = useState('dropoff');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliverySchedule, setDeliverySchedule] = useState('');
+
   const [paymentDetails, setPaymentDetails] = useState({
     cardholderName: '',
     cardId: '',
@@ -257,12 +269,17 @@ const DonatePage = () => {
   const currentRole = authService.getRole();
   const canDonate = currentRole === 'alumni' || currentRole === 'admin' || currentRole === 'teacher';
 
-  const donationSteps = [
+  const isMoneyPath = formData.donationType === 'money';
+  const donationSteps = isMoneyPath ? [
     { number: '1', title: 'Amount', description: 'Enter donation amount' },
-    { number: '2', title: 'Details', description: 'Enter donation info' },
-    { number: '3', title: 'Verify', description: 'Confirm account access' },
-    { number: '4', title: 'Pay', description: 'Finalize donation' },
-    { number: '5', title: 'Complete', description: 'Donation recorded' }
+    { number: '2', title: 'Verify', description: 'Review donor details' },
+    { number: '3', title: 'Pay', description: 'Complete payment' },
+    { number: '4', title: 'Complete', description: 'Donation recorded' }
+  ] : [
+    { number: '1', title: 'Select Items', description: 'Enter item info' },
+    { number: '2', title: 'Verify Details', description: 'Review item info' },
+    { number: '3', title: 'Delivery Information', description: 'Select delivery method' },
+    { number: '4', title: 'Complete', description: 'Donation recorded' }
   ];
 
   const presetAmounts = [100, 250, 500, 1000];
@@ -536,6 +553,30 @@ const DonatePage = () => {
     fetchCampaign();
   }, [campaignId]);
 
+  // Auto-populate donor details from the logged-in user's session
+  useEffect(() => {
+    if (!user) return;
+    setFormData((prev) => ({
+      ...prev,
+      firstName: prev.firstName
+        || user.alumni?.firstName || user.alumni?.first_name
+        || user.firstName || user.first_name || '',
+      lastName: prev.lastName
+        || user.alumni?.lastName || user.alumni?.last_name
+        || user.lastName || user.last_name || '',
+      email: prev.email || user.email || '',
+      phone: prev.phone
+        || user.alumni?.contactNumber || user.alumni?.contact_number
+        || user.contactNumber || user.contact_number || '',
+      address: prev.address
+        || user.alumni?.location
+        || user.location || '',
+      agreeTerms: true,
+      allowContact: true,
+      contactByEmail: true
+    }));
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (currencyMenuRef.current && !currencyMenuRef.current.contains(event.target)) {
@@ -590,6 +631,17 @@ const DonatePage = () => {
   };
 
   const validateStepOne = () => {
+    if (formData.donationType === 'items') {
+      if (!itemName.trim()) {
+        toast.warning('Please enter an item name.');
+        return false;
+      }
+      if (itemImages.length === 0) {
+        toast.warning('Please upload at least one photo of the item.');
+        return false;
+      }
+      return true;
+    }
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       toast.warning('Please choose or enter a valid donation amount first.');
       return false;
@@ -602,16 +654,9 @@ const DonatePage = () => {
   const goNext = () => {
     if (currentStep === 1 && !validateStepOne()) return;
 
-    if (currentStep === 2) {
-      if (!formData.firstName || !formData.lastName || !formData.email || !formData.address || !formData.agreeTerms) {
-        toast.warning('Please complete your details and accept the terms before continuing.');
-        return;
-      }
-    }
-
     setStepLoading(true);
     window.setTimeout(() => {
-      setCurrentStep((step) => Math.min(4, step + 1));
+      setCurrentStep((step) => Math.min(3, step + 1));
       setStepLoading(false);
     }, 350);
   };
@@ -642,13 +687,13 @@ const DonatePage = () => {
       issuedAt: new Date().toLocaleString(),
       donorName: getDonorDisplayName(),
       campaignName: campaign?.purpose || 'Donation Campaign',
-      donationTypeLabel: 'Money',
-      amountLabel: formatAmount(formData.amount, formData.currency),
-      paymentMethod: paymentProviders[formData.paymentMethod]?.label || 'Debit / credit card'
+      donationTypeLabel: formData.donationType === 'items' ? `Item: ${itemName}` : 'Money',
+      amountLabel: formData.donationType === 'items' ? 'Physical Item' : formatAmount(formData.amount, formData.currency),
+      paymentMethod: formData.donationType === 'items' ? 'Physical Item' : (paymentProviders[formData.paymentMethod]?.label || 'Debit / credit card')
     };
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
     if (!isLoggedIn) {
@@ -662,9 +707,6 @@ const DonatePage = () => {
       return;
     }
 
-    const wantsMoney = formData.donationType === 'money' || formData.donationType === 'both';
-    const wantsItems = formData.donationType === 'items' || formData.donationType === 'both';
-
     if (!validateStepOne()) return;
 
     if (formData.paymentMethod === 'card') {
@@ -676,6 +718,31 @@ const DonatePage = () => {
       }
     }
 
+    // Generate local receipt preview first
+    const receipt = buildDonationReceipt();
+
+    setSuccessState({
+      campaign: campaign,
+      receipt
+    });
+    setCurrentStep(4);
+
+    // Advance to Step 4 (receipt preview)
+    // Fire live donation toast immediately — the user has just clicked "Pay"
+    if (isMoneyPath && campaignId && formData.amount && parseFloat(formData.amount) > 0) {
+      donationService.broadcastDonationToast(campaignId, {
+        amount: formData.amount,
+        currency: formData.currency,
+        note: ''
+      }).catch(() => {});
+    }
+
+    if (formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya') {
+      handlePaymentRedirect(formData.paymentMethod);
+    }
+  };
+
+  const handleReceiptSubmission = async () => {
     try {
       setSubmitting(true);
       setError('');
@@ -692,7 +759,7 @@ const DonatePage = () => {
         : `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}\nCurrency: ${formData.currency}`;
 
       const donationMeta = {
-        donationMode: 'money',
+        donationMode: formData.donationType === 'items' ? 'item' : 'money',
         paymentCurrency: formData.currency,
         paymentNumber,
         paymentMethods,
@@ -711,33 +778,45 @@ const DonatePage = () => {
       ].filter(Boolean).join('\n');
 
       const payload = {
-        amount: parseFloat(formData.amount),
+        amount: formData.donationType === 'items' ? 0 : parseFloat(formData.amount),
         description: withDonationMeta(donorSummary, donationMeta),
         date: formData.date
       };
 
       let updatedCampaign;
-      updatedCampaign = await donationService.contributeToDonation(campaign.id, payload);
+      if (formData.donationType === 'items') {
+        const fd = new FormData();
+        fd.append('amount', '0');
+        fd.append('description', withDonationMeta(donorSummary, donationMeta));
+        fd.append('date', formData.date);
+        fd.append('donation_type', 'items');
+        fd.append('item_name', itemName);
+        if (itemDescription) fd.append('item_description', itemDescription);
+        itemImages.forEach((file) => fd.append('images', file));
+        updatedCampaign = await donationService.contributeToDonation(campaign.id, fd);
+      } else {
+        updatedCampaign = await donationService.contributeToDonation(campaign.id, payload);
+      }
 
-      const receipt = buildDonationReceipt(updatedCampaign);
-
-      setSuccessState({
-        campaign: updatedCampaign || campaign,
-        receipt
-      });
+      // Update local states on success
       setCampaign(updatedCampaign || {
         ...campaign,
         amount: campaign.amount + (payload.amount || 0)
       });
-      setCurrentStep(5);
 
-      if (formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya') {
-        handlePaymentRedirect(formData.paymentMethod);
-      }
+      toast.success('Receipt submitted! Your donation has been recorded and is visible to the admin.', {
+        position: 'bottom-center',
+        autoClose: 3500
+      });
+      
+      setTimeout(() => {
+        navigate('/donations');
+      }, 1500);
     } catch (err) {
-      console.error('Error submitting donation:', err);
-      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to submit donation';
+      console.error('Error submitting donation receipt:', err);
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to submit donation receipt';
       setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setSubmitting(false);
     }
@@ -771,15 +850,15 @@ const DonatePage = () => {
     );
   }
 
-  const donorNameForReview = [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
+  const donorNameForReview = [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim() || user?.username || '';
   const contactPreferenceForReview = formData.allowContact
     ? [formData.contactByEmail ? 'Email' : null, formData.contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
     : 'Do not contact';
   const verifiedChecks = [
-    { label: 'Account signed in', value: user?.username || 'Unknown account', ok: isLoggedIn },
+    { label: 'Account signed in', value: user?.username || user?.email || 'Unknown account', ok: isLoggedIn },
     { label: 'Donation permission', value: canDonate ? `${currentRole || 'User'} account can donate` : 'Role cannot donate', ok: canDonate },
-    { label: 'Donor details', value: donorNameForReview || 'Missing donor name', ok: Boolean(donorNameForReview && formData.email && formData.address) },
-    { label: 'Terms accepted', value: formData.agreeTerms ? 'Accepted' : 'Not accepted', ok: formData.agreeTerms }
+    { label: 'Donor name', value: donorNameForReview || 'Name not found', ok: Boolean(donorNameForReview) },
+    { label: 'Email address', value: formData.email || 'Email not found', ok: Boolean(formData.email) }
   ];
 
   const renderReceipt = () => {
@@ -1001,8 +1080,8 @@ const DonatePage = () => {
 
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-lg">
             <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-900">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Step {currentStep} of 5</p>
-              <h3 className="mt-2 text-2xl font-bold">Make a Donation</h3>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Step {currentStep} of {donationSteps.length}</p>
+              <h3 className="mt-2 text-2xl font-bold">{isMoneyPath ? 'Make a Donation' : 'Donate Physical Items'}</h3>
             </div>
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-sm text-red-800">{error}</div>}
@@ -1049,43 +1128,14 @@ const DonatePage = () => {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      const receiptText = [
-                        '================================',
-                        '       LCCB Alumni',
-                        '       Donation Receipt',
-                        '================================',
-                        '',
-                        `Receipt No: ${successState.receipt.receiptNumber}`,
-                        `Date: ${successState.receipt.issuedAt}`,
-                        '',
-                        `Campaign: ${successState.receipt.campaignName}`,
-                        '',
-                        '--------------------------------',
-                        `Donor: ${successState.receipt.donorName}`,
-                        `Type: ${successState.receipt.donationTypeLabel}`,
-                        `Payment: ${successState.receipt.paymentMethod}`,
-                        '--------------------------------',
-                        '',
-                        `TOTAL: ${successState.receipt.amountLabel}`,
-                        '',
-                        '        *** PAID ***',
-                        '',
-                        'Thank you for your donation!',
-                        '================================'
-                      ].join('\n');
-                      navigator.clipboard.writeText(receiptText).then(() => {
-                        toast.success('Receipt copied to clipboard', { position: 'bottom-left', autoClose: 2500 });
-                      }).catch(() => {
-                        toast.error('Unable to copy receipt right now', { position: 'bottom-left', autoClose: 2500 });
-                      });
-                    }}
-                    className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 transition-colors flex items-center gap-2"
+                    disabled={submitting}
+                    onClick={handleReceiptSubmission}
+                    className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 transition-colors flex items-center gap-2 disabled:bg-blue-400 disabled:cursor-not-allowed"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Copy Receipt
+                    {submitting ? 'Submitting...' : 'Submit Receipt'}
                   </button>
                 </div>
 
@@ -1133,6 +1183,35 @@ const DonatePage = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 {currentStep === 1 && (
                   <div>
+                    <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-3">Donation Type</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, donationType: 'money' }))}
+                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            formData.donationType === 'money'
+                              ? 'border-blue-600 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 hover:border-blue-300 text-slate-600'
+                          }`}
+                        >
+                          Money
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, donationType: 'items' }))}
+                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            formData.donationType === 'items'
+                              ? 'border-blue-600 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 hover:border-blue-300 text-slate-600'
+                          }`}
+                        >
+                          Item
+                        </button>
+                      </div>
+                    </div>
+
+                    {formData.donationType === 'money' ? (
                     <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="grid gap-4 gap-y-4 sm:grid-cols-[1.2fr_1.8fr] items-start mb-4">
                         <div ref={currencyMenuRef} className="relative">
@@ -1217,288 +1296,289 @@ const DonatePage = () => {
                         />
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {currentStep === 2 && (
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 space-y-6">
-                    <div className="space-y-2">
-                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Complete your details</p>
-                      <h2 className="text-2xl font-bold text-slate-900">Complete your details to make a donation</h2>
-                      <p className="text-sm text-slate-600">Please fill in the details below so we can process your donation and keep you informed.</p>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    ) : (
+                    <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">First name</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Item Name *</label>
                         <input
-                          name="firstName"
-                          value={formData.firstName}
-                          onChange={handleInputChange}
-                          placeholder="First name"
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                          type="text"
+                          value={itemName}
+                          onChange={(e) => setItemName(e.target.value)}
+                          className="w-full rounded-xl border border-gray-300 px-4 py-3"
+                          placeholder="e.g. Books, Laptop, Chair"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Quantity *</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={itemQuantity}
+                            onChange={(e) => setItemQuantity(e.target.value)}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-3"
+                            placeholder="e.g. 1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                          <select
+                            value={itemCategory}
+                            onChange={(e) => setItemCategory(e.target.value)}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-3 bg-white"
+                          >
+                            <option value="">Select category</option>
+                            <option value="Educational Supplies / Books">Educational Supplies / Books</option>
+                            <option value="School Uniforms / Clothing">School Uniforms / Clothing</option>
+                            <option value="IT Hardware / Electronic Equipment">IT Hardware / Electronic Equipment</option>
+                            <option value="Sports Equipment">Sports Equipment</option>
+                            <option value="Classroom Furniture / General Supplies">Classroom Furniture / General Supplies</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Condition *</label>
+                          <select
+                            value={itemCondition}
+                            onChange={(e) => setItemCondition(e.target.value)}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-3 bg-white"
+                          >
+                            <option value="New">New</option>
+                            <option value="Like New">Like New</option>
+                            <option value="Good">Good</option>
+                            <option value="Fair">Fair</option>
+                            <option value="Poor">Poor</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Description (optional)</label>
+                        <textarea
+                          value={itemDescription}
+                          onChange={(e) => setItemDescription(e.target.value)}
+                          rows="3"
+                          className="w-full rounded-xl border border-gray-300 px-4 py-3 resize-none"
+                          placeholder="Describe the item condition, quantity, etc."
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Last name</label>
-                        <input
-                          name="lastName"
-                          value={formData.lastName}
-                          onChange={handleInputChange}
-                          placeholder="Last name"
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                        />
-                      </div>
-                    </div>
-
-                    <div ref={countryMenuRef} className="relative">
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Where do you live?</label>
-                      <button
-                        type="button"
-                        onClick={() => setCountryMenuOpen((prev) => !prev)}
-                        className={`relative w-full rounded-2xl border-0 bg-white px-4 py-3 pr-10 text-left text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 transition focus:outline-none ${countryMenuOpen ? 'ring-2 ring-slate-900' : 'hover:shadow-md'}`}
-                        aria-haspopup="listbox"
-                        aria-expanded={countryMenuOpen}
-                      >
-                        <span className="block truncate">{formData.country}</span>
-                        <span className={`pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400 transition-transform duration-200 ${countryMenuOpen ? 'rotate-180' : ''}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Item Photos * (up to 5)</label>
+                        <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700 cursor-pointer hover:bg-slate-50 transition-all">
+                          <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                        </span>
-                      </button>
-                      {countryMenuOpen && (
-                        <div className="absolute left-0 right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                          <div className="max-h-[294px] overflow-y-auto">
-                            {countryOptions.map((country) => (
-                              <button
-                                key={country}
-                                type="button"
-                                onClick={() => {
-                                  setFormData((prev) => ({ ...prev, country }));
-                                  setCountryMenuOpen(false);
-                                }}
-                                className={`block w-full px-4 py-3 text-left text-sm transition ${
-                                  formData.country === country
-                                    ? 'bg-blue-700 font-semibold text-white'
-                                    : 'text-slate-700 hover:bg-slate-100'
-                                }`}
-                                role="option"
-                                aria-selected={formData.country === country}
-                              >
-                                {country}
-                              </button>
+                          Choose Photos
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files).slice(0, 5);
+                              setItemImages(prev => [...prev, ...files].slice(0, 5));
+                            }}
+                          />
+                        </label>
+                        {itemImages.length > 0 && (
+                          <div className="flex flex-wrap gap-3 mt-3">
+                            {itemImages.map((file, idx) => (
+                              <div key={idx} className="relative">
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt={`Item ${idx + 1}`}
+                                  className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setItemImages(prev => prev.filter((_, i) => i !== idx))}
+                                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                                >
+                                  ×
+                                </button>
+                              </div>
                             ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+                {currentStep === 2 && (
+                  <div className="space-y-6">
+                    {/* Verify Details */}
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 space-y-6">
+
+                      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Verify details</p>
+                          <h2 className="mt-2 text-2xl font-bold text-slate-900">Review your donation details</h2>
+                          <p className="mt-2 text-sm text-slate-600">Make sure your details, and contribution summary are correct before continuing.</p>
+                        </div>
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${isLoggedIn && canDonate ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {isLoggedIn && canDonate ? 'Verified' : 'Needs login'}
+                        </span>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {verifiedChecks.map((check) => (
+                          <div key={check.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="flex items-start gap-3">
+                              <div className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${check.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {check.ok ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12V16.5z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-bold text-slate-900">{check.label}</div>
+                                <div className="mt-1 break-words text-sm text-slate-600">{check.value}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">{campaign?.purpose}</div>
+                            <div className="mt-1 text-sm text-slate-500">Campaign selected for this donation</div>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] ${isMoneyPath ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {isMoneyPath ? 'Money' : 'Items'}
+                          </span>
+                        </div>
+
+                        {isMoneyPath ? (
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl bg-slate-50 p-4">
+                              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Amount</div>
+                              <div className="mt-1 text-xl font-black text-slate-900">{formatAmount(formData.amount, formData.currency)}</div>
+                              <div className="text-sm text-slate-500">Currency: {formData.currency}</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 space-y-4">
+                            <div className="rounded-xl bg-slate-50 p-4 space-y-2">
+                              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Item Preview</div>
+                              <div className="text-base font-bold text-slate-900">{itemName}</div>
+                              <div className="grid grid-cols-3 gap-2 text-sm text-slate-600">
+                                <div><strong>Quantity:</strong> {itemQuantity}</div>
+                                <div><strong>Category:</strong> {itemCategory || 'General'}</div>
+                                <div><strong>Condition:</strong> {itemCondition}</div>
+                              </div>
+                              {itemImages.length > 0 && (
+                                <div className="mt-3 flex gap-2">
+                                  {itemImages.map((file, idx) => (
+                                    <img
+                                      key={idx}
+                                      src={URL.createObjectURL(file)}
+                                      alt={`Preview ${idx + 1}`}
+                                      className="w-12 h-12 object-cover rounded-lg border border-slate-200"
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {isMoneyPath && (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+                            <div className="font-bold text-slate-900">Donor contact</div>
+                            <div className="mt-2">{formData.email}</div>
+                            <div>{formData.phone || 'No phone number provided'}</div>
+                            <div className="mt-2 text-slate-500">{contactPreferenceForReview}</div>
+                          </div>
+                          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+                            <div className="font-bold text-slate-900">Campaign payment details</div>
+                            <div className="mt-2">Number: {paymentNumber}</div>
+                            <div>Methods: {paymentMethods}</div>
                           </div>
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Find your address</label>
-                      <input
-                        ref={addressInputRef}
-                        name="address"
-                        value={formData.address}
-                        onChange={handleInputChange}
-                        placeholder="Start typing your address"
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                      <button
-                        type="button"
-                        onClick={() => addressInputRef.current?.focus()}
-                        className="text-slate-700 underline underline-offset-2"
-                      >
-                        Enter address manually
-                      </button>
-                    </div>
-
-                    {formData.address && (
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">Review your address</p>
-                            <p className="text-sm text-slate-500">Confirm the address we can use for your donation.</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => addressInputRef.current?.focus()}
-                            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                        <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">{formData.address}</div>
-                      </div>
-                    )}
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Email address</label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={formData.email}
-                          onChange={handleInputChange}
-                          placeholder="name@example.com"
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Phone number (optional)</label>
-                        <input
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleInputChange}
-                          placeholder="Phone number"
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                        />
-                      </div>
+                {currentStep === 3 && !isMoneyPath && (
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 space-y-6">
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Delivery details</p>
+                      <h2 className="text-2xl font-bold text-slate-900">Delivery Information</h2>
+                      <p className="text-sm text-slate-600">Please choose how you would like to deliver the donated items to us.</p>
                     </div>
 
                     <div className="space-y-3">
-                      <div className="text-sm font-medium text-slate-700">Contact preferences</div>
+                      <div className="text-sm font-medium text-slate-700">Delivery Method</div>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <label className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-sm transition-all ${formData.allowContact ? 'border-slate-900 bg-white text-slate-900 shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}`}>
+                        <label className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-sm transition-all cursor-pointer ${deliveryMethod === 'dropoff' ? 'border-blue-900 bg-white text-blue-900 shadow-sm ring-1 ring-blue-900' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}`}>
                           <input
                             type="radio"
-                            name="allowContact"
-                            value="yes"
-                            checked={formData.allowContact === true}
-                            onChange={() => setFormData((prev) => ({ ...prev, allowContact: true }))}
-                            className="mt-1 h-4 w-4 rounded border-slate-300"
+                            name="deliveryMethod"
+                            value="dropoff"
+                            checked={deliveryMethod === 'dropoff'}
+                            onChange={() => setDeliveryMethod('dropoff')}
+                            className="mt-1 h-4 w-4 text-blue-900 border-slate-300"
                           />
                           <div>
-                            <div className="font-semibold">I'm happy to be contacted</div>
-                            <p className="text-sm text-slate-500">For updates by email or phone related to this donation.</p>
+                            <div className="font-semibold">Drop-off</div>
+                            <p className="text-sm text-slate-500">Deliver the items directly to the school administration office.</p>
                           </div>
                         </label>
-                        <label className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-sm transition-all ${formData.allowContact ? 'border-slate-200 bg-white text-slate-700 hover:border-slate-300' : 'border-slate-900 bg-white text-slate-900 shadow-sm'}`}>
+                        <label className={`flex items-start gap-3 rounded-2xl border px-4 py-4 text-sm transition-all cursor-pointer ${deliveryMethod === 'pickup' ? 'border-blue-900 bg-white text-blue-900 shadow-sm ring-1 ring-blue-900' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}`}>
                           <input
                             type="radio"
-                            name="allowContact"
-                            value="no"
-                            checked={formData.allowContact === false}
-                            onChange={() => setFormData((prev) => ({ ...prev, allowContact: false, contactByEmail: false, contactByPhone: false }))}
-                            className="mt-1 h-4 w-4 rounded border-slate-300"
+                            name="deliveryMethod"
+                            value="pickup"
+                            checked={deliveryMethod === 'pickup'}
+                            onChange={() => setDeliveryMethod('pickup')}
+                            className="mt-1 h-4 w-4 text-blue-900 border-slate-300"
                           />
                           <div>
-                            <div className="font-semibold">Please don't contact me</div>
-                            <p className="text-sm text-slate-500">Do not contact me by email or phone for the purposes stated.</p>
+                            <div className="font-semibold">Pickup</div>
+                            <p className="text-sm text-slate-500">Request our team to pick up the items from your address.</p>
                           </div>
                         </label>
                       </div>
-                      {formData.allowContact && (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                            <input
-                              type="checkbox"
-                              name="contactByEmail"
-                              checked={formData.contactByEmail}
-                              onChange={handleInputChange}
-                              className="h-4 w-4 rounded border-slate-300"
-                            />
-                            Email updates
-                          </label>
-                          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                            <input
-                              type="checkbox"
-                              name="contactByPhone"
-                              checked={formData.contactByPhone}
-                              onChange={handleInputChange}
-                              className="h-4 w-4 rounded border-slate-300"
-                            />
-                            Phone updates
-                          </label>
-                        </div>
-                      )}
                     </div>
 
-                    <label className="flex items-start gap-2 text-sm text-slate-700">
-                      <input type="checkbox" name="agreeTerms" checked={formData.agreeTerms} onChange={handleInputChange} className="mt-1" />
-                      <span>
-                        I have read and agree to the Enthuse <a href="/terms" className="text-blue-600 underline">terms & conditions</a> and <a href="/privacy" className="text-blue-600 underline">privacy policy</a>.
-                      </span>
-                    </label>
-                  </div>
-                )}
-
-                {currentStep === 3 && (
-                  <div className="space-y-5 rounded-3xl border border-slate-200 bg-slate-50 p-6">
-                    <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                    {deliveryMethod === 'pickup' && (
                       <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Verify before payment</p>
-                        <h2 className="mt-2 text-2xl font-bold text-slate-900">Review your donation details</h2>
-                        <p className="mt-2 text-sm text-slate-600">Make sure your account, donor details, and contribution summary are correct before continuing.</p>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Pickup Address *</label>
+                        <input
+                          type="text"
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                          placeholder="Enter pickup address"
+                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                        />
                       </div>
-                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${isLoggedIn && canDonate ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {isLoggedIn && canDonate ? 'Verified' : 'Needs login'}
-                      </span>
-                    </div>
+                    )}
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {verifiedChecks.map((check) => (
-                        <div key={check.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                          <div className="flex items-start gap-3">
-                            <div className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${check.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {check.ok ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12V16.5z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                </svg>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-bold text-slate-900">{check.label}</div>
-                              <div className="mt-1 break-words text-sm text-slate-600">{check.value}</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="text-sm font-bold text-slate-900">{campaign?.purpose}</div>
-                          <div className="mt-1 text-sm text-slate-500">Campaign selected for this donation</div>
-                        </div>
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Money</span>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl bg-slate-50 p-4">
-                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Amount</div>
-                          <div className="mt-1 text-xl font-black text-slate-900">{formatAmount(formData.amount, formData.currency)}</div>
-                          <div className="text-sm text-slate-500">Currency: {formData.currency}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-                        <div className="font-bold text-slate-900">Donor contact</div>
-                        <div className="mt-2">{formData.email}</div>
-                        <div>{formData.phone || 'No phone number provided'}</div>
-                        <div className="mt-2 text-slate-500">{contactPreferenceForReview}</div>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-                        <div className="font-bold text-slate-900">Campaign payment details</div>
-                        <div className="mt-2">Number: {paymentNumber}</div>
-                        <div>Methods: {paymentMethods}</div>
-                      </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Preferred Schedule / Date & Time *</label>
+                      <input
+                        type="text"
+                        value={deliverySchedule}
+                        onChange={(e) => setDeliverySchedule(e.target.value)}
+                        placeholder="e.g. Mondays 9:00 AM - 12:00 PM, or July 10, 2026"
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                      />
                     </div>
                   </div>
                 )}
 
-                {currentStep === 4 && (
+                {currentStep === 3 && isMoneyPath && (
                   <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
                       <div className="font-semibold">Payment summary</div>
@@ -1507,59 +1587,61 @@ const DonatePage = () => {
                     </div>
 
                     <h3 className="text-base font-semibold text-slate-900">Please select a payment method:</h3>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {paymentMethodOptions.map((method) => (
-                            <button
-                              key={method.key}
-                              type="button"
-                              onClick={() => setFormData((prev) => ({ ...prev, paymentMethod: method.key }))}
-                              className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-all flex items-center gap-3 ${
-                                formData.paymentMethod === method.key
-                                  ? 'border-slate-900 bg-white text-slate-900 shadow-md'
-                                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-                              }`}
-                            >
-                              <div className="flex-shrink-0">
-                                {method.icon}
-                              </div>
-                              <span>{method.label}</span>
-                            </button>
-                          ))}
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {paymentMethodOptions.map((method) => (
+                        <button
+                          key={method.key}
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, paymentMethod: method.key }));
+                          }}
+                          className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-all flex items-center gap-3 ${
+                            formData.paymentMethod === method.key
+                              ? 'border-slate-900 bg-white text-slate-900 shadow-md'
+                              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex-shrink-0">
+                            {method.icon}
+                          </div>
+                          <span>{method.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {formData.paymentMethod === 'card' && (
+                      <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+                        <div className="flex justify-center">{paymentMethodOptions.find((method) => method.key === 'card')?.logo}</div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Card number *</label>
+                          <input type="text" name="cardNumber" value={paymentDetails.cardNumber} onChange={handlePaymentDetailChange} placeholder="•••• •••• •••• ••••" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
                         </div>
-
-                        {formData.paymentMethod === 'card' && (
-                          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-                            <div className="flex justify-center">{paymentMethodOptions.find((method) => method.key === 'card')?.logo}</div>
-                            <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-2">Card number *</label>
-                              <input type="text" name="cardNumber" value={paymentDetails.cardNumber} onChange={handlePaymentDetailChange} placeholder="•••• •••• •••• ••••" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
-                            </div>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Expiration date *</label>
-                                <input type="text" name="expiryMonth" value={paymentDetails.expiryMonth} onChange={handlePaymentDetailChange} placeholder="MM/YY" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Security code *</label>
-                                <input type="password" name="cvv" value={paymentDetails.cvv} onChange={handlePaymentDetailChange} placeholder="•••" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
-                              </div>
-                            </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Expiration date *</label>
+                            <input type="text" name="expiryMonth" value={paymentDetails.expiryMonth} onChange={handlePaymentDetailChange} placeholder="MM/YY" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
                           </div>
-                        )}
-
-                        {formData.paymentMethod === 'paymaya' && (
-                          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
-                            {paymentMethodOptions.find((method) => method.key === 'paymaya')?.logo}
-                            <p className="text-sm text-slate-600">You will be redirected to the PayMaya form. Please fill out all the required form fields.</p>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Security code *</label>
+                            <input type="password" name="cvv" value={paymentDetails.cvv} onChange={handlePaymentDetailChange} placeholder="•••" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
                           </div>
-                        )}
+                        </div>
+                      </div>
+                    )}
 
-                        {formData.paymentMethod === 'gcash' && (
-                          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
-                            {paymentMethodOptions.find((method) => method.key === 'gcash')?.logo}
-                            <p className="text-sm text-slate-600">You will be redirected to the GCash form. Please fill out all the required form fields.</p>
-                          </div>
-                        )}
+                    {formData.paymentMethod === 'paymaya' && (
+                      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
+                        {paymentMethodOptions.find((method) => method.key === 'paymaya')?.logo}
+                        <p className="text-sm text-slate-600">You will be redirected to the PayMaya form. Please fill out all the required form fields.</p>
+                      </div>
+                    )}
+
+                    {formData.paymentMethod === 'gcash' && (
+                      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
+                        {paymentMethodOptions.find((method) => method.key === 'gcash')?.logo}
+                        <p className="text-sm text-slate-600">You will be redirected to the GCash form. Please fill out all the required form fields.</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1567,13 +1649,13 @@ const DonatePage = () => {
                   <button type="button" onClick={currentStep === 1 ? () => navigate('/donations') : goBack} className="flex-1 rounded-xl border border-gray-300 px-6 py-3 font-medium text-gray-700 hover:bg-gray-50">
                     {currentStep === 1 ? 'Cancel' : 'Back'}
                   </button>
-                  {currentStep < 4 ? (
+                  {currentStep < 3 ? (
                     <button type="button" onClick={goNext} disabled={!isLoggedIn || !canDonate || stepLoading} className="flex-1 rounded-xl bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400">
-                      {stepLoading ? 'Processing...' : currentStep === 3 ? 'Continue to Payment' : 'Next'}
+                      {stepLoading ? 'Processing...' : 'Next'}
                     </button>
                   ) : (
                     <button type="submit" disabled={!isLoggedIn || !canDonate || submitting} className="flex-1 rounded-xl bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400">
-                      {submitting ? 'Processing...' : 'Pay'}
+                      {submitting ? 'Processing...' : isMoneyPath ? 'Pay' : 'Submit Donation Request'}
                     </button>
                   )}
                 </div>

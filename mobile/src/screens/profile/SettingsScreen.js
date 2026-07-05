@@ -155,7 +155,6 @@ export default function SettingsScreen({ navigation, user, setUser }) {
   const [prefShowDonationToasts, setPrefShowDonationToasts] = useState(true);
   // Admin-only
   const [prefNotifyPendingRegistrations, setPrefNotifyPendingRegistrations] = useState(true);
-  const [prefNotifyJobApplications, setPrefNotifyJobApplications] = useState(true);
 
   const activeMeta =
     SETTINGS_OPTIONS.find((option) => option.key === activeSection) || null;
@@ -207,7 +206,6 @@ export default function SettingsScreen({ navigation, user, setUser }) {
           setPrefNotifyJobs(data.notify_jobs ?? true);
           setPrefShowDonationToasts(data.show_donation_toasts ?? true);
           setPrefNotifyPendingRegistrations(data.notify_pending_registrations ?? true);
-          setPrefNotifyJobApplications(data.notify_job_applications ?? true);
         }
       } catch (error) {
         // Fallback: read master switch from local storage
@@ -254,7 +252,6 @@ export default function SettingsScreen({ navigation, user, setUser }) {
         showDonationToasts: prefShowDonationToasts,
         ...(isAdmin && {
           notifyPendingRegistrations: prefNotifyPendingRegistrations,
-          notifyJobApplications: prefNotifyJobApplications,
         }),
       });
       await setNotificationEnabled(userId, notificationsEnabled);
@@ -386,13 +383,6 @@ export default function SettingsScreen({ navigation, user, setUser }) {
                       description="Get notified when a new alumnus submits a registration and is waiting for your approval."
                       enabled={notificationsEnabled && prefNotifyPendingRegistrations}
                       onToggle={() => setPrefNotifyPendingRegistrations((p) => !p)}
-                      disabled={savingNotifications || !notificationsEnabled}
-                    />
-                    <PreferenceRow
-                      title="Job Applications"
-                      description="Receive an alert when an alumnus applies to a job posting so you can review their application."
-                      enabled={notificationsEnabled && prefNotifyJobApplications}
-                      onToggle={() => setPrefNotifyJobApplications((p) => !p)}
                       disabled={savingNotifications || !notificationsEnabled}
                     />
                     <PreferenceRow

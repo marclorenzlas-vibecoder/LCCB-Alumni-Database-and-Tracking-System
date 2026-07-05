@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import applicationService from '../services/applicationService';
 import careerService from '../services/careerService';
-import Toast from './Toast';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
 /**
@@ -14,8 +13,6 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
  * Features:
  * - View all applicants with full profiles
  * - See alumni qualifications (education, skills, employment history)
- * - Filter applications by status
- * - Update application status (PENDING, REVIEWED, SHORTLISTED, ACCEPTED, REJECTED)
  * - Read applicant cover letters
  */
 const JobApplications = () => {
@@ -28,34 +25,6 @@ const JobApplications = () => {
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCoverLetterModal, setShowCoverLetterModal] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('ALL');
-  const [toast, setToast] = useState(null);
-
-  const getStatusToast = (status) => {
-    const statusConfig = {
-      REVIEWED: {
-        message: 'Application marked as reviewed successfully!',
-        type: 'info'
-      },
-      SHORTLISTED: {
-        message: 'Application shortlisted successfully!',
-        type: 'warning'
-      },
-      ACCEPTED: {
-        message: 'Application accepted successfully!',
-        type: 'success'
-      },
-      REJECTED: {
-        message: 'Application rejected successfully!',
-        type: 'error'
-      }
-    };
-
-    return statusConfig[status] || {
-      message: `Application status updated to ${status} successfully!`,
-      type: 'success'
-    };
-  };
 
   useEffect(() => {
     fetchJobAndApplications();
@@ -83,54 +52,6 @@ const JobApplications = () => {
     }
   };
 
-  const handleStatusUpdate = async (applicationId, newStatus) => {
-    try {
-      console.log('Updating application', applicationId, 'to status', newStatus);
-      const response = await applicationService.updateApplicationStatus(applicationId, newStatus);
-      console.log('Update response:', response);
-      
-      // Refresh the applications list
-      await fetchJobAndApplications();
-      
-      // Trigger instant notification refresh for the applicant
-      if (window.refreshNotifications) {
-        window.refreshNotifications();
-      }
-      
-      // Trigger instant application count refresh
-      if (window.refreshApplicationCounts) {
-        window.refreshApplicationCounts();
-      }
-      
-      // Trigger instant application status refresh for alumni
-      if (window.refreshApplicationStatus) {
-        window.refreshApplicationStatus();
-      }
-      
-      const statusToast = getStatusToast(newStatus);
-      setToast(statusToast);
-    } catch (error) {
-      console.error('Error updating status:', error);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to update application status';
-      setToast({ message: errorMsg, type: 'error' });
-    }
-  };
-
-  const getStatusBadgeColor = (status) => {
-    const colors = {
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      REVIEWED: 'bg-blue-100 text-blue-800',
-      SHORTLISTED: 'bg-green-100 text-green-800',
-      REJECTED: 'bg-red-100 text-red-800',
-      ACCEPTED: 'bg-purple-100 text-purple-800'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
-  };
-
-  const filteredApplications = filterStatus === 'ALL' 
-    ? applications 
-    : applications.filter(app => app.status === filterStatus);
-
   const getResumeLink = (application) => {
     if (!application?.resume_url) return null;
     return `${API_BASE_URL}/applications/${application.id}/resume`;
@@ -145,10 +66,7 @@ const JobApplications = () => {
   const actionButtonBaseClass = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60';
   const actionButtonVariants = {
     blue: 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-700 focus:ring-blue-100',
-    indigo: 'bg-indigo-600 shadow-indigo-600/20 hover:bg-indigo-700 focus:ring-indigo-100',
-    amber: 'bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 focus:ring-amber-100',
-    emerald: 'bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-700 focus:ring-emerald-100',
-    red: 'bg-red-600 shadow-red-600/20 hover:bg-red-700 focus:ring-red-100'
+    indigo: 'bg-indigo-600 shadow-indigo-600/20 hover:bg-indigo-700 focus:ring-indigo-100'
   };
 
   if (loading) {
@@ -164,13 +82,6 @@ const JobApplications = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
       <div className="w-full max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -206,41 +117,14 @@ const JobApplications = () => {
           )}
         </div>
 
-        {/* Filter Tabs */}
-        <div className="mb-6 bg-white rounded-lg shadow-md p-4">
-          <div className="flex flex-wrap gap-2">
-            {['ALL', 'PENDING', 'REVIEWED', 'SHORTLISTED', 'ACCEPTED', 'REJECTED'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  filterStatus === status
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {status}
-                {status !== 'ALL' && (
-                  <span className="ml-2 text-xs">
-                    ({applications.filter(app => app.status === status).length})
-                  </span>
-                )}
-                {status === 'ALL' && (
-                  <span className="ml-2 text-xs">({applications.length})</span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Applications List */}
-        {filteredApplications.length === 0 ? (
+        {applications.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <p className="text-gray-500">No applications found.</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredApplications.map((application) => (
+            {applications.map((application) => (
               <div
                 key={application.id}
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-all"
@@ -265,9 +149,6 @@ const JobApplications = () => {
                         Applied on {new Date(application.applied_at).toLocaleDateString()}
                       </div>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeColor(application.status)}`}>
-                      {application.status}
-                    </span>
                   </div>
                 </div>
 
@@ -296,46 +177,6 @@ const JobApplications = () => {
                       View Resume
                     </a>
                   )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStatusUpdate(application.id, 'REVIEWED');
-                    }}
-                    className={`${actionButtonBaseClass} ${actionButtonVariants.blue}`}
-                    disabled={application.status === 'REVIEWED'}
-                  >
-                    Mark as Reviewed
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStatusUpdate(application.id, 'SHORTLISTED');
-                    }}
-                    className={`${actionButtonBaseClass} ${actionButtonVariants.amber}`}
-                    disabled={application.status === 'SHORTLISTED'}
-                  >
-                    Shortlist
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStatusUpdate(application.id, 'ACCEPTED');
-                    }}
-                    className={`${actionButtonBaseClass} ${actionButtonVariants.emerald}`}
-                    disabled={application.status === 'ACCEPTED'}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStatusUpdate(application.id, 'REJECTED');
-                    }}
-                    className={`${actionButtonBaseClass} ${actionButtonVariants.red}`}
-                    disabled={application.status === 'REJECTED'}
-                  >
-                    Reject
-                  </button>
                 </div>
               </div>
             ))}
@@ -401,9 +242,6 @@ const JobApplications = () => {
                         {selectedApplication.applicant.location}
                       </p>
                     )}
-                    <span className={`inline-block mt-3 px-4 py-2 rounded-full text-sm font-medium ${getStatusBadgeColor(selectedApplication.status)}`}>
-                      {selectedApplication.status}
-                    </span>
                   </div>
                 </div>
 

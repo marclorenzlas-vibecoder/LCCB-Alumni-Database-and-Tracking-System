@@ -92,7 +92,7 @@ const runUpload = (req, res, next) => {
 // Create new event
 router.post('/', runUpload, async (req, res) => {
   try {
-    const { name, description, date, location, sendNotification, notifyBatch } = req.body;
+    const { name, description, date, location, sendNotification, notifyBatch, targetBatch } = req.body;
 
     if (!name) {
       return res.status(400).json({ 
@@ -103,6 +103,7 @@ router.post('/', runUpload, async (req, res) => {
 
     const imagePath = req.file ? `/uploads/events/${req.file.filename}` : null;
     const shouldNotify = sendNotification === 'true' || sendNotification === true;
+    const batchValue = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch) : null;
 
     const event = await prisma.event.create({
       data: {
@@ -111,7 +112,8 @@ router.post('/', runUpload, async (req, res) => {
         date: date ? new Date(date) : null,
         location: location ? location.trim() : null,
         image: imagePath,
-        send_notification: shouldNotify
+        send_notification: shouldNotify,
+        target_batch: batchValue
       }
     });
 
@@ -150,13 +152,16 @@ router.post('/', runUpload, async (req, res) => {
 router.put('/:id', runUpload, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, date, location } = req.body;
+    const { name, description, date, location, targetBatch } = req.body;
 
     const updateData = {};
     if (name) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description ? description.trim() : null;
     if (date !== undefined) updateData.date = date ? new Date(date) : null;
     if (location !== undefined) updateData.location = location ? location.trim() : null;
+    if (targetBatch !== undefined) {
+      updateData.target_batch = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch) : null;
+    }
     
     // Add image path if uploaded
     if (req.file) {
@@ -236,6 +241,22 @@ router.post('/:id/join', async (req, res) => {
 
     if (!alumni_id) {
       return res.status(400).json({ error: 'Alumni ID is required' });
+    }
+
+    // Fetch event to check batch restriction
+    const event = await prisma.event.findUnique({ where: { id: Number(id) } });
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Batch restriction check
+    if (event.target_batch) {
+      const alumni = await prisma.alumni.findUnique({ where: { id: Number(alumni_id) } });
+      if (!alumni || alumni.batch !== event.target_batch) {
+        return res.status(403).json({
+          error: `This event is restricted to Batch ${event.target_batch}. Your batch does not match.`
+        });
+      }
     }
 
     // Check if already registered

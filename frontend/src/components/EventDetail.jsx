@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import eventService from "../services/eventService";
 import { authService } from "../services/authService";
@@ -334,6 +335,9 @@ const EventDetail = () => {
     user &&
     ((user?.role || "").toUpperCase() !== "TEACHER" || isAlumni) &&
     !isEventPast();
+
+  const userBatch = user?.alumni?.batch || null;
+  const isBatchRestricted = event?.target_batch && userBatch !== event.target_batch;
 
   if (loading) {
     return (
@@ -778,6 +782,36 @@ const EventDetail = () => {
                       Leave Event
                     </button>
                   </div>
+                ) : isBatchRestricted ? (
+                  <div>
+                    <div className="flex items-center gap-2 mb-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                      <svg
+                        className="w-5 h-5 text-amber-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                      <span className="text-sm font-semibold text-amber-800">
+                        Restricted to Batch {event.target_batch}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4">
+                      This event is only open to Batch {event.target_batch} alumni. Your batch does not match.
+                    </p>
+                    <button
+                      disabled
+                      className="w-full px-4 py-3 text-sm font-medium bg-gray-100 text-gray-400 rounded-lg cursor-not-allowed"
+                    >
+                      Only Batch {event.target_batch} Can Join
+                    </button>
+                  </div>
                 ) : (
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-widest text-blue-600 mb-3">
@@ -1047,8 +1081,8 @@ const EventDetail = () => {
         )}
 
         {/* Lightbox */}
-        {showLightbox && gallery.length > 0 && (
-          <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center">
+        {showLightbox && gallery.length > 0 && createPortal(
+          <div className="fixed inset-0 bg-black/95 z-[9999] flex items-center justify-center">
             <button
               onClick={closeLightbox}
               className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center text-white/70 hover:text-white transition-colors z-10 rounded-full hover:bg-white/10"
@@ -1118,7 +1152,8 @@ const EventDetail = () => {
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white/60 text-xs font-medium tracking-wide">
               {lightboxIndex + 1} / {gallery.length}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>

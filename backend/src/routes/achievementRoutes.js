@@ -102,21 +102,22 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/;
-    const ok =
-      allowed.test(path.extname(file.originalname).toLowerCase()) &&
-      allowed.test(file.mimetype);
-    if (ok) cb(null, true);
-    else cb(new Error("Only image files are allowed"));
+    const allowedImage = /jpeg|jpg|png|gif|webp/;
+    const allowedVideo = /mp4|mov|avi|mkv|webm/;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const isImage = allowedImage.test(ext) && file.mimetype.startsWith('image/');
+    const isVideo = allowedVideo.test(ext) && file.mimetype.startsWith('video/');
+    if (isImage || isVideo) cb(null, true);
+    else cb(new Error("Only image or video files are allowed"));
   },
 });
 
 router.post(
   "/",
   authenticateToken,
-  upload.single("image"),
+  upload.any(),
   async (req, res) => {
     try {
       // fields come from multipart/form-data
@@ -129,14 +130,15 @@ router.post(
         });
       }
 
-      const imagePath = req.file
-        ? `/uploads/achievements/${req.file.filename}`
+      const mediaFile = req.files?.find(f => f.fieldname === 'image' || f.fieldname === 'video');
+      const mediaPath = mediaFile
+        ? `/uploads/achievements/${mediaFile.filename}`
         : null;
 
       const createData = {
         title: title.trim(),
         category: category ? category.trim() : null,
-        image: imagePath,
+        image: mediaPath,
         description: description ? description.trim() : null,
         date: date ? new Date(date) : null,
       };
@@ -180,7 +182,7 @@ router.post(
 router.put(
   "/:id",
   authenticateToken,
-  upload.single("image"),
+  upload.any(),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -194,9 +196,10 @@ router.put(
         updateData.description = description ? description.trim() : null;
       if (date !== undefined) updateData.date = date ? new Date(date) : null;
 
-      // Add image path if uploaded
-      if (req.file) {
-        updateData.image = `/uploads/achievements/${req.file.filename}`;
+      // Add media path if uploaded
+      const mediaFile = req.files?.find(f => f.fieldname === 'image' || f.fieldname === 'video');
+      if (mediaFile) {
+        updateData.image = `/uploads/achievements/${mediaFile.filename}`;
 
         // Delete old image if exists
         const oldAchievement = await prisma.achievement.findUnique({
@@ -285,6 +288,20 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     console.error("Error deleting achievement:", error);
     res.status(500).json({ error: "Failed to delete achievement" });
   }
+});
+
+// Multer error handler
+router.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ error: "Only one image or video file is allowed." });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+  if (err.message === 'Only image or video files are allowed') {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
 });
 
 module.exports = router;

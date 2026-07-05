@@ -1,56 +1,31 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
 import BackButton from '../../components/BackButton';
 import { jobService } from '../../services/jobService';
-import { getAlumniId } from '../../utils/auth';
 import { formatDate } from '../../utils/formatters';
 
-const STATUS_STYLES = {
-  PENDING: { label: 'Pending', bg: '#fef3c7', color: '#92400e' },
-  REVIEWED: { label: 'Under Review', bg: '#e0e7ff', color: '#3730a3' },
-  SHORTLISTED: { label: 'Shortlisted', bg: '#dcfce7', color: '#166534' },
-  ACCEPTED: { label: 'Accepted', bg: '#d1fae5', color: '#065f46' },
-  REJECTED: { label: 'Rejected', bg: '#fee2e2', color: '#991b1b' }
-};
-
-export default function JobDetailScreen({ route, navigation, user }) {
+export default function JobDetailScreen({ route, navigation }) {
   const { jobId } = route.params;
-  const alumniId = useMemo(() => getAlumniId(user), [user]);
 
   const [job, setJob] = useState(null);
-  const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
     const loadData = async () => {
-      const [jobData, appData] = await Promise.all([
-        jobService.getJobById(jobId),
-        alumniId ? jobService.checkApplication(jobId, alumniId) : Promise.resolve(null)
-      ]);
+      const jobData = await jobService.getJobById(jobId);
       if (!mounted) return;
       setJob(jobData);
-      if (appData?.hasApplied || appData?.applied) {
-        setApplication(appData.application || appData);
-      }
     };
     loadData()
       .catch((e) => console.error('Failed to load job:', e?.message || e))
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
-  }, [jobId, alumniId]);
-
-  const handleApply = () => {
-    if (!alumniId) {
-      Alert.alert('No alumni profile', 'You need an alumni profile to apply.');
-      return;
-    }
-    navigation.navigate('JobApplication', { jobId });
-  };
+  }, [jobId]);
 
   if (loading) {
     return (
@@ -70,10 +45,6 @@ export default function JobDetailScreen({ route, navigation, user }) {
     );
   }
 
-  const status = application?.status;
-  const statusStyle = status ? STATUS_STYLES[status] : null;
-  const isApplied = !!application;
-
   const requirementsList = job.requirements
     ? job.requirements.split('\n').map((r) => r.trim()).filter(Boolean)
     : [];
@@ -86,15 +57,6 @@ export default function JobDetailScreen({ route, navigation, user }) {
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <Text style={styles.heroTitle}>{job.job_title}</Text>
-            {statusStyle ? (
-              <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                <Text style={[styles.statusBadgeText, { color: statusStyle.color }]}>{statusStyle.label}</Text>
-              </View>
-            ) : (
-              <View style={[styles.statusBadge, { backgroundColor: '#dbeafe' }]}>
-                <Text style={[styles.statusBadgeText, { color: '#1d4ed8' }]}>Open</Text>
-              </View>
-            )}
           </View>
 
           <Text style={styles.heroCompany}>{job.company || 'Company not specified'}</Text>
@@ -176,30 +138,13 @@ export default function JobDetailScreen({ route, navigation, user }) {
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        {isApplied && statusStyle ? (
-          <View style={[styles.footerStatus, { backgroundColor: statusStyle.bg }]}>
-            <Text style={[styles.footerStatusText, { color: statusStyle.color }]}>
-              {statusStyle.label}
-            </Text>
-          </View>
-        ) : (
-          <Pressable
-            style={[styles.footerApplyButton, isApplied && styles.footerApplyDisabled]}
-            onPress={handleApply}
-            disabled={isApplied}
-          >
-            <Text style={styles.footerApplyText}>{isApplied ? 'Already Applied' : 'Apply Now'}</Text>
-          </Pressable>
-        )}
-      </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 100
+    paddingBottom: 32
   },
   centered: {
     flex: 1,
@@ -209,24 +154,6 @@ const styles = StyleSheet.create({
   notFoundText: {
     fontSize: 16,
     color: '#64748b'
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 16
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569'
   },
   heroCard: {
     backgroundColor: '#f8fafc',
@@ -260,16 +187,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94a3b8',
     marginTop: 4
-  },
-  statusBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-start'
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '700'
   },
   logisticsCard: {
     backgroundColor: '#fff',
@@ -363,39 +280,4 @@ const styles = StyleSheet.create({
     color: '#334155',
     lineHeight: 22
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    paddingBottom: 28
-  },
-  footerApplyButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center'
-  },
-  footerApplyDisabled: {
-    backgroundColor: '#94a3b8'
-  },
-  footerApplyText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  footerStatus: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center'
-  },
-  footerStatusText: {
-    fontSize: 15,
-    fontWeight: '700'
-  }
 });

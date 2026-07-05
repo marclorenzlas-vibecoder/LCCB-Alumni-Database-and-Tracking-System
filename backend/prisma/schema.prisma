@@ -159,18 +159,45 @@ enum application_status {
 }
 
 model donation {
-  id          Int       @id @default(autoincrement())
-  alumni_id   Int?
-  amount      Decimal   @db.Decimal(10, 2)
-  date        DateTime? @db.Date
-  purpose     String?   @db.VarChar(255)
-  description String?   @db.Text
-  image       String?   @db.VarChar(255)
-  category    String?   @db.VarChar(100)
-  goal        Decimal?  @db.Decimal(10, 2)
-  alumni      alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "donation_ibfk_1")
+  id              Int       @id @default(autoincrement())
+  alumni_id       Int?
+  amount          Decimal   @db.Decimal(10, 2)
+  date            DateTime? @db.Date
+  purpose         String?   @db.VarChar(255)
+  description     String?   @db.Text
+  image           String?   @db.VarChar(255)
+  category        String?   @db.VarChar(100)
+  goal            Decimal?  @db.Decimal(10, 2)
+  donation_type   String?   @default("money") @db.VarChar(20)
+  item_name       String?   @db.VarChar(255)
+  item_description String?  @db.Text
+  alumni          alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "donation_ibfk_1")
+  donation_images donation_image[]
+  receipt_submissions receipt_submission[]
 
   @@index([alumni_id], map: "alumni_id")
+}
+
+model donation_image {
+  id          Int       @id @default(autoincrement())
+  donation_id Int
+  image_url   String    @db.VarChar(500)
+  created_at  DateTime? @default(now()) @db.DateTime(0)
+  donation    donation? @relation(fields: [donation_id], references: [id], onDelete: Cascade)
+
+  @@index([donation_id])
+}
+
+model receipt_submission {
+  id            Int       @id @default(autoincrement())
+  campaign_id   Int
+  admin_user_id Int
+  submitted_at  DateTime  @default(now())
+  status        String    @default("submitted") @db.VarChar(50)
+  notes         String?   @db.Text
+  campaign      donation? @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id])
 }
 
 model event {
@@ -184,6 +211,7 @@ model event {
   send_notification Boolean?          @default(false)
   status           event_status?      @default(UPCOMING)
   notified_current Boolean?           @default(false)
+  target_batch     Int?
   created_at       DateTime?          @default(now()) @db.DateTime(0)
   updated_at       DateTime?          @default(now()) @db.DateTime(0)
   event_attendance event_attendance[]

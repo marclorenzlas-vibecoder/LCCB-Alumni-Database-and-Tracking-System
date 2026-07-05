@@ -6,27 +6,10 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
 import { jobService } from '../../services/jobService';
-import { getAlumniId } from '../../utils/auth';
 import { timeAgo } from '../../utils/formatters';
 
 const departments = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
 const workTypes = ['Full-time', 'Part-time', 'Contract', 'Remote'];
-
-const STATUS_TABS = [
-  { key: '', label: 'All' },
-  { key: 'ACCEPTED', label: 'Accepted', bg: '#d1fae5', color: '#065f46' },
-  { key: 'REVIEWED', label: 'Under Review', bg: '#e0e7ff', color: '#3730a3' },
-  { key: 'REJECTED', label: 'Rejected', bg: '#fee2e2', color: '#991b1b' },
-  { key: 'SHORTLISTED', label: 'Shortlist', bg: '#dcfce7', color: '#166534' },
-];
-
-const STATUS_STYLES = {
-  PENDING: { label: 'Pending', bg: '#fef3c7', color: '#92400e' },
-  REVIEWED: { label: 'Under Review', bg: '#e0e7ff', color: '#3730a3' },
-  SHORTLISTED: { label: 'Shortlisted', bg: '#dcfce7', color: '#166534' },
-  ACCEPTED: { label: 'Accepted', bg: '#d1fae5', color: '#065f46' },
-  REJECTED: { label: 'Rejected', bg: '#fee2e2', color: '#991b1b' },
-};
 
 function MultiOptionPicker({ visible, title, options, selected, onToggle, onClose }) {
   return (
@@ -163,20 +146,13 @@ function FilterDropdown({ visible, locations, tempLocations, tempDepartments, te
   );
 }
 
-function JobRow({ job, application, onPress }) {
+function JobRow({ job, onPress }) {
   const meta = [job.location, job.department, job.job_type].filter(Boolean).join(' \u00B7 ');
-  const status = application?.status;
-  const statusStyle = status ? STATUS_STYLES[status] : null;
 
   return (
     <Pressable style={styles.row} onPress={onPress}>
       <View style={styles.rowTop}>
         <Text style={styles.rowTitle} numberOfLines={2}>{job.job_title}</Text>
-        {statusStyle ? (
-          <View style={[styles.rowBadge, { backgroundColor: statusStyle.bg }]}>
-            <Text style={[styles.rowBadgeText, { color: statusStyle.color }]}>{statusStyle.label}</Text>
-          </View>
-        ) : null}
       </View>
       {meta ? <Text style={styles.rowMeta}>{meta}</Text> : null}
       <Text style={styles.rowTimestamp}>Posted {timeAgo(job.created_at)}</Text>
@@ -185,15 +161,12 @@ function JobRow({ job, application, onPress }) {
 }
 
 export default function JobsListScreen({ navigation, user }) {
-  const alumniId = useMemo(() => getAlumniId(user), [user]);
   const [jobs, setJobs] = useState([]);
-  const [applicationMap, setApplicationMap] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
   const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   const [tempLocations, setTempLocations] = useState([]);
@@ -201,21 +174,9 @@ export default function JobsListScreen({ navigation, user }) {
   const [tempWorkTypes, setTempWorkTypes] = useState([]);
 
   const loadData = useCallback(async () => {
-    const [jobsData, appsData] = await Promise.all([
-      jobService.getAllJobs(),
-      alumniId ? jobService.getApplicationsByAlumni(alumniId).catch(() => []) : Promise.resolve([])
-    ]);
+    const jobsData = await jobService.getAllJobs();
     setJobs(jobsData || []);
-
-    const nextMap = new Map();
-    (appsData || []).forEach((entry) => {
-      const jobId = Number(entry?.job_posting_id || entry?.job_posting?.id);
-      if (!Number.isNaN(jobId)) {
-        nextMap.set(jobId, { id: entry.id, status: entry.status, appliedAt: entry.applied_at });
-      }
-    });
-    setApplicationMap(nextMap);
-  }, [alumniId]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -251,15 +212,8 @@ export default function JobsListScreen({ navigation, user }) {
     if (selectedDepartments.length > 0) result = result.filter((j) => selectedDepartments.includes(j.department));
     if (selectedWorkTypes.length > 0) result = result.filter((j) => selectedWorkTypes.includes(j.job_type));
 
-    if (statusFilter) {
-      result = result.filter((j) => {
-        const app = applicationMap.get(Number(j.id));
-        return app?.status === statusFilter;
-      });
-    }
-
     return result;
-  }, [jobs, query, selectedLocations, selectedDepartments, selectedWorkTypes, statusFilter, applicationMap]);
+  }, [jobs, query, selectedLocations, selectedDepartments, selectedWorkTypes]);
 
   const activeFilterCount = selectedLocations.length + selectedDepartments.length + selectedWorkTypes.length;
 
@@ -292,25 +246,6 @@ export default function JobsListScreen({ navigation, user }) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.screenTitle}>Job Board</Text>
         <Text style={styles.screenSubtitle}>Explore openings posted across alumni network.</Text>
-
-        <View style={styles.statusTabRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusTabScroll}>
-            {STATUS_TABS.map((tab) => {
-              const active = statusFilter === tab.key;
-              return (
-                <Pressable
-                  key={tab.key}
-                  style={[styles.statusTab, active && styles.statusTabActive]}
-                  onPress={() => setStatusFilter(statusFilter === tab.key ? '' : tab.key)}
-                >
-                  <Text style={[styles.statusTabText, active && styles.statusTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
 
         <View style={styles.searchRow}>
           <View style={styles.searchShell}>
@@ -353,10 +288,6 @@ export default function JobsListScreen({ navigation, user }) {
           onClose={() => setShowFilterDropdown(false)}
         />
 
-        <Pressable style={styles.myAppsButton} onPress={() => navigation.navigate('MyApplications')}>
-          <Text style={styles.myAppsText}>View My Applications</Text>
-        </Pressable>
-
         {loading ? <LoadingState label="Loading job postings" /> : null}
         {!loading && jobs.length === 0 ? <EmptyState title="No jobs available" /> : null}
         {!loading && jobs.length > 0 && filteredJobs.length === 0 ? <EmptyState title="No matching jobs" /> : null}
@@ -365,7 +296,6 @@ export default function JobsListScreen({ navigation, user }) {
           <React.Fragment key={job.id}>
             <JobRow
               job={job}
-              application={applicationMap.get(Number(job.id))}
               onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}
             />
             {index < filteredJobs.length - 1 ? <View style={styles.divider} /> : null}
@@ -391,32 +321,6 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
     marginBottom: 12
-  },
-  statusTabRow: {
-    marginBottom: 12
-  },
-  statusTabScroll: {
-    gap: 8
-  },
-  statusTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#fff'
-  },
-  statusTabActive: {
-    backgroundColor: '#1e3a8a',
-    borderColor: '#1e3a8a'
-  },
-  statusTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569'
-  },
-  statusTabTextActive: {
-    color: '#ffffff'
   },
   searchRow: {
     flexDirection: 'row',
@@ -476,21 +380,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700'
   },
-  myAppsButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: '#dbeafe',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    padding: 12,
-    marginBottom: 16
-  },
-  myAppsText: {
-    color: '#1e3a8a',
-    fontWeight: '700',
-    fontSize: 14
-  },
   row: {
     paddingVertical: 16,
     paddingHorizontal: 4
@@ -507,16 +396,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#2563eb',
     lineHeight: 24
-  },
-  rowBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: 'flex-start'
-  },
-  rowBadgeText: {
-    fontSize: 11,
-    fontWeight: '700'
   },
   rowMeta: {
     fontSize: 14,

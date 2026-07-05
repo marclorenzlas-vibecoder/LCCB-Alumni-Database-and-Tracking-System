@@ -38,5 +38,20 @@ export const donationService = {
   async contributeToDonation(donationId, payload) {
     const response = await apiClient.post(`/donations/${donationId}/contribute`, payload);
     return response.data;
+  },
+
+  async getContributions(campaignId) {
+    const response = await apiClient.get(`/donations/${campaignId}/contributions`);
+    return response.data;
+  },
+
+  async submitReceipt(campaignId, data = {}) {
+    const response = await apiClient.post(`/donations/${campaignId}/submit-receipt`, data);
+    return response.data;
+  },
+
+  async getReceiptStatus(campaignId) {
+    const response = await apiClient.get(`/donations/${campaignId}/receipt-status`);
+    return response.data;
   }
 };

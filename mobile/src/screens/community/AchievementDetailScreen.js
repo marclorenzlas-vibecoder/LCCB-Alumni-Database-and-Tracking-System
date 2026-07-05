@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { API_ORIGIN } from '../../config/api';
@@ -48,11 +49,21 @@ export default function AchievementDetailScreen({ user }) {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <BackButton navigation={navigation} label="Back" />
         {item.image ? (
-          <Image
-            source={{ uri: imageUrl(item.image, API_ORIGIN) }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          /\.(mp4|mov|avi|mkv|webm)$/i.test(item.image) ? (
+            <Video
+              source={{ uri: imageUrl(item.image, API_ORIGIN) }}
+              style={styles.heroImage}
+              useNativeControls
+              resizeMode="cover"
+              shouldPlay={false}
+            />
+          ) : (
+            <Image
+              source={{ uri: imageUrl(item.image, API_ORIGIN) }}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          )
         ) : (
           <View style={[styles.heroImage, { backgroundColor: '#e2e8f0' }]} />
         )}

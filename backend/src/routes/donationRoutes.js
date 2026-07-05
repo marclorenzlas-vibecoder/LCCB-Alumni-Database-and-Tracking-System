@@ -283,28 +283,31 @@ const buildLiveDonationActivityFeed = ({ notifications = [], donations = [], alu
     ...donations.flatMap((entry) => parseDonationActivitiesFromEntry(entry, notificationsByLink, alumniMap, alumniMapById))
   ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
-  for (const item of candidates) {
-    const linkMatch = String(item.link || '').match(/\/donate\/(\d+)/);
-    const donationId = linkMatch ? linkMatch[1] : null;
-    const idMatch = String(item.id || '').match(/^donation-(\d+)/);
-    const entryId = idMatch ? idMatch[1] : null;
-    const uniqueDonationId = donationId || entryId;
+  const now = new Date();
 
-    if (uniqueDonationId) {
-      if (seen.has(`id:${uniqueDonationId}`)) continue;
-      seen.add(`id:${uniqueDonationId}`);
-    } else {
-      const key = [
-        item.title,
-        item.senderName,
-        item.amountLabel
-      ].join('|');
-      if (seen.has(key)) continue;
-      seen.add(key);
+  for (const item of candidates) {
+    const itemDate = new Date(item.createdAt || item.created_at || 0);
+    if (Number.isNaN(itemDate.getTime())) continue;
+
+    // Filter to only include the current calendar month
+    if (itemDate.getFullYear() !== now.getFullYear() || itemDate.getMonth() !== now.getMonth()) {
+      continue;
     }
 
+    const donor = String(item.senderName || '').trim().toLowerCase();
+    const amount = String(item.amountLabel || '').trim().toLowerCase();
+    const linkMatch = String(item.link || '').match(/\/donate\/(\d+)/);
+    const idMatch = String(item.id || '').match(/^donation-(\d+)/);
+    const campaignId = linkMatch ? linkMatch[1] : (idMatch ? idMatch[1] : '');
+    const date = new Date(item.createdAt || item.created_at || 0);
+    const dateStr = isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
+
+    const signature = `${donor}|${amount}|${campaignId}|${dateStr}`;
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+
     activity.push(item);
-    if (activity.length >= 100) break;
+    if (activity.length >= 1000) break;
   }
 
   return activity;
@@ -445,8 +448,16 @@ const getDonorProfileImage = async (req) => {
 
 const handleRecentDonationActivity = async (req, res) => {
   try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
     const [donations, notifications, alumniRows] = await Promise.all([
       prisma.donation.findMany({
+        where: {
+          date: {
+            gte: startOfMonth
+          }
+        },
         include: {
           alumni: {
             select: {
@@ -456,13 +467,16 @@ const handleRecentDonationActivity = async (req, res) => {
             }
           }
         },
-        orderBy: { date: 'desc' },
-        take: 100
+        orderBy: { date: 'desc' }
       }),
       prisma.notification.findMany({
-        where: { type: 'DONATION' },
-        orderBy: { created_at: 'desc' },
-        take: 100
+        where: {
+          type: 'DONATION',
+          created_at: {
+            gte: startOfMonth
+          }
+        },
+        orderBy: { created_at: 'desc' }
       }),
       prisma.alumni.findMany({
         select: {
@@ -502,7 +516,8 @@ router.get('/', async (req, res) => {
             last_name: true,
             email: true
           }
-        }
+        },
+        donation_images: true
       },
       orderBy: { date: 'desc' }
     });
@@ -523,6 +538,9 @@ router.get('/alumni/:alumniId', async (req, res) => {
     const { alumniId } = req.params;
     const donations = await prisma.donation.findMany({
       where: { alumni_id: Number(alumniId) },
+      include: {
+        donation_images: true
+      },
       orderBy: { date: 'desc' }
     });
     res.json(donations);
@@ -586,7 +604,8 @@ router.get('/:id', async (req, res) => {
             email: true,
             profile_image: true
           }
-        }
+        },
+        donation_images: true
       }
     });
 
@@ -671,12 +690,81 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
   }
 });
 
+// Broadcast live toast notification for money donation immediately upon payment selection
+router.post('/:id/broadcast-toast', flexibleAuthMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, currency, note } = req.body;
+
+    const existingCampaign = await prisma.donation.findUnique({
+      where: { id: Number(id) }
+    });
+
+    if (!existingCampaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    const donorName = await getDonorDisplayName(req);
+    const senderProfileImage = await getDonorProfileImage(req);
+    const amountLabel = formatDonationAmount(parseFloat(amount) || 0, currency || 'PHP');
+
+    const donationTitle = `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}`;
+    // Append the optional note (e.g. "Payment method: GCash · Currency: PHP") so the
+    // toast's detail line is non-empty and the card retains its full height.
+    const donationMessage = note
+      ? `${donationTitle}. ${note}`
+      : `${donationTitle}.`;
+
+    const liveDonationPayload = {
+      type: 'DONATION',
+      title: donationTitle,
+      message: donationMessage,
+      link: `/donate/${existingCampaign.id}`,
+      senderName: donorName,
+      senderProfileImage,
+      amountLabel,
+      campaignName: existingCampaign.purpose || 'a donation campaign',
+      donationKind: 'money',
+      createdAt: new Date().toISOString()
+    };
+
+    broadcastUpdate('notification.created', liveDonationPayload);
+
+    // Save notification for admins
+    const adminUsers = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true }
+    });
+
+    if (adminUsers.length > 0) {
+      await prisma.notification.createMany({
+        data: adminUsers.map((admin) => ({
+          user_id: admin.id,
+          type: 'DONATION',
+          title: donationTitle,
+          message: donationMessage,
+          link: `/donate/${existingCampaign.id}`,
+          sender_name: donorName,
+          sender_profile_image: senderProfileImage || '',
+          is_read: false
+        }))
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error broadcasting live toast:', error);
+    res.status(500).json({ error: 'Failed to broadcast live toast', details: error.message });
+  }
+});
+
 // Contribute to an existing donation campaign
 router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { amount, description } = req.body;
+    const { amount, description, donation_type, item_name, item_description } = req.body;
     const contributionAmount = parseFloat(amount) || 0;
+    const donationType = donation_type === 'item' ? 'item' : 'money';
 
     const existingCampaign = await prisma.donation.findUnique({
       where: { id: Number(id) }
@@ -686,25 +774,50 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
       return res.status(404).json({ error: 'Donation campaign not found' });
     }
 
-    if (contributionAmount <= 0 && !description) {
+    // Validate item donations require item_name
+    if (donationType === 'item' && !item_name) {
+      return res.status(400).json({ error: 'Item name is required for item donations' });
+    }
+
+    if (donationType === 'money' && contributionAmount <= 0 && !description) {
       return res.status(400).json({ error: 'Contribution amount or description is required' });
     }
 
     const { cleanDescription, meta } = parseDescriptionMeta(description || '');
-    const contributionDonationMode = String(meta.donationMode || '').toLowerCase();
+    const contributionDonationMode = donationType === 'item' ? 'items' : String(meta.donationMode || '').toLowerCase();
     const contributionDonationCurrency = String(meta.paymentCurrency || 'PHP').toUpperCase();
-    const contributionDonationKind = contributionDonationMode === 'both'
-      ? 'money and items'
-      : contributionDonationMode === 'items' || contributionDonationMode === 'item' || contributionDonationMode === 'goods'
-        ? 'items'
-        : 'money';
-    const contributionAmountLabel = contributionAmount > 0
-      ? formatDonationAmount(contributionAmount, contributionDonationCurrency)
-      : 'an item donation';
+    const contributionDonationKind = donationType === 'item'
+      ? 'items'
+      : contributionDonationMode === 'both'
+        ? 'money and items'
+        : contributionDonationMode === 'items' || contributionDonationMode === 'item' || contributionDonationMode === 'goods'
+          ? 'items'
+          : 'money';
+    const contributionAmountLabel = donationType === 'item'
+      ? `item: ${item_name}`
+      : contributionAmount > 0
+        ? formatDonationAmount(contributionAmount, contributionDonationCurrency)
+        : 'an item donation';
     const existingData = parseDescriptionMeta(existingCampaign.description || '');
     const mergedMeta = { ...existingData.meta, ...meta };
+
+    // Store item donation metadata
+    if (donationType === 'item') {
+      mergedMeta.donationType = 'item';
+      mergedMeta.itemName = item_name || '';
+      mergedMeta.itemDescription = item_description || '';
+    }
+
+    // Store uploaded images
+    const uploadedImagePaths = [];
     if (req.files && req.files.length > 0) {
-      mergedMeta.itemImagePaths = req.files.map((f) => `/uploads/donations/${f.filename}`);
+      const paths = req.files.map((f) => `/uploads/donations/${f.filename}`);
+      if (donationType === 'item') {
+        mergedMeta.itemImagePaths = paths;
+      } else {
+        mergedMeta.itemImagePaths = paths;
+      }
+      uploadedImagePaths.push(...paths);
     }
 
     const donorNameFromForm = extractLineValue(cleanDescription, 'Donor');
@@ -713,13 +826,23 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
     const donorName = rawDonorName.replace(/^(mr|ms|mrs|dr|mr\.|ms\.|mrs\.|dr\.)\s+/i, '').trim() || rawDonorName;
     // Capture alumni_id so the activity feed can resolve profile images in O(1)
     const contributorAlumniId = Number(req.user?.alumniId || 0) || null;
+
+    // Build item details text for contribution block
+    let itemDetailsText = '';
+    if (donationType === 'item') {
+      itemDetailsText = `Item: ${item_name}${item_description ? ` — ${item_description}` : ''}`;
+      if (uploadedImagePaths.length > 0) {
+        itemDetailsText += ` (${uploadedImagePaths.length} image${uploadedImagePaths.length > 1 ? 's' : ''} attached)`;
+      }
+    }
+
     const contributionBlock = buildContributionBlock({
       campaignPurpose: existingCampaign.purpose || 'a donation campaign',
       donorName,
       alumniId: contributorAlumniId,
       amountLabel: contributionAmountLabel,
       recordedAt: new Date(),
-      donorDetailsText: cleanDescription
+      donorDetailsText: cleanDescription + (itemDetailsText ? `\n${itemDetailsText}` : '')
     });
     const combinedCleanDescription = appendContributionRecord(
       existingData.cleanDescription,
@@ -730,65 +853,80 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
     const updatedCampaign = await prisma.donation.update({
       where: { id: Number(id) },
       data: {
-        amount: contributionAmount > 0 ? Number(existingCampaign.amount) + contributionAmount : existingCampaign.amount,
+        amount: donationType === 'money' && contributionAmount > 0 ? Number(existingCampaign.amount) + contributionAmount : existingCampaign.amount,
         description: updatedDescription || existingCampaign.description,
-        date: new Date()
+        date: new Date(),
+        donation_type: donationType,
+        item_name: donationType === 'item' ? item_name : existingCampaign.item_name,
+        item_description: donationType === 'item' ? (item_description || null) : existingCampaign.item_description
       }
     });
 
-    try {
-      const senderProfileImage = await getDonorProfileImage(req);
-      const { cleanDescription: rawDonorNotes } = parseDescriptionMeta(description || '');
-      // Strip structured label lines so they don't appear in the live broadcast message
-      const STRUCTURED_LINE_RE = /^(donor|alumniid|amount|recorded|donation for)\s*:/i;
-      const humanNotes = rawDonorNotes
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l && !STRUCTURED_LINE_RE.test(l))
-        .join(' ')
-        .trim();
-      const donationKind = contributionDonationKind;
-      const amountLabel = contributionAmountLabel;
-
-      const donationTitle = `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}`;
-      const donationMessage = humanNotes
-        ? `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}. ${humanNotes}`
-        : `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}.`;
-
-      const liveDonationPayload = {
-        type: 'DONATION',
-        title: donationTitle,
-        message: donationMessage,
-        link: `/donate/${existingCampaign.id}`,
-        senderName: donorName,
-        senderProfileImage,
-        amountLabel,
-        campaignName: existingCampaign.purpose || 'a donation campaign',
-        donationKind,
-        createdAt: new Date().toISOString()
-      };
-
-      // Alumni see live donation toasts only — do not persist DONATION rows for them.
-      broadcastUpdate('notification.created', liveDonationPayload);
-
-      const adminUsers = await prisma.user.findMany({
-        where: { role: 'ADMIN' },
-        select: { id: true }
+    // Save item images to donation_images table
+    if (donationType === 'item' && uploadedImagePaths.length > 0) {
+      await prisma.donation_image.createMany({
+        data: uploadedImagePaths.map((url) => ({
+          donation_id: Number(id),
+          image_url: url
+        }))
       });
+    }
 
-      if (adminUsers.length > 0) {
-        await prisma.notification.createMany({
-          data: adminUsers.map((admin) => ({
-            user_id: admin.id,
-            type: 'DONATION',
-            title: donationTitle,
-            message: donationMessage,
-            link: `/donate/${existingCampaign.id}`,
-            sender_name: donorName,
-            sender_profile_image: senderProfileImage,
-            is_read: false
-          }))
+    try {
+      if (donationType === 'item') {
+        const senderProfileImage = await getDonorProfileImage(req);
+        const { cleanDescription: rawDonorNotes } = parseDescriptionMeta(description || '');
+        // Strip structured label lines so they don't appear in the live broadcast message
+        const STRUCTURED_LINE_RE = /^(donor|alumniid|amount|recorded|donation for)\s*:/i;
+        const humanNotes = rawDonorNotes
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l && !STRUCTURED_LINE_RE.test(l))
+          .join(' ')
+          .trim();
+        const donationKind = contributionDonationKind;
+        const amountLabel = contributionAmountLabel;
+
+        const donationTitle = `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}`;
+        const donationMessage = humanNotes
+          ? `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}. ${humanNotes}`
+          : `${donorName} donated ${amountLabel} to ${existingCampaign.purpose || 'a donation campaign'}.`;
+
+        const liveDonationPayload = {
+          type: 'DONATION',
+          title: donationTitle,
+          message: donationMessage,
+          link: `/donate/${existingCampaign.id}`,
+          senderName: donorName,
+          senderProfileImage,
+          amountLabel,
+          campaignName: existingCampaign.purpose || 'a donation campaign',
+          donationKind,
+          createdAt: new Date().toISOString()
+        };
+
+        // Alumni see live donation toasts only — do not persist DONATION rows for them.
+        broadcastUpdate('notification.created', liveDonationPayload);
+
+        const adminUsers = await prisma.user.findMany({
+          where: { role: 'ADMIN' },
+          select: { id: true }
         });
+
+        if (adminUsers.length > 0) {
+          await prisma.notification.createMany({
+            data: adminUsers.map((admin) => ({
+              user_id: admin.id,
+              type: 'DONATION',
+              title: donationTitle,
+              message: donationMessage,
+              link: `/donate/${existingCampaign.id}`,
+              sender_name: donorName,
+              sender_profile_image: senderProfileImage,
+              is_read: false
+            }))
+          });
+        }
       }
     } catch (notificationError) {
       console.error('Error creating donation notification:', notificationError);
@@ -905,6 +1043,198 @@ router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
       error: 'Failed to delete donation',
       details: error.message 
     });
+  }
+});
+
+// ============================================================
+// Admin Campaign Receipts — GET /contributions, POST /submit-receipt, GET /receipt-status
+// ============================================================
+
+router.get('/:id/contributions', flexibleAuthMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const campaign = await prisma.donation.findUnique({
+      where: { id: Number(id) },
+      include: {
+        donation_images: true
+      }
+    });
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    const { cleanDescription } = parseDescriptionMeta(campaign.description || '');
+
+    const money = [];
+    const items = [];
+
+    if (cleanDescription.includes('Donor:')) {
+      const blocks = cleanDescription.split(/\n\s*\n(?=Donation for:)/i).filter((b) => b.includes('Donor:'));
+
+      const alumniIds = blocks
+        .map((b) => Number(extractLineValue(b, 'AlumniId') || 0))
+        .filter((id) => id > 0);
+
+      // Fetch all alumni to resolve profile images for older legacy entries that do not have an AlumniId field
+      const allAlumni = await prisma.alumni.findMany({
+        select: { id: true, first_name: true, last_name: true, profile_image: true }
+      });
+
+      const getAlumniByName = (name) => {
+        if (!name) return null;
+        const cleanName = name.toLowerCase().replace(/^(mr|ms|mrs|dr|mr\.|ms\.|mrs\.|dr\.)\s+/i, '').trim();
+        const parts = cleanName.split(/\s+/);
+        
+        let found = allAlumni.find(a => {
+          const fullName = `${a.first_name} ${a.last_name}`.toLowerCase();
+          return fullName === cleanName;
+        });
+        if (found) return found;
+
+        return allAlumni.find(a => {
+          const first = a.first_name.toLowerCase();
+          const last = a.last_name.toLowerCase();
+          const hasFirst = parts.some(p => first.includes(p) || p.includes(first));
+          const hasLast = parts.some(p => last.includes(p) || p.includes(last));
+          return hasFirst && hasLast;
+        });
+      };
+
+      let alumniMapById = new Map();
+      if (alumniIds.length > 0) {
+        const alumniRows = await prisma.alumni.findMany({
+          where: { id: { in: [...new Set(alumniIds)] } },
+          select: { id: true, first_name: true, last_name: true, profile_image: true }
+        });
+        for (const a of alumniRows) {
+          alumniMapById.set(a.id, a);
+        }
+      }
+
+      for (const block of blocks) {
+        const donorName = extractLineValue(block, 'Donor') || 'Alumnus';
+        const amountLabel = extractLineValue(block, 'Amount') || '';
+        const recordedRaw = extractLineValue(block, 'Recorded');
+        const recordedAt = recordedRaw && !Number.isNaN(new Date(recordedRaw).getTime()) ? new Date(recordedRaw) : null;
+        const storedAlumniId = Number(extractLineValue(block, 'AlumniId') || 0);
+        const matchedAlumni = storedAlumniId ? alumniMapById.get(storedAlumniId) : getAlumniByName(donorName);
+        const profileImage = matchedAlumni?.profile_image || null;
+
+        const isItem = /item[:\s]/i.test(block) || /item donation/i.test(block) || /donation type:\s*items/i.test(block);
+        const itemMatch = block.match(/Item:\s*(.+?)(?:\s*[—-]\s*(.+?))?(?:\s*\(\d+\s+image.*)?\s*$/im);
+
+        const entry = {
+          donorName,
+          alumniId: storedAlumniId || null,
+          amountLabel,
+          recordedAt,
+          profileImage,
+          rawBlock: block
+        };
+
+        if (isItem) {
+          entry.itemName = itemMatch?.[1]?.trim() || extractLineValue(block, 'Item') || '';
+          entry.itemDescription = itemMatch?.[2]?.trim() || '';
+          const imagesMatch = block.match(/\((\d+)\s+image/);
+          entry.imageCount = imagesMatch ? Number(imagesMatch[1]) : 0;
+          items.push(entry);
+        } else {
+          money.push(entry);
+        }
+      }
+
+      // Sort money and items lists from newest to oldest based on recordedAt date
+      money.sort((a, b) => {
+        const tA = a.recordedAt ? a.recordedAt.getTime() : 0;
+        const tB = b.recordedAt ? b.recordedAt.getTime() : 0;
+        return tB - tA;
+      });
+
+      items.sort((a, b) => {
+        const tA = a.recordedAt ? a.recordedAt.getTime() : 0;
+        const tB = b.recordedAt ? b.recordedAt.getTime() : 0;
+        return tB - tA;
+      });
+    }
+
+    const totalMoney = money.reduce((sum, e) => {
+      const numStr = (e.amountLabel || '').replace(/[^\d.,]/g, '').replace(/,/g, '');
+      return sum + (parseFloat(numStr) || 0);
+    }, 0);
+
+    res.json({
+      campaign: {
+        id: campaign.id,
+        purpose: campaign.purpose,
+        amount: Number(campaign.amount),
+        goal: campaign.goal ? Number(campaign.goal) : null,
+        category: campaign.category,
+        image: campaign.image,
+        date: campaign.date,
+        donation_type: campaign.donation_type
+      },
+      money,
+      items,
+      totalMoney,
+      totalItems: items.length
+    });
+  } catch (error) {
+    console.error('Error fetching contributions:', error);
+    res.status(500).json({ error: 'Failed to fetch contributions', details: error.message });
+  }
+});
+
+router.post('/:id/submit-receipt', flexibleAuthMiddleware, async (req, res) => {
+  try {
+    const role = req.user?.role?.toUpperCase();
+    if (role !== 'ADMIN' && role !== 'TEACHER') {
+      return res.status(403).json({ error: 'Only admins or teachers can submit receipts' });
+    }
+
+    const { id } = req.params;
+    const { notes } = req.body || {};
+
+    const campaign = await prisma.donation.findUnique({ where: { id: Number(id) } });
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    const userId = Number(req.user?.id || 0);
+
+    const submission = await prisma.receipt_submission.create({
+      data: {
+        campaign_id: Number(id),
+        admin_user_id: userId,
+        notes: notes || null,
+        status: 'submitted'
+      }
+    });
+
+    res.json(submission);
+  } catch (error) {
+    console.error('Error submitting receipt:', error);
+    res.status(500).json({ error: 'Failed to submit receipt', details: error.message });
+  }
+});
+
+router.get('/:id/receipt-status', flexibleAuthMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const submissions = await prisma.receipt_submission.findMany({
+      where: { campaign_id: Number(id) },
+      orderBy: { submitted_at: 'desc' }
+    });
+
+    res.json({
+      submitted: submissions.length > 0,
+      submissions
+    });
+  } catch (error) {
+    console.error('Error fetching receipt status:', error);
+    res.status(500).json({ error: 'Failed to fetch receipt status', details: error.message });
   }
 });
 

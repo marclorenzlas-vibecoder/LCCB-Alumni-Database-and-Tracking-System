@@ -1,6 +1,7 @@
-import React, { useCallback, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../../components/ScreenContainer';
 import LoadingState from '../../components/LoadingState';
@@ -8,6 +9,7 @@ import BackButton from '../../components/BackButton';
 import { donationService } from '../../services/donationService';
 import { isAlumni, isTeacher } from '../../utils/auth';
 import { safeGoBack } from '../../utils/safeGoBack';
+import { extractDonationMeta, withDonationMeta } from '../../utils/donationMeta';
 
 const CURRENCY_OPTIONS = [
   { value: 'PHP', label: 'Philippine Peso (PHP)' },
@@ -198,23 +200,29 @@ const COUNTRY_OPTIONS = [
 const CURRENCY_SYMBOLS = { PHP: '\u20B1', USD: '$', EUR: '\u20AC', GBP: '\u00A3', JPY: '\u00A5', AUD: 'A$', CAD: 'C$', SGD: 'S$' };
 const PRESET_AMOUNTS = [100, 250, 500, 1000];
 
-const STEPS = [
-  { number: '1', title: 'Amount', description: 'Enter donation amount' },
-  { number: '2', title: 'Details', description: 'Enter donation info' },
-  { number: '3', title: 'Verify', description: 'Confirm account access' },
-  { number: '4', title: 'Pay', description: 'Finalize donation' },
-  { number: '5', title: 'Complete', description: 'Donation recorded' }
-];
-
 const PAYMENT_METHODS = [
-  { key: 'card', label: 'Debit Card', icon: 'card-outline' },
+  { key: 'card', label: 'Debit / credit card', icon: 'card-outline' },
   { key: 'gcash', label: 'GCash', icon: 'wallet-outline' },
   { key: 'paymaya', label: 'PayMaya', icon: 'phone-portrait-outline' }
 ];
 
+const ITEM_CATEGORIES = [
+  'Educational Supplies / Books',
+  'School Uniforms / Clothing',
+  'IT Hardware / Electronic Equipment',
+  'Sports Equipment',
+  'Classroom Furniture / General Supplies',
+  'Other'
+];
+
+const ITEM_CONDITIONS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
+
 export default function DonationDetailScreen({ route, navigation, user }) {
   const { donationId } = route.params || {};
   const teacher = isTeacher(user);
+  const alumniUser = isAlumni(user);
+  const role = String(user?.role || '').toUpperCase();
+  const canDonate = alumniUser || teacher || role === 'ADMIN';
 
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -237,14 +245,47 @@ export default function DonationDetailScreen({ route, navigation, user }) {
   const [country, setCountry] = useState('Philippines');
   const [allowContact, setAllowContact] = useState(true);
   const [contactMethod, setContactMethod] = useState('email');
-  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(true);
 
   const [paymentMethod, setPaymentMethod] = useState('card');
+  const [cardholderName, setCardholderName] = useState('');
+  const [cardId, setCardId] = useState('');
   const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
+  const [expiryMonth, setExpiryMonth] = useState('');
+  const [expiryYear, setExpiryYear] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
+
+  const [donationType, setDonationType] = useState('money');
+  const [itemName, setItemName] = useState('');
+  const [itemDescription, setItemDescription] = useState('');
+  const [itemImages, setItemImages] = useState([]);
+  const [itemQuantity, setItemQuantity] = useState('1');
+  const [itemCategory, setItemCategory] = useState('');
+  const [itemCondition, setItemCondition] = useState('New');
+  const [showItemCategoryPicker, setShowItemCategoryPicker] = useState(false);
+  const [showItemConditionPicker, setShowItemConditionPicker] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState('dropoff');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliverySchedule, setDeliverySchedule] = useState('');
+
+  const isMoneyPath = donationType === 'money';
+  const steps = useMemo(() => (
+    isMoneyPath
+      ? [
+          { number: '1', title: 'Amount' },
+          { number: '2', title: 'Verify' },
+          { number: '3', title: 'Pay' },
+          { number: '4', title: 'Complete' }
+        ]
+      : [
+          { number: '1', title: 'Items' },
+          { number: '2', title: 'Verify' },
+          { number: '3', title: 'Delivery' },
+          { number: '4', title: 'Complete' }
+        ]
+  ), [isMoneyPath]);
 
   const loadCampaign = useCallback(async () => {
     if (!donationId) { setError('Donation not found'); return; }
@@ -269,21 +310,101 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     return () => { mounted = false; };
   }, [loadCampaign]));
 
+  useEffect(() => {
+    if (!user) return;
+    setFirstName((prev) => prev || user.alumni?.firstName || user.alumni?.first_name || user.firstName || user.first_name || '');
+    setLastName((prev) => prev || user.alumni?.lastName || user.alumni?.last_name || user.lastName || user.last_name || '');
+    setEmail((prev) => prev || user.email || '');
+    setPhone((prev) => prev || user.alumni?.contactNumber || user.alumni?.contact_number || user.contactNumber || user.contact_number || '');
+    setAddress((prev) => prev || user.alumni?.location || user.location || '');
+    setAgreeTerms(true);
+    setAllowContact(true);
+    setContactMethod('email');
+  }, [user]);
+
+  const donationInfo = campaign ? extractDonationMeta(campaign.description || '') : { cleanDescription: '', meta: {} };
+  const campaignMeta = donationInfo.meta || {};
+  const paymentNumber = campaignMeta.paymentNumber || '0912-345-6789';
+  const paymentMethods = campaignMeta.paymentMethods || 'GCash / PayMaya / Debit Card';
+  const paymentRedirects = {
+    gcash: campaignMeta.gcashUrl || 'https://www.gcash.com/',
+    paymaya: campaignMeta.paymayaUrl || 'https://www.paymaya.com/'
+  };
+
   const getSymbol = (cur) => CURRENCY_SYMBOLS[cur] || cur;
   const formatAmount = (val, cur) => {
     const num = parseFloat(val) || 0;
     return `${getSymbol(cur)}${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const pickItemImages = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow photo access to upload item images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.length) {
+      setItemImages(prev => [...prev, ...result.assets].slice(0, 5));
+    }
+  };
+
+  const removeItemImage = (index) => {
+    setItemImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const validateStep = (step) => {
     if (step === 1) {
+      if (donationType === 'item') {
+        if (!itemName.trim()) { Alert.alert('Missing Item Name', 'Please enter the name of the item you wish to donate.'); return false; }
+        if (!itemQuantity.trim() || Number(itemQuantity) <= 0) { Alert.alert('Missing Quantity', 'Please enter the item quantity.'); return false; }
+        if (!itemCategory.trim()) { Alert.alert('Missing Category', 'Please select an item category.'); return false; }
+        if (itemImages.length === 0) { Alert.alert('Item Image Required', 'Please upload at least one photo of the item.'); return false; }
+        return true;
+      }
       if (!amount || parseFloat(amount) <= 0) { Alert.alert('Invalid Amount', 'Please enter a valid donation amount.'); return false; }
       return true;
     }
     if (step === 2) {
+      if (!canDonate) {
+        Alert.alert('Donation unavailable', 'Only alumni or admin accounts can make donations.');
+        return false;
+      }
       if (!firstName.trim() || !lastName.trim() || !email.trim() || !address.trim() || !agreeTerms) {
         Alert.alert('Incomplete', 'Please fill in your name, email, address, and accept the terms.');
         return false;
+      }
+      return true;
+    }
+    if (step === 3) {
+      if (donationType === 'item') {
+        if (deliveryMethod === 'pickup' && !deliveryAddress.trim()) {
+          Alert.alert('Pickup Address Required', 'Please enter the pickup address.');
+          return false;
+        }
+        if (!deliverySchedule.trim()) {
+          Alert.alert('Schedule Required', 'Please enter your preferred delivery schedule.');
+          return false;
+        }
+        return true;
+      }
+      if (paymentMethod === 'card') {
+        const required = [
+          cardholderName,
+          cardId,
+          cardNumber,
+          expiryMonth,
+          expiryYear,
+          cardCvv
+        ];
+        if (required.some((value) => !String(value || '').trim())) {
+          Alert.alert('Card Details Required', 'Please complete your debit card details before continuing.');
+          return false;
+        }
       }
       return true;
     }
@@ -292,48 +413,130 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 
   const goNext = () => {
     if (!validateStep(currentStep)) return;
-    if (currentStep < 4) setCurrentStep(s => s + 1);
+    setCurrentStep(s => Math.min(3, s + 1));
   };
   const goBack = () => {
+    if (successState) {
+      setSuccessState(null);
+      setCurrentStep(3);
+      return;
+    }
     if (currentStep > 1) setCurrentStep(s => s - 1);
     else safeGoBack(navigation);
   };
 
+  const getDonorDisplayName = () => [title, firstName, lastName].filter(Boolean).join(' ').trim() || user?.username || 'Anonymous donor';
+
+  const buildReceipt = () => ({
+    receiptNumber: `RCPT-${Date.now().toString().slice(-8)}`,
+    issuedAt: new Date().toLocaleString(),
+    donorName: getDonorDisplayName(),
+    campaignName: campaign?.purpose || 'Donation Campaign',
+    donationTypeLabel: donationType === 'item' ? `Item: ${itemName}` : 'Money',
+    amountLabel: donationType === 'item' ? 'Physical Item' : formatAmount(amount, currency),
+    paymentMethod: donationType === 'item' ? 'Physical Item' : (PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Debit / credit card')
+  });
+
   const handleSubmit = async () => {
     if (!campaign) return;
+    if (!validateStep(currentStep)) return;
+
+    const receipt = buildReceipt();
+    setSuccessState(receipt);
+    setCurrentStep(4);
+
+    if (donationType === 'money' && amount && parseFloat(amount) > 0) {
+      donationService.broadcastDonationToast?.(campaign.id, {
+        amount,
+        currency,
+        note: ''
+      }).catch(() => {});
+    }
+
+    if (donationType === 'money' && (paymentMethod === 'gcash' || paymentMethod === 'paymaya')) {
+      Linking.openURL(paymentRedirects[paymentMethod]).catch(() => {});
+    }
+  };
+
+  const handleReceiptSubmission = async () => {
+    if (!campaign || !successState) return;
     setSubmitting(true);
     try {
       const paymentLabel = PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Card';
+      const paymentSummary = paymentMethod === 'card'
+        ? [
+            'Payment method: Debit Card',
+            `Card holder: ${cardholderName}`,
+            `Card ID: ${cardId}`,
+            `Card number: **** **** **** ${String(cardNumber).replace(/\D/g, '').slice(-4)}`,
+            `Expiry: ${expiryMonth}/${expiryYear}`,
+            `Currency: ${currency}`
+          ].join('\n')
+        : `Payment method: ${paymentLabel}\nCurrency: ${currency}`;
+
       const contactPreference = allowContact ? (contactMethod === 'phone' ? 'Phone' : 'Email') : 'Do not contact';
+      const donationMeta = {
+        donationMode: donationType === 'item' ? 'item' : 'money',
+        paymentCurrency: currency,
+        paymentNumber,
+        paymentMethods
+      };
       const donorSummary = [
-        `Donor: ${[title, firstName, lastName].filter(Boolean).join(' ')}`,
+        `Donor: ${[firstName, lastName].filter(Boolean).join(' ')}`,
         `Country: ${country}`,
         `Address: ${address}`,
         phone ? `Phone: ${phone}` : null,
         `Contact preference: ${contactPreference}`,
-        `Payment method: ${paymentLabel}`,
-        `Currency: ${currency}`
+        `Agreement: ${agreeTerms ? 'Accepted' : 'Not accepted'}`,
+        donationType === 'item'
+          ? [
+              'Donation type: Physical Item',
+              `Item quantity: ${itemQuantity}`,
+              `Item category: ${itemCategory || 'General'}`,
+              `Item condition: ${itemCondition}`,
+              `Delivery method: ${deliveryMethod === 'pickup' ? 'Pickup' : 'Drop-off'}`,
+              deliveryMethod === 'pickup' ? `Pickup address: ${deliveryAddress}` : null,
+              `Preferred schedule: ${deliverySchedule}`
+            ].filter(Boolean).join('\n')
+          : paymentSummary
       ].filter(Boolean).join('\n');
-      const payload = {
-        amount: parseFloat(amount),
-        description: donorSummary,
-        date: new Date().toISOString().split('T')[0]
-      };
+
+      let payload;
+      if (donationType === 'item') {
+        const fd = new FormData();
+        fd.append('donation_type', 'items');
+        fd.append('item_name', itemName);
+        if (itemDescription) fd.append('item_description', itemDescription);
+        fd.append('description', withDonationMeta(donorSummary, donationMeta));
+        fd.append('amount', '0');
+        fd.append('date', new Date().toISOString().split('T')[0]);
+        fd.append('item_quantity', itemQuantity);
+        fd.append('item_category', itemCategory);
+        fd.append('item_condition', itemCondition);
+        itemImages.forEach((asset, idx) => {
+          const file = {
+            uri: asset.uri,
+            type: 'image/jpeg',
+            name: `item-${Date.now()}-${idx}.jpg`
+          };
+          fd.append('images', file);
+        });
+        payload = fd;
+      } else {
+        payload = {
+          amount: parseFloat(amount),
+          description: withDonationMeta(donorSummary, donationMeta),
+          date: new Date().toISOString().split('T')[0]
+        };
+      }
+
       const result = await donationService.contributeToDonation(campaign.id, payload);
-      const receiptNumber = `RCPT-${Date.now().toString().slice(-8)}`;
-      setSuccessState({
-        receiptNumber,
-        issuedAt: new Date().toLocaleString(),
-        donorName: [title, firstName, lastName].filter(Boolean).join(' '),
-        campaignName: campaign.purpose,
-        donationTypeLabel: 'Money',
-        amountLabel: formatAmount(amount, currency),
-        paymentMethod: PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Card'
-      });
       setCampaign(result || { ...campaign, amount: (campaign.amount || 0) + parseFloat(amount) });
-      setCurrentStep(5);
+      Alert.alert('Receipt submitted', 'Your donation has been recorded and is visible to the admin.', [
+        { text: 'OK', onPress: () => navigation.navigate('DonationsList') }
+      ]);
     } catch (err) {
-      Alert.alert('Error', err?.response?.data?.message || err?.response?.data?.error || 'Failed to submit donation');
+      Alert.alert('Error', err?.response?.data?.message || err?.response?.data?.error || 'Failed to submit donation receipt');
     } finally {
       setSubmitting(false);
     }
@@ -361,8 +564,8 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               <Ionicons name="checkmark" size={32} color="#fff" />
             </View>
           </View>
-          <Text style={styles.successTitle}>Donation Successful!</Text>
-          <Text style={styles.successSub}>Thank you for your generous contribution.</Text>
+          <Text style={styles.successTitle}>Review Receipt</Text>
+          <Text style={styles.successSub}>Submit this receipt to record your donation for admin review.</Text>
 
           <View style={styles.receiptCard}>
             <View style={styles.receiptHeaderRow}>
@@ -407,7 +610,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
             <View style={styles.receiptDivider} />
             <View style={styles.receiptPaidBadge}>
               <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
-              <Text style={styles.receiptPaidText}>PAID</Text>
+              <Text style={styles.receiptPaidText}>{donationType === 'item' ? 'READY' : 'PAID'}</Text>
             </View>
             <View style={styles.receiptFooterWrap}>
               <Text style={styles.receiptFooter}>Thank you for your generous donation!</Text>
@@ -422,16 +625,11 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           </View>
 
           <View style={styles.successActions}>
-            <Pressable style={styles.successBtnOutline} onPress={() => safeGoBack(navigation)}>
-              <Text style={styles.successBtnOutlineText}>Back to Campaigns</Text>
+            <Pressable style={styles.successBtnOutline} onPress={goBack} disabled={submitting}>
+              <Text style={styles.successBtnOutlineText}>Back</Text>
             </Pressable>
-            <Pressable style={styles.successBtnSolid} onPress={() => {
-              setSuccessState(null);
-              setCurrentStep(1);
-              setAmount('');
-              safeGoBack(navigation);
-            }}>
-              <Text style={styles.successBtnSolidText}>Done</Text>
+            <Pressable style={[styles.successBtnSolid, submitting && styles.btnDisabled]} onPress={handleReceiptSubmission} disabled={submitting}>
+              <Text style={styles.successBtnSolidText}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -444,13 +642,13 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Step Indicator */}
         <View style={styles.stepperCard}>
-          <Text style={styles.stepperLabel}>Step {currentStep} of 5</Text>
+          <Text style={styles.stepperLabel}>Step {currentStep} of {steps.length}</Text>
           <View style={styles.stepperRow}>
-            {STEPS.map((step, i) => {
+            {steps.map((step, i) => {
               const stepNum = i + 1;
               const isComplete = stepNum < currentStep;
-              const isLastStep = stepNum === STEPS.length;
-              const showCheck = isComplete || (currentStep >= STEPS.length && isLastStep);
+              const isLastStep = stepNum === steps.length;
+              const showCheck = isComplete || (currentStep >= steps.length && isLastStep);
               const isActive = stepNum === currentStep;
               return (
                 <View key={step.number} style={styles.stepItem}>
@@ -464,30 +662,85 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           </View>
         </View>
 
-        {/* Step 1: Amount */}
+        {/* Step 1: Amount / Item */}
         {currentStep === 1 && (
           <View style={styles.stepCard}>
-            <Text style={styles.stepCardTitle}>Enter Donation Amount</Text>
-            <Text style={styles.stepCardSub}>Choose a currency and amount for your donation.</Text>
+            <Text style={styles.stepCardTitle}>Donation Type</Text>
+            <Text style={styles.stepCardSub}>Choose how you'd like to contribute.</Text>
 
-            <Pressable style={styles.currencyBtn} onPress={() => setShowCurrencyPicker(true)}>
-              <Text style={styles.currencyBtnLabel}>Currency</Text>
-              <Text style={styles.currencyBtnValue}>{currency} — {CURRENCY_OPTIONS.find(c => c.value === currency)?.label}</Text>
-              <Ionicons name="chevron-forward" size={16} color="#64748b" />
-            </Pressable>
+            {/* Type Toggle */}
+            <View style={styles.typeToggle}>
+              <Pressable
+                style={[styles.typeToggleBtn, donationType === 'money' && styles.typeToggleBtnActive]}
+                onPress={() => setDonationType('money')}
+              >
+                <Ionicons name="cash-outline" size={18} color={donationType === 'money' ? '#fff' : '#475569'} />
+                <Text style={[styles.typeToggleText, donationType === 'money' && styles.typeToggleTextActive]}>Money</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.typeToggleBtn, donationType === 'item' && styles.typeToggleBtnActive]}
+                onPress={() => setDonationType('item')}
+              >
+                <Ionicons name="cube-outline" size={18} color={donationType === 'item' ? '#fff' : '#475569'} />
+                <Text style={[styles.typeToggleText, donationType === 'item' && styles.typeToggleTextActive]}>Physical Item</Text>
+              </Pressable>
+            </View>
 
-            <View style={styles.presetGrid}>
-              {PRESET_AMOUNTS.map(preset => (
-                <Pressable key={preset} style={[styles.presetBtn, amount === String(preset) && styles.presetBtnActive]} onPress={() => setAmount(String(preset))}>
-                  <Text style={[styles.presetBtnText, amount === String(preset) && styles.presetBtnTextActive]}>{getSymbol(currency)}{preset}</Text>
+            {donationType === 'money' ? (
+              <>
+                <Pressable style={styles.currencyBtn} onPress={() => setShowCurrencyPicker(true)}>
+                  <Text style={styles.currencyBtnLabel}>Currency</Text>
+                  <Text style={styles.currencyBtnValue}>{currency} — {CURRENCY_OPTIONS.find(c => c.value === currency)?.label}</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#64748b" />
                 </Pressable>
-              ))}
-            </View>
 
-            <View style={styles.amountInputWrap}>
-              <Text style={styles.amountSymbol}>{getSymbol(currency)}</Text>
-              <TextInput style={styles.amountInput} placeholder="0.00" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
-            </View>
+                <View style={styles.presetGrid}>
+                  {PRESET_AMOUNTS.map(preset => (
+                    <Pressable key={preset} style={[styles.presetBtn, amount === String(preset) && styles.presetBtnActive]} onPress={() => setAmount(String(preset))}>
+                      <Text style={[styles.presetBtnText, amount === String(preset) && styles.presetBtnTextActive]}>{getSymbol(currency)}{preset}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <View style={styles.amountInputWrap}>
+                  <Text style={styles.amountSymbol}>{getSymbol(currency)}</Text>
+                  <TextInput style={styles.amountInput} placeholder="0.00" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Item Name *</Text>
+                  <TextInput style={styles.textInput} placeholder="e.g. Books, Laptop, Chair" placeholderTextColor="#94a3b8" value={itemName} onChangeText={setItemName} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Description (optional)</Text>
+                  <TextInput style={[styles.textInput, { height: 80, textAlignVertical: 'top' }]} placeholder="Describe the item condition, quantity, etc." placeholderTextColor="#94a3b8" multiline value={itemDescription} onChangeText={setItemDescription} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Item Photos * (up to 5)</Text>
+                  <Pressable style={styles.currencyBtn} onPress={pickItemImages}>
+                    <Ionicons name="camera-outline" size={18} color="#475569" />
+                    <Text style={styles.currencyBtnLabel}>Choose Photos</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#64748b" />
+                  </Pressable>
+                  {itemImages.length > 0 && (
+                    <View style={styles.imagePreviewRow}>
+                      {itemImages.map((img, idx) => (
+                        <View key={idx} style={styles.imagePreviewItem}>
+                          <Image source={{ uri: img.uri }} style={styles.imagePreviewThumb} />
+                          <Pressable style={styles.imageRemoveBtn} onPress={() => removeItemImage(idx)}>
+                            <Ionicons name="close-circle" size={20} color="#ef4444" />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
           </View>
         )}
 
@@ -754,6 +1007,15 @@ const styles = StyleSheet.create({
   amountInputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 12, backgroundColor: '#f8fafc' },
   amountSymbol: { fontSize: 18, fontWeight: '600', color: '#64748b', marginRight: 6 },
   amountInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: '#0f172a' },
+  typeToggle: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  typeToggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingVertical: 12, backgroundColor: '#f8fafc' },
+  typeToggleBtnActive: { borderColor: '#1d4ed8', backgroundColor: '#1d4ed8' },
+  typeToggleText: { fontSize: 14, fontWeight: '600', color: '#475569' },
+  typeToggleTextActive: { color: '#fff' },
+  imagePreviewRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  imagePreviewItem: { position: 'relative', width: 72, height: 72 },
+  imagePreviewThumb: { width: 72, height: 72, borderRadius: 8 },
+  imageRemoveBtn: { position: 'absolute', top: -6, right: -6 },
   fieldGroup: { gap: 4 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#475569' },
   textInput: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, backgroundColor: '#fff', fontSize: 14, color: '#0f172a' },

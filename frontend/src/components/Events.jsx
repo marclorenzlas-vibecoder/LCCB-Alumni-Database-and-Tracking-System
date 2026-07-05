@@ -18,7 +18,7 @@ const Events = () => {
   const [loading, setLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [newEvent, setNewEvent] = useState({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
+  const [newEvent, setNewEvent] = useState({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
 
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -161,7 +161,7 @@ const Events = () => {
   const handleAddEvent = async (e) => {
     e.preventDefault();
     try {
-      let payload = newEvent;
+      let payload;
       
       if (newEvent.image) {
         const fd = new FormData();
@@ -173,8 +173,19 @@ const Events = () => {
         if (newEvent.sendNotification) {
           fd.append('notifyBatch', newEvent.notifyBatch || 'all');
         }
+        fd.append('targetBatch', newEvent.targetBatch || 'all');
         fd.append('image', newEvent.image);
         payload = fd;
+      } else {
+        payload = {
+          name: newEvent.name,
+          description: newEvent.description,
+          date: newEvent.date,
+          location: newEvent.location,
+          sendNotification: newEvent.sendNotification,
+          notifyBatch: newEvent.notifyBatch,
+          targetBatch: newEvent.targetBatch
+        };
       }
       
       if (editingId) {
@@ -188,7 +199,7 @@ const Events = () => {
       }
       setShowEventModal(false);
       setEditingId(null);
-      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
+      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
     } catch (err) {
       console.error('Error saving event:', err);
       const msg = err?.response?.data?.error || 'Failed to save event. Please try again.';
@@ -205,7 +216,8 @@ const Events = () => {
       location: event.location || '',
       image: null,
       sendNotification: false,
-      notifyBatch: 'all'
+      notifyBatch: 'all',
+      targetBatch: event.target_batch ? String(event.target_batch) : 'all'
     });
     setShowEventModal(true);
   };
@@ -819,13 +831,42 @@ const Events = () => {
                   )}
                 </div>
 
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Restrict Attendance to Batch
+                  </label>
+                  <select
+                    value={newEvent.targetBatch}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, targetBatch: e.target.value }))}
+                    className="app-select"
+                  >
+                    <option value="all">Open to All Batches</option>
+                    <option value="2015">Batch 2015</option>
+                    <option value="2016">Batch 2016</option>
+                    <option value="2017">Batch 2017</option>
+                    <option value="2018">Batch 2018</option>
+                    <option value="2019">Batch 2019</option>
+                    <option value="2020">Batch 2020</option>
+                    <option value="2021">Batch 2021</option>
+                    <option value="2022">Batch 2022</option>
+                    <option value="2023">Batch 2023</option>
+                    <option value="2024">Batch 2024</option>
+                    <option value="2025">Batch 2025</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {newEvent.targetBatch === 'all'
+                      ? 'All alumni can join this event'
+                      : `Only Batch ${newEvent.targetBatch} alumni can join. Others can view but not register.`}
+                  </p>
+                </div>
+
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button
                     type="button"
                     onClick={() => {
                       setShowEventModal(false);
                       setEditingId(null);
-                      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
+                      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
                     }}
                     className="app-secondary-button"
                   >
@@ -961,6 +1002,14 @@ const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 {event.location}
+              </div>
+            )}
+            {event.target_batch && (
+              <div className="flex items-center text-amber-600">
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Batch {event.target_batch} Only
               </div>
             )}
           </div>

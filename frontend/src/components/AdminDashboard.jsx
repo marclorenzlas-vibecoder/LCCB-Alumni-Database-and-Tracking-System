@@ -20,7 +20,7 @@ const toneClasses = {
   rose: 'from-rose-500 to-pink-500'
 };
 
-const RECENT_DONATION_CACHE_LIMIT = 100;
+const RECENT_DONATION_CACHE_LIMIT = 1000;
 
 const AdminDashboard = ({ pendingOnly = false }) => {
   const [pendingUsers, setPendingUsers] = useState([]);

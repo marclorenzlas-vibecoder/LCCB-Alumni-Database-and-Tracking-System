@@ -34,11 +34,20 @@ function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
     >
       <div className="relative h-48 overflow-hidden">
         {achievement.image ? (
-          <img
-            src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-            alt={achievement.title}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
+          /\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
+            <video
+              src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+              className="h-full w-full object-cover"
+              controls
+              muted
+            />
+          ) : (
+            <img
+              src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+              alt={achievement.title}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          )
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-medium text-slate-500">
             No image available
@@ -129,7 +138,8 @@ const Achievements = () => {
     category: '',
     description: '',
     date: '',
-    image: null
+    image: null,
+    video: null
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -199,10 +209,10 @@ const Achievements = () => {
 
   const handleInputChange = (e) => {
     const { name, value, files } = e.target;
-    if (name === 'image') {
+    if (name === 'image' || name === 'video') {
       setFormData(prev => ({
         ...prev,
-        image: files[0]
+        [name]: files[0]
       }));
     } else {
       setFormData(prev => ({
@@ -218,15 +228,16 @@ const Achievements = () => {
     setError('');
 
     try {
-      let payload = formData;
-      if (formData.image) {
+      let payload;
+      if (formData.image || formData.video) {
         const fd = new FormData();
         fd.append('alumni_id', formData.alumni_id);
         fd.append('title', formData.title);
         fd.append('category', formData.category);
         if (formData.description) fd.append('description', formData.description);
         if (formData.date) fd.append('date', formData.date);
-        fd.append('image', formData.image);
+        if (formData.image) fd.append('image', formData.image);
+        if (formData.video) fd.append('video', formData.video);
         payload = fd;
       } else {
         payload = {
@@ -258,7 +269,8 @@ const Achievements = () => {
         category: '',
         description: '',
         date: '',
-        image: null
+        image: null,
+        video: null
       });
     } catch (err) {
       console.error('Error saving achievement:', err);
@@ -276,7 +288,8 @@ const Achievements = () => {
       category: achievement.category || '',
       description: achievement.description || '',
       date: achievement.date ? achievement.date.split('T')[0] : '',
-      image: null
+      image: null,
+      video: null
     });
     setShowModal(true);
   };
@@ -349,7 +362,20 @@ const Achievements = () => {
           </div>
           {isTeacher && (
             <button 
-              onClick={() => setShowModal(true)}
+              onClick={() => {
+                setEditingId(null);
+                setFormData({
+                  alumni_id: '',
+                  title: '',
+                  category: '',
+                  description: '',
+                  date: '',
+                  image: null,
+                  video: null
+                });
+                setError('');
+                setShowModal(true);
+              }}
               className="app-primary-button">
               Add New
             </button>
@@ -534,6 +560,21 @@ const Achievements = () => {
                         <p className="text-sm text-gray-500 mt-1">Selected: {formData.image.name}</p>
                       )}
                     </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Achievement Video
+                      </label>
+                      <input
+                        type="file"
+                        name="video"
+                        accept="video/*"
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-purple-100 file:text-purple-900 hover:file:bg-purple-200"
+                      />
+                      {formData.video && (
+                        <p className="text-sm text-gray-500 mt-1">Selected: {formData.video.name}</p>
+                      )}
+                    </div>
                   </div>
                   {error && (
                     <div className="text-red-600 text-sm">
@@ -546,6 +587,15 @@ const Achievements = () => {
                       onClick={() => {
                         setShowModal(false);
                         setEditingId(null);
+                        setFormData({
+                          alumni_id: '',
+                          title: '',
+                          category: '',
+                          description: '',
+                          date: '',
+                          image: null,
+                          video: null
+                        });
                         setError('');
                       }}
                         className="app-secondary-button"

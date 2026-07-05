@@ -310,7 +310,7 @@ export default function AlumniDirectoryScreen({ navigation }) {
     });
     return map;
   }, [groupSections]);
-  const groupLabel = selectedGroup === 'ALL' ? 'All Groups' : (groupLabelMap[selectedGroup] || selectedGroup);
+  const groupLabel = selectedGroup === 'ALL' ? 'All Program' : (groupLabelMap[selectedGroup] || selectedGroup);
 
   return (
     <ScreenContainer>
@@ -453,7 +453,7 @@ export default function AlumniDirectoryScreen({ navigation }) {
 
       <OptionPicker
         visible={groupPickerOpen}
-        title="Select Group"
+        title="All Program"
         sections={groupSections}
         selected={selectedGroup}
         onSelect={(value) => {
@@ -461,7 +461,7 @@ export default function AlumniDirectoryScreen({ navigation }) {
           setGroupPickerOpen(false);
         }}
         onClose={() => setGroupPickerOpen(false)}
-        displayValue={(value) => (value === 'ALL' ? 'All Groups' : value)}
+        displayValue={(value) => (value === 'ALL' ? 'All Program' : value)}
       />
 
       <Modal visible={showOfficersModal} transparent animationType="fade" onRequestClose={() => setShowOfficersModal(false)}>

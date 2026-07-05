@@ -889,7 +889,7 @@ const Navbar = () => {
                       />
                     </svg>
                     {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full shadow-lg animate-bounce">
+                      <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full shadow-lg">
                         {unreadCount > 9 ? "9+" : unreadCount}
                       </span>
                     )}

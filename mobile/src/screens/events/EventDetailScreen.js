@@ -28,6 +28,11 @@ export default function EventDetailScreen({ navigation, route, user }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const alumniUser = useMemo(() => isAlumni(user), [user]);
   const teacherUser = useMemo(() => isTeacher(user), [user]);
+  const userBatch = useMemo(() => (
+    user?.alumni?.batch === undefined || user?.alumni?.batch === null
+      ? null
+      : String(user.alumni.batch)
+  ), [user]);
   const currentUserId = useMemo(
     () => Number(user?.id || user?.userId || user?.user_id || 0),
     [user],
@@ -442,6 +447,21 @@ export default function EventDetailScreen({ navigation, route, user }) {
                   onPress={onJoinLeave}
                   disabled={submitting}
                   tone="danger"
+                />
+              </View>
+            ) : event?.target_batch && userBatch !== String(event.target_batch) ? (
+              <View>
+                <View style={[styles.attendingBadge, { backgroundColor: '#fef3c7' }]}>
+                  <Ionicons name="lock-closed-outline" size={17} color="#92400e" />
+                  <Text style={[styles.attendingText, { color: '#92400e' }]}>
+                    Restricted to Batch {event.target_batch}
+                  </Text>
+                </View>
+                <PrimaryButton
+                  label={`Only Batch ${event.target_batch} Can Join`}
+                  onPress={() => {}}
+                  disabled={true}
+                  tone="secondary"
                 />
               </View>
             ) : (

@@ -119,13 +119,17 @@ export default function DonationsScreen({ navigation, user }) {
           </View>
         </Pressable>
 
-        {!teacher ? (
-          <View style={styles.donateActionWrap}>
+        <View style={styles.donateActionWrap}>
+          {teacher ? (
+            <Pressable style={styles.donateBtn} onPress={() => navigation.navigate('AdminCampaignReceipts', { donationId: item.id })}>
+              <Text style={styles.donateBtnText}>View Receipts</Text>
+            </Pressable>
+          ) : (
             <Pressable style={styles.donateBtn} onPress={() => navigation.navigate('DonationDetail', { donationId: item.id })}>
               <Text style={styles.donateBtnText}>Donate</Text>
             </Pressable>
-          </View>
-        ) : null}
+          )}
+        </View>
 
         <View style={styles.actionsRow}>
           <Pressable style={styles.shareBtn} onPress={() => onShare(item)}>

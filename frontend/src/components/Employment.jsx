@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import careerService from '../services/careerService';
-import applicationService from '../services/applicationService';
 import { authService } from '../services/authService';
 import ConfirmModal from './ConfirmModal';
 import FilterMenu from './FilterMenu';
@@ -10,17 +8,15 @@ import { toast } from 'react-toastify';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
 /**
- * Employment Component - Job Postings and Applications
+ * Employment Component - Job Postings
  * 
  * User Roles (based on email domain):
- * - Teachers (@lccbonline.com): Can post jobs, edit/delete jobs, and view all applications
- * - Alumni (@gmail.com): Can apply to jobs and track their applications
+ * - Teachers (@lccbonline.com): Can post jobs and edit/delete jobs
+ * - Alumni (@gmail.com): Can view job opportunities
  */
 const Employment = () => {
-  const navigate = useNavigate();
   const [postedJobs, setPostedJobs] = useState([]);
   const isTeacher = authService.isTeacher();
-  const currentUser = authService.getCurrentUser();
   const [alumniList, setAlumniList] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -40,18 +36,9 @@ const Employment = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Application modal state
-  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  // Job detail state
+  const [showJobDetail, setShowJobDetail] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [applicationTab, setApplicationTab] = useState('overview');
-  const [coverLetter, setCoverLetter] = useState('');
-  const [resumeFiles, setResumeFiles] = useState([]);
-  const [contactMethod, setContactMethod] = useState('email');
-  const [contactEmail, setContactEmail] = useState(currentUser?.email || '');
-  const [contactNumber, setContactNumber] = useState(currentUser?.alumni?.contact_number || currentUser?.contact_number || '');
-  const [appliedJobs, setAppliedJobs] = useState(new Map()); // Map of job_id -> application status
-  const [applicationLoading, setApplicationLoading] = useState(false);
-  const [applicationCounts, setApplicationCounts] = useState({});
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState({
@@ -91,17 +78,7 @@ const Employment = () => {
   useEffect(() => {
     fetchPostedJobs();
     fetchAlumniList();
-    if (currentUser && !isTeacher) {
-      checkApplicationStatus();
-    }
   }, []);
-
-  // Fetch application counts whenever jobs change (for teachers)
-  useEffect(() => {
-    if (isTeacher && postedJobs.length > 0) {
-      fetchApplicationCounts();
-    }
-  }, [postedJobs.length, isTeacher]);
 
   // Close filter menus on outside click / Escape
   useEffect(() => {
@@ -138,210 +115,6 @@ const Employment = () => {
   const selectedWorkTypeLabel = selectedWorkTypes.length > 0 ? `${selectedWorkTypes.length} selected` : 'Work type';
   const activeFilterCount = selectedLocations.length + selectedDepartments.length + selectedWorkTypes.length;
 
-  // Refresh counts when page becomes visible (user returns to tab)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        if (isTeacher && postedJobs.length > 0) {
-          fetchApplicationCounts();
-        }
-        if (!isTeacher && currentUser) {
-          checkApplicationStatus();
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isTeacher, postedJobs.length, currentUser]);
-
-  // Expose fetchApplicationCounts globally for instant updates from other components
-  useEffect(() => {
-    if (isTeacher) {
-      window.refreshApplicationCounts = fetchApplicationCounts;
-    } else if (currentUser) {
-      window.refreshApplicationStatus = checkApplicationStatus;
-    }
-    return () => { 
-      delete window.refreshApplicationCounts;
-      delete window.refreshApplicationStatus;
-    };
-  }, [isTeacher, postedJobs.length, currentUser]);
-
-  const getApplicationStatusButton = (jobId) => {
-    const application = appliedJobs.get(jobId);
-    if (!application) return null;
-
-    const statusConfig = {
-      PENDING: {
-        text: 'Application Pending',
-        bgColor: 'bg-yellow-500'
-      },
-      REVIEWED: {
-        text: 'Under Review',
-        bgColor: 'bg-blue-900'
-      },
-      SHORTLISTED: {
-        text: 'Shortlisted',
-        bgColor: 'bg-green-500'
-      },
-      ACCEPTED: {
-        text: 'Accepted',
-        bgColor: 'bg-green-600'
-      },
-      REJECTED: {
-        text: 'Not Selected',
-        bgColor: 'bg-red-500'
-      }
-    };
-
-    const config = statusConfig[application.status] || statusConfig.PENDING;
-
-    if (application.status === 'PENDING') {
-      return (
-        <div className="flex-1 flex gap-2">
-          <button
-            disabled
-            className={`flex-1 ${actionBaseClass} ${config.bgColor} text-white`}
-          >
-            {config.text}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleWithdrawApplication(jobId)}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-red-600/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-red-100"
-          >
-            Withdraw
-          </button>
-        </div>
-      );
-    }
-    
-    return (
-      <button 
-        disabled
-        className={`flex-1 ${actionBaseClass} ${config.bgColor} text-white`}>
-        {config.text}
-      </button>
-    );
-  };
-
-  const getInlineStatusBadge = (jobId) => {
-    const application = appliedJobs.get(jobId);
-    if (!application) return null;
-
-    const badgeStyles = {
-      REVIEWED: 'bg-purple-100 text-purple-800',
-      SHORTLISTED: 'bg-amber-100 text-amber-800',
-      ACCEPTED: 'bg-green-100 text-green-800',
-      REJECTED: 'bg-red-100 text-red-800',
-      PENDING: 'bg-yellow-100 text-yellow-800'
-    };
-
-    const badgeLabels = {
-      REVIEWED: 'Under Review',
-      SHORTLISTED: 'Shortlisted',
-      ACCEPTED: 'Accepted',
-      REJECTED: 'Rejected',
-      PENDING: 'Pending'
-    };
-
-    return (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${badgeStyles[application.status] || badgeStyles.PENDING}`}>
-        {badgeLabels[application.status] || 'Pending'}
-      </span>
-    );
-  };
-
-  const checkApplicationStatus = async () => {
-    // Extract alumni ID from nested alumni object
-    const alumniId = currentUser?.alumni?.id || currentUser?.alumniId;
-    if (!alumniId) return;
-    
-    try {
-      const applications = await applicationService.getAlumniApplications(alumniId);
-      const statusMap = new Map();
-      applications.forEach(app => {
-        statusMap.set(app.job_posting_id, {
-          id: app.id,
-          status: app.status,
-          appliedAt: app.applied_at,
-          reviewedAt: app.reviewed_at
-        });
-      });
-      setAppliedJobs(statusMap);
-    } catch (err) {
-      console.error('Error fetching application status:', err);
-    }
-  };
-
-  const handleWithdrawApplication = (jobId) => {
-    const application = appliedJobs.get(jobId);
-    if (!application || application.status !== 'PENDING') {
-      toast.warning('Only pending applications can be withdrawn.');
-      return;
-    }
-
-    setConfirmModal({
-      isOpen: true,
-      title: 'Withdraw Application',
-      message: 'Do you want to withdraw this application? You can reapply later if the job is still open.',
-      type: 'danger',
-      confirmText: 'Withdraw',
-      cancelText: 'Keep Application',
-      onConfirm: async () => {
-        try {
-          await applicationService.withdrawApplication(application.id);
-          await checkApplicationStatus();
-          setConfirmModal({
-            isOpen: false,
-            title: '',
-            message: '',
-            onConfirm: null,
-            type: 'danger',
-            confirmText: 'Confirm',
-            cancelText: 'Cancel'
-          });
-          toast.success('Application withdrawn successfully.');
-        } catch (err) {
-          console.error('Error withdrawing application:', err);
-          const errorMsg = err.response?.data?.error || 'Failed to withdraw application';
-          toast.error(errorMsg);
-          setConfirmModal({
-            isOpen: false,
-            title: '',
-            message: '',
-            onConfirm: null,
-            type: 'danger',
-            confirmText: 'Confirm',
-            cancelText: 'Cancel'
-          });
-        }
-      }
-    });
-  };
-
-  const fetchApplicationCounts = async () => {
-    if (!isTeacher) return;
-    
-    try {
-      const counts = {};
-      await Promise.all(
-        postedJobs.map(async (job) => {
-          try {
-            const applications = await applicationService.getJobApplications(job.id);
-            counts[job.id] = applications.length;
-          } catch (err) {
-            counts[job.id] = 0;
-          }
-        })
-      );
-      setApplicationCounts(counts);
-    } catch (err) {
-      console.error('Error fetching application counts:', err);
-    }
-  };
-
   const fetchAlumniList = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/alumni`);
@@ -356,22 +129,6 @@ const Employment = () => {
     try {
       const data = await careerService.getAllJobs();
       setPostedJobs(data);
-      
-      // Fetch counts directly after getting jobs data
-      if (isTeacher && data.length > 0) {
-        const counts = {};
-        await Promise.all(
-          data.map(async (job) => {
-            try {
-              const applications = await applicationService.getJobApplications(job.id);
-              counts[job.id] = applications.length;
-            } catch (err) {
-              counts[job.id] = 0;
-            }
-          })
-        );
-        setApplicationCounts(counts);
-      }
     } catch (err) {
       console.error('Error fetching posted jobs:', err);
     }
@@ -482,89 +239,9 @@ const Employment = () => {
     });
   };
 
-  const handleApplyNow = (job) => {
-    // Extract alumni ID from nested alumni object
-    const alumniId = currentUser?.alumni?.id || currentUser?.alumniId;
-    if (!alumniId) {
-      toast.warning('Please log in as an alumni to apply for jobs.');
-      return;
-    }
-    
+  const handleOpenJobDetail = (job) => {
     setSelectedJob(job);
-    setCoverLetter('');
-    setResumeFiles([]);
-    setContactMethod('email');
-    setContactEmail(currentUser?.email || '');
-    setContactNumber(currentUser?.alumni?.contact_number || currentUser?.contact_number || '');
-    setApplicationTab('overview');
-    setShowApplicationModal(true);
-  };
-
-  const handleSubmitApplication = async (e) => {
-    e.preventDefault();
-
-    if (!coverLetter.trim()) {
-      toast.error('Cover letter is required.');
-      return;
-    }
-
-    const trimmedContactEmail = String(contactEmail || '').trim();
-    const trimmedContactNumber = String(contactNumber || '').trim();
-
-    if (contactMethod === 'email' && !trimmedContactEmail) {
-      toast.error('Please provide a contact email.');
-      return;
-    }
-
-    if (contactMethod === 'phone' && !trimmedContactNumber) {
-      toast.error('Please provide a contact number.');
-      return;
-    }
-
-    setApplicationLoading(true);
-
-    try {
-      // Extract alumni ID from nested alumni object
-      const alumniId = currentUser?.alumni?.id || currentUser?.alumniId;
-      const response = await applicationService.applyToJob(
-        selectedJob.id,
-        alumniId,
-        coverLetter.trim(),
-        '', // resumeUrl (not used)
-        resumeFiles,
-        contactMethod,
-        trimmedContactEmail,
-        trimmedContactNumber
-      );
-
-      const createdApplication = response?.application;
-      if (!createdApplication?.id) {
-        await checkApplicationStatus();
-        throw new Error('Application was submitted, but the application record could not be loaded for withdrawal. Please refresh the page.');
-      }
-      
-      // Update applied jobs map with PENDING status
-      setAppliedJobs(prev => new Map(prev).set(selectedJob.id, {
-        id: createdApplication.id,
-        status: 'PENDING',
-        appliedAt: createdApplication.applied_at || new Date().toISOString(),
-        reviewedAt: createdApplication.reviewed_at || null
-      }));
-      
-      // Trigger instant notification refresh for all users
-      if (window.refreshNotifications) {
-        window.refreshNotifications();
-      }
-      
-      setShowApplicationModal(false);
-      toast.success('Application submitted successfully! The employer will be notified and will review your qualifications.');
-    } catch (err) {
-      console.error('Error submitting application:', err);
-      const errorMsg = err.response?.data?.error || 'Failed to submit application';
-      toast.error(errorMsg);
-    } finally {
-      setApplicationLoading(false);
-    }
+    setShowJobDetail(true);
   };
 
   const filteredJobs = postedJobs
@@ -732,11 +409,11 @@ const Employment = () => {
               <colgroup>
                 {isTeacher ? (
                   <>
-                    <col style={{ width: '28%' }} />
-                    <col style={{ width: '16%' }} />
-                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '34%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '18%' }} />
                     <col style={{ width: '14%', minWidth: '100px' }} />
-                    <col style={{ width: '26%', minWidth: '260px' }} />
+                    <col style={{ width: '16%', minWidth: '160px' }} />
                   </>
                 ) : (
                   <>
@@ -772,14 +449,13 @@ const Employment = () => {
               {!loading && filteredJobs.map((job) => (
                 <tr
                   key={job.id}
-                  onClick={() => handleApplyNow(job)}
+                  onClick={() => handleOpenJobDetail(job)}
                   className="border-b border-gray-100 last:border-b-0 transition hover:bg-blue-50/50 cursor-pointer"
                 >
                   <td className="px-6 py-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-lg font-semibold text-blue-600 hover:text-blue-800 transition truncate">{job.job_title}</p>
-                        {getInlineStatusBadge(job.id)}
                       </div>
                       <p className="text-sm text-gray-500 mt-0.5">Posted {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}</p>
                     </div>
@@ -794,12 +470,6 @@ const Employment = () => {
                   {isTeacher && (
                     <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1" style={{ flexDirection: 'row', alignItems: 'center', gap: '6px', justifyContent: 'flex-start' }}>
-                        <button
-                          onClick={() => navigate(`/job-applications/${job.id}`)}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200 text-sm font-medium shadow-sm whitespace-nowrap"
-                        >
-                          Applications ({applicationCounts[job.id] || 0})
-                        </button>
                         <button
                           onClick={() => handleEdit(job)}
                           className="flex-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm"
@@ -1019,8 +689,8 @@ const Employment = () => {
           </div>
         )}
 
-        {/* Application Full Page */}
-        {showApplicationModal && selectedJob && (
+        {/* Job Detail Full Page */}
+        {showJobDetail && selectedJob && (
           <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
             {/* Header */}
             <div className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm">
@@ -1028,46 +698,19 @@ const Employment = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowApplicationModal(false);
+                    setShowJobDetail(false);
                     setSelectedJob(null);
-                    setCoverLetter('');
                   }}
                   className="inline-flex items-center gap-2 rounded-xl bg-slate-100 border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition-all"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                   Back to Jobs
                 </button>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setApplicationTab('overview')}
-                    className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                      applicationTab === 'overview'
-                        ? 'bg-blue-700 text-white shadow-md shadow-blue-700/20'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Overview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApplicationTab('application')}
-                    className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                      applicationTab === 'application'
-                        ? 'bg-blue-700 text-white shadow-md shadow-blue-700/20'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Application
-                  </button>
-                </div>
               </div>
             </div>
 
             {/* Content */}
             <div className="mx-auto max-w-5xl px-6 py-8 sm:px-8">
-              {applicationTab === 'overview' ? (
-                /* ── Overview Tab ── */
                 <div className="space-y-8">
                   <div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900">{selectedJob.job_title}</h1>
@@ -1191,153 +834,6 @@ const Employment = () => {
                     </div>
                   </div>
                 </div>
-              ) : (
-                /* ── Application Tab ── */
-                <form id="job-application-form" onSubmit={handleSubmitApplication} className="space-y-6">
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-4 shadow-sm">
-                    <div className="flex gap-3 items-center">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
-                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <p className="text-sm leading-6 text-blue-800">
-                        Your profile information, qualifications, and employment history will be shared with the employer when you submit this application.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-5 xl:items-stretch">
-                    <div className="xl:col-span-3 flex flex-col">
-                      <div className="flex h-full min-h-[36rem] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <label className="block text-sm font-semibold text-slate-900 mb-1.5">
-                          Cover Letter *
-                        </label>
-                        <p className="text-xs text-slate-500 mb-3">
-                          Introduce yourself and explain why you're interested in this position. This is required.
-                        </p>
-                        <textarea
-                          value={coverLetter}
-                          onChange={(e) => setCoverLetter(e.target.value)}
-                          className="block min-h-[28rem] flex-1 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm leading-6 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
-                          placeholder={"Dear Hiring Manager,\n\nI am writing to express my interest in the position..."}
-                          rows="12"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="xl:col-span-2 space-y-4">
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm space-y-3">
-                        <h4 className="text-sm font-semibold text-amber-900 mb-2">Resume / CV</h4>
-                        <p className="text-sm leading-6 text-amber-800">Upload your resume so employers can review your background faster.</p>
-                        <input
-                          type="file"
-                          multiple
-                          accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={(e) => setResumeFiles(e.target.files ? Array.from(e.target.files) : [])}
-                          className="block w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-amber-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-amber-900 hover:file:bg-amber-200"
-                        />
-                        {resumeFiles.length > 0 && (
-                          <div className="mt-2 space-y-2">
-                            {resumeFiles.map((f, idx) => (
-                              <div key={idx} className="flex items-center justify-between gap-2 bg-white rounded-md px-3 py-2 border border-gray-100">
-                                <div className="truncate text-sm text-slate-800">{f.name} <span className="text-xs text-gray-400">({Math.round(f.size/1024)} KB)</span></div>
-                                <button type="button" onClick={() => setResumeFiles(prev => prev.filter((_,i) => i !== idx))} className="text-red-600 text-xs font-semibold">Remove</button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <p className="text-xs text-slate-500">Or leave blank to use your profile documents.</p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h4 className="text-sm font-semibold text-slate-900 mb-3">Contact Verification</h4>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Preferred contact method</label>
-                        <div className="mb-3 inline-flex w-full rounded-xl border border-slate-200 bg-slate-50 p-1">
-                          <button
-                            type="button"
-                            onClick={() => setContactMethod('email')}
-                            className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                              contactMethod === 'email'
-                                ? 'bg-blue-700 text-white shadow-sm'
-                                : 'text-slate-600 hover:bg-white'
-                            }`}
-                          >
-                            Email
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setContactMethod('phone')}
-                            className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                              contactMethod === 'phone'
-                                ? 'bg-blue-700 text-white shadow-sm'
-                                : 'text-slate-600 hover:bg-white'
-                            }`}
-                          >
-                            Phone
-                          </button>
-                        </div>
-
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Contact Email</label>
-                        <input
-                          type="email"
-                          value={contactEmail}
-                          onChange={(e) => setContactEmail(e.target.value)}
-                          className={`${fieldClass} mb-3 ${contactMethod === 'email' ? 'border-blue-300 ring-2 ring-blue-100' : ''}`}
-                        />
-
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Contact Number</label>
-                        <input
-                          type="text"
-                          value={contactNumber}
-                          onChange={(e) => setContactNumber(e.target.value)}
-                          className={`${fieldClass} ${contactMethod === 'phone' ? 'border-blue-300 ring-2 ring-blue-100' : ''}`}
-                        />
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h4 className="text-sm font-semibold text-slate-900 mb-3">What happens next?</h4>
-                        <ul className="space-y-2 text-sm leading-6 text-slate-600">
-                          <li className="flex gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-                            <span>Your application will be sent to the employer</span>
-                          </li>
-                          <li className="flex gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-                            <span>The employer will review your profile and qualifications</span>
-                          </li>
-                          <li className="flex gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-                            <span>You'll be contacted if your application is selected</span>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowApplicationModal(false);
-                        setSelectedJob(null);
-                        setCoverLetter('');
-                      }}
-                      className={secondaryActionClass}
-                      disabled={applicationLoading}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={applicationLoading}
-                      className={primaryActionClass}
-                    >
-                      {applicationLoading ? 'Submitting...' : 'Submit Application'}
-                    </button>
-                  </div>
-                </form>
-              )}
             </div>
           </div>
         )}

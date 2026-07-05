@@ -4,7 +4,6 @@ import achievementService from '../services/achievementService';
 import { authService } from '../services/authService';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
-import UserLayout from './UserLayout';
 
 const AchievementDetail = () => {
   const { id } = useParams();
@@ -118,8 +117,7 @@ const AchievementDetail = () => {
   }
 
   return (
-    <UserLayout>
-      <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-6">
             <button
@@ -193,16 +191,25 @@ const AchievementDetail = () => {
             >
               {achievement.image ? (
                 <div className="rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
-                  <img
-                    src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-                    alt={achievement.title}
-                    className="w-full h-auto object-cover"
-                    style={{ 
-                      borderRadius: '8px',
-                      maxHeight: '400px',
-                      objectFit: 'cover'
-                    }}
-                  />
+                  {/\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
+                    <video
+                      src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+                      className="w-full h-auto object-cover"
+                      controls
+                      style={{ borderRadius: '8px', maxHeight: '400px', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <img
+                      src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+                      alt={achievement.title}
+                      className="w-full h-auto object-cover"
+                      style={{ 
+                        borderRadius: '8px',
+                        maxHeight: '400px',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  )}
                 </div>
               ) : (
                 <div 
@@ -236,8 +243,7 @@ const AchievementDetail = () => {
           </div>
 
         </div>
-      </div>
-    </UserLayout>
+    </div>
   );
 };
 

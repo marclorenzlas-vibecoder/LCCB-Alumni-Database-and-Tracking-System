@@ -108,10 +108,10 @@ function DonationCard({ donation, isTeacher, onEdit, onDelete, onDonate, onShare
               </>
             )}
             <button
-              onClick={() => navigate(`/donate/${donation.id}`)}
+              onClick={() => onDonate(donation)}
               className="w-full px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 text-sm flex items-center justify-center gap-2"
             >
-              Donate
+              {isTeacher ? 'View Receipts' : 'Donate'}
             </button>
             <button
               onClick={() => onShare(donation)}
@@ -491,7 +491,14 @@ const Donations = () => {
               isTeacher={isTeacher}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              onDonate={(d) => navigate(`/donate/${d.id}`)}
+              onDonate={(d) => {
+                const role = authService.getRole();
+                if (role === 'admin' || role === 'teacher') {
+                  navigate(`/admin/donate/${d.id}`);
+                } else {
+                  navigate(`/donate/${d.id}`);
+                }
+              }}
               onShare={handleShare}
               formatAmount={formatAmount}
               calculateProgress={calculateProgress}

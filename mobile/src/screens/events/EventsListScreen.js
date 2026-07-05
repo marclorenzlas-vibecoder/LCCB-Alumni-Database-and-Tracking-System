@@ -486,6 +486,12 @@ function EventSection({ title, count, events, navigation, teacher, collapsible =
                 <Text style={styles.eventName}>{event.name}</Text>
                 <Text style={styles.eventMeta}>{formatDate(event.date)}</Text>
                 <Text style={styles.eventMeta}>{event.location || 'TBA'}</Text>
+                {event.target_batch ? (
+                  <View style={styles.batchBadge}>
+                    <Ionicons name="lock-closed-outline" size={10} color="#92400e" />
+                    <Text style={[styles.typeBadgeText, { color: '#92400e' }]}>Batch {event.target_batch} Only</Text>
+                  </View>
+                ) : null}
               </View>
             </Pressable>
             <View style={styles.eventActions}>
@@ -581,6 +587,17 @@ const styles = StyleSheet.create({
   badgeRow: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 6 },
   typeBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   typeBadgeText: { fontSize: 10, fontWeight: '700' },
+  batchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: '#fef3c7'
+  },
   pastBadge: {
     backgroundColor: '#f8fafc', color: '#0f172a', borderRadius: 999, borderWidth: 1,
     borderColor: '#cbd5e1', paddingHorizontal: 8, paddingVertical: 2, fontSize: 10, fontWeight: '700'

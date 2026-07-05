@@ -42,6 +42,15 @@ const isWithinRetention = (dateStr) => {
   return date >= cutoff;
 };
 
+const stripDonationPaymentDetails = (message = '') => {
+  if (!message || typeof message !== 'string') return '';
+  return message
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(payment method|currency)\s*:/i.test(line))
+    .join('\n')
+    .trim();
+};
+
 export default function NotificationsScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -228,7 +237,7 @@ export default function NotificationsScreen({ navigation }) {
                     </View>
                     <View style={styles.cardTextWrap}>
                       <Text style={styles.title}>{item.title || 'Notification'}</Text>
-                      <Text style={styles.message}>{item.message || 'No message'}</Text>
+                      <Text style={styles.message}>{stripDonationPaymentDetails(item.message) || 'No message'}</Text>
                     </View>
                     {!item.is_read ? <View style={styles.unreadDot} /> : null}
                   </View>

@@ -22,6 +22,7 @@ import Employment from './components/Employment';
 import JobApplications from './components/JobApplications';
 import Donations from './components/Donations';
 import DonatePage from './components/DonatePage';
+import AdminCampaignReceipts from './components/AdminCampaignReceipts';
 import Notifications from './components/Notifications';
 import LiveDonationToast from './components/LiveDonationToast';
 import OAuthCallback from './components/OAuthCallback';
@@ -87,7 +88,7 @@ function AppContent() {
           } />
           <Route path="/pending-approval" element={
             <ProtectedRoute>
-              {['teacher', 'admin'].includes(authService.getRole()) ? <AdminDashboard pendingOnly /> : <PendingApproval />}
+              {['teacher', 'admin'].includes((user?.role || '').toLowerCase()) ? <AdminDashboard pendingOnly /> : <PendingApproval />}
             </ProtectedRoute>
           } />
           <Route path="/login" element={<Login />} />
@@ -148,6 +149,11 @@ function AppContent() {
           <Route path="/donate/:campaignId" element={
             <ProtectedRoute allowedRoles={['ALUMNI', 'TEACHER', 'ADMIN']} redirectTo="/home">
               <DonatePage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/donate/:campaignId" element={
+            <ProtectedRoute allowedRoles={['TEACHER', 'ADMIN']} redirectTo="/home">
+              <AdminCampaignReceipts />
             </ProtectedRoute>
           } />
           <Route path="/teachers" element={

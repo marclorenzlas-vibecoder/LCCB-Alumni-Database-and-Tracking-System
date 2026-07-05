@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { realtimeClient } from '../services/realtimeClient';
 import { authService } from '../services/authService';
-import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import {
   isShowDonationToastsEnabled,
+  setPreferences,
   NOTIFICATION_PREFERENCE_EVENT
 } from '../utils/notificationPreferences';
 const getInitials = (name) => {
@@ -28,6 +29,15 @@ const stripDuplicatePrefix = (message, title) => {
   return msg;
 };
 
+const stripPaymentDetailLines = (text) => {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^(payment method|currency)\s*:/i.test(line))
+    .join('\n')
+    .trim();
+};
+
 const buildDonationCopy = ({ amountLabel, campaignName, donationKind, title, message }) => {
   const campaign = campaignName?.trim() || 'a campaign';
   const kind = String(donationKind || '').toLowerCase();
@@ -41,7 +51,7 @@ const buildDonationCopy = ({ amountLabel, campaignName, donationKind, title, mes
     gift = amountLabel;
   }
 
-  const rawDetail = stripDuplicatePrefix(message, title);
+  const rawDetail = stripPaymentDetailLines(stripDuplicatePrefix(message, title));
   let detail = '';
   if (rawDetail) {
     const donationForMatch = rawDetail.match(/^(?:donation for|note|notes):\s*(.+)/i);
@@ -59,6 +69,7 @@ const buildDonationCopy = ({ amountLabel, campaignName, donationKind, title, mes
 const LiveDonationToast = () => {
   const [toasts, setToasts] = useState([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [currentUser, setCurrentUser] = useState(() => authService.getCurrentUser());
 
   const formatRelativeTime = (timestamp) => {
     const diffMs = Date.now() - timestamp;
@@ -75,10 +86,64 @@ const LiveDonationToast = () => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Keep currentUser state in sync with local storage & login updates
   useEffect(() => {
-    const user = authService.getCurrentUser();
-    const userId = user?.id;
-    if (!userId) return undefined;
+    const handleAuthChange = () => {
+      setCurrentUser(authService.getCurrentUser());
+    };
+
+    window.addEventListener('auth-user-updated', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+    window.addEventListener('logout', handleAuthChange);
+
+    return () => {
+      window.removeEventListener('auth-user-updated', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+      window.removeEventListener('logout', handleAuthChange);
+    };
+  }, []);
+
+  const userId = currentUser?.id;
+  const role = currentUser ? (currentUser.role || authService.getRole()) : null;
+
+  // Sync preferences from database on user login/mount
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchPreferences = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const response = await fetch(`${API_BASE_URL}/auth/notification-preference/${userId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPreferences(userId, {
+            notificationEnabled: data.notification_enabled ?? true,
+            notifyEvents: data.notify_events ?? true,
+            notifyAchievements: data.notify_achievements ?? true,
+            notifyDonations: data.notify_donations ?? true,
+            notifyJobs: data.notify_jobs ?? true,
+            showDonationToasts: data.show_donation_toasts ?? true
+          });
+        }
+      } catch (err) {
+        console.error('Error syncing notification preferences:', err);
+      }
+    };
+
+    fetchPreferences();
+  }, [userId]);
+
+  // Sync state and handle preference settings changes
+  useEffect(() => {
+    if (!userId) {
+      setNotificationsEnabled(false);
+      return undefined;
+    }
 
     const syncPreference = () => {
       setNotificationsEnabled(isShowDonationToastsEnabled(userId));
@@ -109,7 +174,7 @@ const LiveDonationToast = () => {
       window.removeEventListener(NOTIFICATION_PREFERENCE_EVENT, onPreferenceChange);
       window.removeEventListener('storage', onStorageChange);
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (!notificationsEnabled) {
@@ -117,9 +182,11 @@ const LiveDonationToast = () => {
     }
   }, [notificationsEnabled]);
 
+  // Subscribe to real-time donation notifications when authenticated and role matches
   useEffect(() => {
-    const role = authService.getRole?.() || null;
-    if (!role || role.toUpperCase() !== 'ALUMNI') return undefined;
+    if (!role) return undefined;
+    const upperRole = role.toUpperCase();
+    if (upperRole !== 'ALUMNI' && upperRole !== 'TEACHER' && upperRole !== 'ADMIN') return undefined;
 
     const handler = (payload) => {
       try {
@@ -187,7 +254,7 @@ const LiveDonationToast = () => {
         /* ignore */
       }
     };
-  }, []);
+  }, [role, userId]);
 
   if (!notificationsEnabled || !toasts.length) return null;
 

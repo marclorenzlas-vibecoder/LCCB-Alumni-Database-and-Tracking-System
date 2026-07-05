@@ -162,6 +162,17 @@ const donationService = {
     return response.data;
   },
 
+  // Broadcast live toast notification for money donation
+  broadcastDonationToast: async (id, data) => {
+    const token = localStorage.getItem('token');
+    const response = await axios.post(`${API_URL}/${id}/broadcast-toast`, data, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  },
+
   // Delete donation (requires authentication)
   deleteDonation: async (id) => {
     const token = localStorage.getItem('token');
@@ -169,6 +180,33 @@ const donationService = {
       headers: {
         'Authorization': `Bearer ${token}`
       }
+    });
+    return response.data;
+  },
+
+  // Get contributions for a campaign (admin view)
+  getContributions: async (campaignId) => {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`${API_URL}/${campaignId}/contributions`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  // Submit receipt for a campaign (admin action)
+  submitReceipt: async (campaignId, data = {}) => {
+    const token = localStorage.getItem('token');
+    const response = await axios.post(`${API_URL}/${campaignId}/submit-receipt`, data, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return response.data;
+  },
+
+  // Get receipt submission status for a campaign
+  getReceiptStatus: async (campaignId) => {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`${API_URL}/${campaignId}/receipt-status`, {
+      headers: { 'Authorization': `Bearer ${token}` }
     });
     return response.data;
   }

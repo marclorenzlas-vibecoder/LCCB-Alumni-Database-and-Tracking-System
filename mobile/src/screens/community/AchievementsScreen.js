@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -29,7 +30,19 @@ function AchievementCardItem({ item, teacher, navigation, onEdit, onDelete }) {
       style={styles.card}
       onPress={() => !teacher && navigation.navigate('AchievementDetail', { achievement: item })}
     >
-      {item.image ? <Image source={{ uri: imageUrl(item.image, API_ORIGIN) }} style={styles.preview} /> : null}
+      {item.image ? (
+        /\.(mp4|mov|avi|mkv|webm)$/i.test(item.image) ? (
+          <Video
+            source={{ uri: imageUrl(item.image, API_ORIGIN) }}
+            style={styles.preview}
+            useNativeControls
+            resizeMode="cover"
+            isLooping={false}
+          />
+        ) : (
+          <Image source={{ uri: imageUrl(item.image, API_ORIGIN) }} style={styles.preview} />
+        )
+      ) : null}
       <View style={styles.cardBody}>
         <View style={styles.metaRow}>
           <Text style={styles.categoryBadge}>{item.category || 'General'}</Text>
@@ -75,6 +88,7 @@ export default function AchievementsScreen({ user, navigation }) {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [imageAsset, setImageAsset] = useState(null);
+  const [videoAsset, setVideoAsset] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
@@ -137,7 +151,7 @@ export default function AchievementsScreen({ user, navigation }) {
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permission.status !== 'granted') {
-      Alert.alert('Permission required', 'Allow photo access to upload achievement image.');
+      Alert.alert('Permission required', 'Allow media access to upload achievement image.');
       return;
     }
 
@@ -149,6 +163,24 @@ export default function AchievementsScreen({ user, navigation }) {
 
     if (!result.canceled && result.assets?.length) {
       setImageAsset(result.assets[0]);
+    }
+  };
+
+  const pickVideo = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission required', 'Allow media access to upload achievement video.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: true,
+      quality: 0.8
+    });
+
+    if (!result.canceled && result.assets?.length) {
+      setVideoAsset(result.assets[0]);
     }
   };
 
@@ -169,6 +201,10 @@ export default function AchievementsScreen({ user, navigation }) {
         const file = toMultipartFile(imageAsset, `achievement-${Date.now()}.jpg`);
         if (file) fd.append('image', file);
       }
+      if (videoAsset) {
+        const file = toMultipartFile(videoAsset, `achievement-${Date.now()}.mp4`);
+        if (file) fd.append('video', file);
+      }
 
       if (editingId) {
         await communityService.updateAchievement(editingId, fd);
@@ -178,6 +214,7 @@ export default function AchievementsScreen({ user, navigation }) {
 
       setEditingId(null);
       setImageAsset(null);
+      setVideoAsset(null);
       setForm({ alumni_id: alumniId ? String(alumniId) : '', title: '', description: '', date: '' });
       await loadItems(false);
     } catch (error) {
@@ -196,6 +233,7 @@ export default function AchievementsScreen({ user, navigation }) {
       date: item.date ? String(item.date).slice(0, 10) : ''
     });
     setImageAsset(null);
+    setVideoAsset(null);
   };
 
   const onDelete = (id) => {
@@ -273,6 +311,9 @@ export default function AchievementsScreen({ user, navigation }) {
           <TextInput style={styles.input} placeholder="Date (YYYY-MM-DD)" value={form.date} onChangeText={(v) => setForm((p) => ({ ...p, date: v }))} />
           <Pressable style={styles.pickBtn} onPress={pickImage}>
             <Text style={styles.pickText}>{imageAsset ? imageAsset.fileName || 'Image selected' : 'Choose Image'}</Text>
+          </Pressable>
+          <Pressable style={[styles.pickBtn, { backgroundColor: '#6b21a8' }]} onPress={pickVideo}>
+            <Text style={styles.pickText}>{videoAsset ? videoAsset.fileName || 'Video selected' : 'Choose Video'}</Text>
           </Pressable>
           <PrimaryButton label={saving ? 'Saving...' : editingId ? 'Update Achievement' : 'Create Achievement'} onPress={onSave} disabled={saving} />
         </View>

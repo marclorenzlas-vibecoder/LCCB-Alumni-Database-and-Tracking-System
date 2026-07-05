@@ -48,7 +48,7 @@ const createEducationEntry = (entry = {}) => ({
 const DEFAULT_BATCH_OPTIONS = Array.from({ length: 60 }, (_, index) => String(new Date().getFullYear() - index));
 
 const getGroupLabel = (value) => {
-  if (!value) return 'All Groups';
+  if (!value) return 'All Program';
 
   for (const section of registerCourseSections) {
     const item = section.items.find((entry) => entry.value === value);
@@ -1537,7 +1537,7 @@ const AlumniDirectory = () => {
                   menuRef={groupMenuRef}
                   isOpen={showGroupMenu}
                   setIsOpen={setShowGroupMenu}
-                  buttonLabel="All Groups"
+                  buttonLabel="All Program"
                   selectedLabel={getGroupLabel(selectedGroup)}
                   selectedValue={selectedGroup}
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
@@ -1546,7 +1546,7 @@ const AlumniDirectory = () => {
                     setSelectedGroup((prev) => (prev === value ? '' : value));
                     setShowGroupMenu(false);
                   }}
-                  panelTitle="All Groups"
+                  panelTitle="All Program"
                   panelWidthClass="w-96"
                   alignClass="right-0"
                 />
