@@ -9,7 +9,7 @@ import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
 import { authService } from '../../services/authService';
 import { realtimeClient } from '../../services/realtimeClient';
-import { getAlumniId, isTeacher } from '../../utils/auth';
+import { getAlumniId } from '../../utils/auth';
 import { imageUrl } from '../../utils/formatters';
 import { toMultipartFile } from '../../utils/upload';
 import { theme } from '../../theme';
@@ -68,6 +68,23 @@ const getPrimaryEducation = (history = []) => {
 
 const formatLevelLabel = (value) => LEVEL_LABELS[value] || value || 'Not set';
 
+const normalizePrivacySettings = (alumni = {}) => ({
+  isStudentIdPublic: (alumni.isStudentIdPublic ?? alumni.is_student_id_public ?? true) !== false,
+  isDateOfBirthPublic: (alumni.isDateOfBirthPublic ?? alumni.is_date_of_birth_public ?? true) !== false,
+  isCoursePublic: (alumni.isCoursePublic ?? alumni.is_course_public ?? true) !== false,
+  isGraduationYearPublic: (alumni.isGraduationYearPublic ?? alumni.is_graduation_year_public ?? true) !== false,
+  isEducationHistoryPublic: (alumni.isEducationHistoryPublic ?? alumni.is_education_history_public ?? true) !== false,
+  isEmailPublic: (alumni.isEmailPublic ?? alumni.is_email_public ?? true) !== false,
+  isPhonePublic: (alumni.isPhonePublic ?? alumni.is_phone_public ?? true) !== false,
+  isPositionPublic:
+    (alumni.isPositionPublic ?? alumni.is_position_public ?? true) !== false &&
+    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? true) !== false,
+  isCompanyPublic: (alumni.isCompanyPublic ?? alumni.is_company_public ?? true) !== false,
+  isLocationPublic: (alumni.isLocationPublic ?? alumni.is_location_public ?? true) !== false,
+  isSocialLinksPublic: (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? true) !== false,
+  isSkillsPublic: (alumni.isSkillsPublic ?? alumni.is_skills_public ?? true) !== false
+});
+
 export default function ProfileScreen({ navigation, user, setUser }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const role = String(user?.role || 'ALUMNI').toUpperCase();
@@ -94,6 +111,7 @@ export default function ProfileScreen({ navigation, user, setUser }) {
   const [saving, setSaving] = useState(false);
   const [imageAsset, setImageAsset] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [privacySettings, setPrivacySettings] = useState(normalizePrivacySettings(user?.alumni || {}));
   const [pickerState, setPickerState] = useState({
     visible: false,
     field: null,
@@ -123,6 +141,7 @@ export default function ProfileScreen({ navigation, user, setUser }) {
           contactNumber: freshUser?.alumni?.contactNumber || freshUser?.alumni?.contact_number || '',
           skills: freshUser?.alumni?.skills || ''
         });
+        setPrivacySettings(normalizePrivacySettings(freshUser?.alumni || {}));
         setEducationHistory(freshEducationHistory);
       })
       .catch((error) => console.error('Failed to refresh profile:', error));
@@ -163,6 +182,50 @@ export default function ProfileScreen({ navigation, user, setUser }) {
     setEducationField(pickerState.index, pickerState.field, value);
     closePicker();
   };
+
+  const togglePrivacy = (key) => {
+    if (!editMode) return;
+    setPrivacySettings((prev) => {
+      return {
+        ...prev,
+        [key]: !prev[key]
+      };
+    });
+  };
+
+  const renderVisibilityToggle = (key, label) => (
+    <Pressable
+      style={[
+        styles.visibilityButton,
+        !editMode && styles.visibilityDisabled,
+        editMode && (privacySettings[key] ? styles.visibilityPublic : styles.visibilityPrivate)
+      ]}
+      onPress={() => togglePrivacy(key)}
+      disabled={!editMode}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} is ${privacySettings[key] ? 'public' : 'private'}`}
+    >
+      <Ionicons
+        name={privacySettings[key] ? 'eye-outline' : 'eye-off-outline'}
+        size={15}
+        color={!editMode ? '#94a3b8' : privacySettings[key] ? '#047857' : '#475569'}
+      />
+      <Text style={[
+        styles.visibilityText,
+        !editMode && styles.visibilityTextDisabled,
+        editMode && (privacySettings[key] ? styles.visibilityTextPublic : styles.visibilityTextPrivate)
+      ]}>
+        {privacySettings[key] ? 'Public' : 'Private'}
+      </Text>
+    </Pressable>
+  );
+
+  const renderLabel = (label, privacyKey = null) => (
+    <View style={styles.labelRow}>
+      <Text style={styles.label}>{label}</Text>
+      {privacyKey ? renderVisibilityToggle(privacyKey, label) : null}
+    </View>
+  );
 
   // Listen for alumni data updates and refresh profile if it's the current user
   useEffect(() => {
@@ -248,6 +311,19 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       formData.append('location', form.location || '');
       formData.append('contactNumber', form.contactNumber || '');
       formData.append('skills', form.skills || '');
+      formData.append('isStudentIdPublic', String(privacySettings.isStudentIdPublic));
+      formData.append('isDateOfBirthPublic', String(privacySettings.isDateOfBirthPublic));
+      formData.append('isCoursePublic', String(privacySettings.isCoursePublic));
+      formData.append('isGraduationYearPublic', String(privacySettings.isGraduationYearPublic));
+      formData.append('isEducationHistoryPublic', String(privacySettings.isEducationHistoryPublic));
+      formData.append('isEmailPublic', String(privacySettings.isEmailPublic));
+      formData.append('isPhonePublic', String(privacySettings.isPhonePublic));
+      formData.append('isPositionPublic', String(privacySettings.isPositionPublic));
+      formData.append('isEmploymentPublic', String(privacySettings.isPositionPublic));
+      formData.append('isCompanyPublic', String(privacySettings.isCompanyPublic));
+      formData.append('isLocationPublic', String(privacySettings.isLocationPublic));
+      formData.append('isSocialLinksPublic', String(privacySettings.isSocialLinksPublic));
+      formData.append('isSkillsPublic', String(privacySettings.isSkillsPublic));
 
       if (imageAsset) {
         const file = toMultipartFile(imageAsset, `profile-${Date.now()}.jpg`);
@@ -286,12 +362,39 @@ export default function ProfileScreen({ navigation, user, setUser }) {
           location: updatedAlumni.location,
           contactNumber: updatedAlumni.contact_number || updatedAlumni.contactNumber,
           skills: updatedAlumni.skills || form.skills,
+          isStudentIdPublic: updatedAlumni.isStudentIdPublic ?? updatedAlumni.is_student_id_public ?? privacySettings.isStudentIdPublic,
+          is_student_id_public: updatedAlumni.isStudentIdPublic ?? updatedAlumni.is_student_id_public ?? privacySettings.isStudentIdPublic,
+          isDateOfBirthPublic: updatedAlumni.isDateOfBirthPublic ?? updatedAlumni.is_date_of_birth_public ?? privacySettings.isDateOfBirthPublic,
+          is_date_of_birth_public: updatedAlumni.isDateOfBirthPublic ?? updatedAlumni.is_date_of_birth_public ?? privacySettings.isDateOfBirthPublic,
+          isCoursePublic: updatedAlumni.isCoursePublic ?? updatedAlumni.is_course_public ?? privacySettings.isCoursePublic,
+          is_course_public: updatedAlumni.isCoursePublic ?? updatedAlumni.is_course_public ?? privacySettings.isCoursePublic,
+          isGraduationYearPublic: updatedAlumni.isGraduationYearPublic ?? updatedAlumni.is_graduation_year_public ?? privacySettings.isGraduationYearPublic,
+          is_graduation_year_public: updatedAlumni.isGraduationYearPublic ?? updatedAlumni.is_graduation_year_public ?? privacySettings.isGraduationYearPublic,
+          isEducationHistoryPublic: updatedAlumni.isEducationHistoryPublic ?? updatedAlumni.is_education_history_public ?? privacySettings.isEducationHistoryPublic,
+          is_education_history_public: updatedAlumni.isEducationHistoryPublic ?? updatedAlumni.is_education_history_public ?? privacySettings.isEducationHistoryPublic,
+          isEmailPublic: updatedAlumni.isEmailPublic ?? updatedAlumni.is_email_public ?? privacySettings.isEmailPublic,
+          is_email_public: updatedAlumni.isEmailPublic ?? updatedAlumni.is_email_public ?? privacySettings.isEmailPublic,
+          isPhonePublic: updatedAlumni.isPhonePublic ?? updatedAlumni.is_phone_public ?? privacySettings.isPhonePublic,
+          is_phone_public: updatedAlumni.isPhonePublic ?? updatedAlumni.is_phone_public ?? privacySettings.isPhonePublic,
+          isPositionPublic: updatedAlumni.isPositionPublic ?? updatedAlumni.is_position_public ?? privacySettings.isPositionPublic,
+          is_position_public: updatedAlumni.isPositionPublic ?? updatedAlumni.is_position_public ?? privacySettings.isPositionPublic,
+          isEmploymentPublic: updatedAlumni.isEmploymentPublic ?? updatedAlumni.is_employment_public ?? privacySettings.isPositionPublic,
+          is_employment_public: updatedAlumni.isEmploymentPublic ?? updatedAlumni.is_employment_public ?? privacySettings.isPositionPublic,
+          isCompanyPublic: updatedAlumni.isCompanyPublic ?? updatedAlumni.is_company_public ?? privacySettings.isCompanyPublic,
+          is_company_public: updatedAlumni.isCompanyPublic ?? updatedAlumni.is_company_public ?? privacySettings.isCompanyPublic,
+          isLocationPublic: updatedAlumni.isLocationPublic ?? updatedAlumni.is_location_public ?? privacySettings.isLocationPublic,
+          is_location_public: updatedAlumni.isLocationPublic ?? updatedAlumni.is_location_public ?? privacySettings.isLocationPublic,
+          isSocialLinksPublic: updatedAlumni.isSocialLinksPublic ?? updatedAlumni.is_social_links_public ?? privacySettings.isSocialLinksPublic,
+          is_social_links_public: updatedAlumni.isSocialLinksPublic ?? updatedAlumni.is_social_links_public ?? privacySettings.isSocialLinksPublic,
+          isSkillsPublic: updatedAlumni.isSkillsPublic ?? updatedAlumni.is_skills_public ?? privacySettings.isSkillsPublic,
+          is_skills_public: updatedAlumni.isSkillsPublic ?? updatedAlumni.is_skills_public ?? privacySettings.isSkillsPublic,
           educationHistory: finalEducationHistory,
           education_history: finalEducationHistory
         }
       };
       setUser(nextUser);
       await authService.saveUser(nextUser);
+      setPrivacySettings(normalizePrivacySettings(nextUser.alumni || {}));
       setForm((prev) => ({
         ...prev,
         username: nextUsername,
@@ -355,11 +458,18 @@ export default function ProfileScreen({ navigation, user, setUser }) {
           <Text style={styles.value}>{form.username || '-'}</Text>
         )}
 
-        <Text style={styles.label}>Email</Text>
+        {renderLabel('Email', 'isEmailPublic')}
         {editMode ? (
           <TextInput style={styles.input} keyboardType="email-address" value={form.email} onChangeText={(v) => setField('email', v)} autoCapitalize="none" />
         ) : (
           <Text style={styles.value}>{form.email || '-'}</Text>
+        )}
+
+        {renderLabel('Contact Number', 'isPhonePublic')}
+        {editMode ? (
+          <TextInput style={styles.input} keyboardType="phone-pad" value={form.contactNumber} onChangeText={(v) => setField('contactNumber', v)} />
+        ) : (
+          <Text style={styles.value}>{form.contactNumber || '-'}</Text>
         )}
 
         <Text style={styles.label}>Role</Text>
@@ -383,16 +493,16 @@ export default function ProfileScreen({ navigation, user, setUser }) {
         <Text style={styles.label}>Last Name</Text>
         {editMode ? <TextInput style={styles.input} value={form.lastName} onChangeText={(v) => setField('lastName', v)} /> : <Text style={styles.value}>{form.lastName || '-'}</Text>}
 
-        <Text style={styles.label}>School ID / Student Number</Text>
+        {renderLabel('School ID / Student Number', 'isStudentIdPublic')}
         {editMode ? <TextInput style={styles.input} value={form.studentId} onChangeText={(v) => setField('studentId', v)} placeholder="Optional" /> : <Text style={styles.value}>{form.studentId || 'Not provided'}</Text>}
 
-        <Text style={styles.label}>Course</Text>
+        {renderLabel('Course', 'isCoursePublic')}
         {editMode ? <TextInput style={styles.input} value={form.course} onChangeText={(v) => setField('course', v)} /> : <Text style={styles.value}>{form.course || '-'}</Text>}
 
-        <Text style={styles.label}>Graduation Year</Text>
+        {renderLabel('Graduation Year', 'isGraduationYearPublic')}
         {editMode ? <TextInput style={styles.input} keyboardType="number-pad" value={form.graduationYear} onChangeText={(v) => setField('graduationYear', v)} /> : <Text style={styles.value}>{form.graduationYear || '-'}</Text>}
 
-        <Text style={styles.label}>Education History (Level & Batch)</Text>
+        {renderLabel('Education History (Level & Batch)', 'isEducationHistoryPublic')}
         <View style={styles.educationWrap}>
           {educationHistory.map((entry, index) => (
             <View key={`education-${index}`} style={styles.educationCard}>
@@ -433,16 +543,16 @@ export default function ProfileScreen({ navigation, user, setUser }) {
           ) : null}
         </View>
 
-        <Text style={styles.label}>Current Position</Text>
+        {renderLabel('Current Position', 'isPositionPublic')}
         {editMode ? <TextInput style={styles.input} value={form.currentPosition} onChangeText={(v) => setField('currentPosition', v)} /> : <Text style={styles.value}>{form.currentPosition || '-'}</Text>}
 
-        <Text style={styles.label}>Company</Text>
+        {renderLabel('Company', 'isCompanyPublic')}
         {editMode ? <TextInput style={styles.input} value={form.company} onChangeText={(v) => setField('company', v)} /> : <Text style={styles.value}>{form.company || '-'}</Text>}
 
-        <Text style={styles.label}>Location</Text>
+        {renderLabel('Location', 'isLocationPublic')}
         {editMode ? <TextInput style={styles.input} value={form.location} onChangeText={(v) => setField('location', v)} /> : <Text style={styles.value}>{form.location || '-'}</Text>}
 
-        <Text style={styles.label}>Skills</Text>
+        {renderLabel('Skills', 'isSkillsPublic')}
         {editMode ? <TextInput style={[styles.input, styles.textArea]} multiline numberOfLines={3} value={form.skills} onChangeText={(v) => setField('skills', v)} /> : <Text style={styles.value}>{form.skills || '-'}</Text>}
 
         {editMode ? <PrimaryButton label={saving ? 'Saving...' : 'Save Profile'} onPress={onSave} disabled={saving} /> : null}
@@ -595,6 +705,46 @@ const styles = StyleSheet.create({
   label: {
     color: theme.colors.muted,
     fontSize: 12
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10
+  },
+  visibilityButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4
+  },
+  visibilityPublic: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0'
+  },
+  visibilityPrivate: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1'
+  },
+  visibilityDisabled: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0'
+  },
+  visibilityText: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  visibilityTextPublic: {
+    color: '#047857'
+  },
+  visibilityTextPrivate: {
+    color: '#475569'
+  },
+  visibilityTextDisabled: {
+    color: '#94a3b8'
   },
   value: {
     color: theme.colors.text,

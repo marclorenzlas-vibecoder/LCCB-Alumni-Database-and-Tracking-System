@@ -76,6 +76,71 @@ class AlumniService {
       bio: alumnus.bio || "",
       status,
       isPublic: alumnus.is_public !== undefined ? alumnus.is_public : true,
+      isStudentIdPublic:
+        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? true,
+      is_student_id_public:
+        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? true,
+      isDateOfBirthPublic:
+        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? true,
+      is_date_of_birth_public:
+        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? true,
+      isCoursePublic: alumnus.isCoursePublic ?? alumnus.is_course_public ?? true,
+      is_course_public: alumnus.isCoursePublic ?? alumnus.is_course_public ?? true,
+      isGraduationYearPublic:
+        alumnus.isGraduationYearPublic ??
+        alumnus.is_graduation_year_public ??
+        true,
+      is_graduation_year_public:
+        alumnus.isGraduationYearPublic ??
+        alumnus.is_graduation_year_public ??
+        true,
+      isEducationHistoryPublic:
+        alumnus.isEducationHistoryPublic ??
+        alumnus.is_education_history_public ??
+        true,
+      is_education_history_public:
+        alumnus.isEducationHistoryPublic ??
+        alumnus.is_education_history_public ??
+        true,
+      isEmailPublic: alumnus.isEmailPublic ?? alumnus.is_email_public ?? true,
+      is_email_public: alumnus.isEmailPublic ?? alumnus.is_email_public ?? true,
+      isPhonePublic: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? true,
+      is_phone_public: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? true,
+      isPositionPublic:
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+          false &&
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+          false,
+      is_position_public:
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+          false &&
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+          false,
+      isEmploymentPublic:
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+          false &&
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+          false,
+      is_employment_public:
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+          false &&
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+          false,
+      isCompanyPublic:
+        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? true,
+      is_company_public:
+        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? true,
+      isLocationPublic:
+        alumnus.isLocationPublic ?? alumnus.is_location_public ?? true,
+      is_location_public:
+        alumnus.isLocationPublic ?? alumnus.is_location_public ?? true,
+      isSocialLinksPublic:
+        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? true,
+      is_social_links_public:
+        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? true,
+      isSkillsPublic: alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? true,
+      is_skills_public:
+        alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? true,
       isVerified:
         alumnus.is_verified !== undefined ? alumnus.is_verified : false,
     };
@@ -440,7 +505,12 @@ class AlumniService {
   // Get alumni by ID
   async getAlumniById(id) {
     try {
-      const response = await fetch(`${API_URL}/${id}`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_URL}/${id}`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : undefined,
+        },
+      });
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }

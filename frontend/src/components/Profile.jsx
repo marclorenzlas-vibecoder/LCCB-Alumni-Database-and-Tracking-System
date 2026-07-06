@@ -93,6 +93,108 @@ const readResponseBody = async (response) => {
 
 const PROFILE_UPDATED_EVENT = 'auth-user-updated';
 
+const DEFAULT_PRIVACY_SETTINGS = {
+  isStudentIdPublic: true,
+  isDateOfBirthPublic: true,
+  isCoursePublic: true,
+  isGraduationYearPublic: true,
+  isEducationHistoryPublic: true,
+  isEmailPublic: true,
+  isPhonePublic: true,
+  isPositionPublic: true,
+  isCompanyPublic: true,
+  isLocationPublic: true,
+  isSocialLinksPublic: true,
+  isSkillsPublic: true
+};
+
+const pickPrivacyFlag = (source = {}, camelKey, snakeKey) => {
+  const value = source[camelKey] ?? source[snakeKey];
+  return value === undefined ? true : value !== false;
+};
+
+const normalizePrivacySettings = (alumni = {}) => ({
+  isStudentIdPublic: pickPrivacyFlag(alumni, 'isStudentIdPublic', 'is_student_id_public'),
+  isDateOfBirthPublic: pickPrivacyFlag(alumni, 'isDateOfBirthPublic', 'is_date_of_birth_public'),
+  isCoursePublic: pickPrivacyFlag(alumni, 'isCoursePublic', 'is_course_public'),
+  isGraduationYearPublic: pickPrivacyFlag(alumni, 'isGraduationYearPublic', 'is_graduation_year_public'),
+  isEducationHistoryPublic: pickPrivacyFlag(alumni, 'isEducationHistoryPublic', 'is_education_history_public'),
+  isEmailPublic: pickPrivacyFlag(alumni, 'isEmailPublic', 'is_email_public'),
+  isPhonePublic: pickPrivacyFlag(alumni, 'isPhonePublic', 'is_phone_public'),
+  isPositionPublic: pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public') && pickPrivacyFlag(alumni, 'isEmploymentPublic', 'is_employment_public'),
+  isCompanyPublic: pickPrivacyFlag(alumni, 'isCompanyPublic', 'is_company_public'),
+  isLocationPublic: pickPrivacyFlag(alumni, 'isLocationPublic', 'is_location_public'),
+  isSocialLinksPublic: pickPrivacyFlag(alumni, 'isSocialLinksPublic', 'is_social_links_public'),
+  isSkillsPublic: pickPrivacyFlag(alumni, 'isSkillsPublic', 'is_skills_public')
+});
+
+const privacySettingsToAlumniFields = (settings = DEFAULT_PRIVACY_SETTINGS) => ({
+  isStudentIdPublic: settings.isStudentIdPublic,
+  is_student_id_public: settings.isStudentIdPublic,
+  isDateOfBirthPublic: settings.isDateOfBirthPublic,
+  is_date_of_birth_public: settings.isDateOfBirthPublic,
+  isCoursePublic: settings.isCoursePublic,
+  is_course_public: settings.isCoursePublic,
+  isGraduationYearPublic: settings.isGraduationYearPublic,
+  is_graduation_year_public: settings.isGraduationYearPublic,
+  isEducationHistoryPublic: settings.isEducationHistoryPublic,
+  is_education_history_public: settings.isEducationHistoryPublic,
+  isEmailPublic: settings.isEmailPublic,
+  is_email_public: settings.isEmailPublic,
+  isPhonePublic: settings.isPhonePublic,
+  is_phone_public: settings.isPhonePublic,
+  isPositionPublic: settings.isPositionPublic,
+  is_position_public: settings.isPositionPublic,
+  isEmploymentPublic: settings.isPositionPublic,
+  is_employment_public: settings.isPositionPublic,
+  isCompanyPublic: settings.isCompanyPublic,
+  is_company_public: settings.isCompanyPublic,
+  isLocationPublic: settings.isLocationPublic,
+  is_location_public: settings.isLocationPublic,
+  isSocialLinksPublic: settings.isSocialLinksPublic,
+  is_social_links_public: settings.isSocialLinksPublic,
+  isSkillsPublic: settings.isSkillsPublic,
+  is_skills_public: settings.isSkillsPublic
+});
+
+const EyeIcon = ({ hidden = false }) => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    {hidden ? (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.88 5.09A10.7 10.7 0 0112 4.88c4.48 0 8.27 2.94 9.54 7a10.64 10.64 0 01-2.38 3.79" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.61 6.61A10.9 10.9 0 002.46 11.88a10.94 10.94 0 007.88 6.9" />
+      </>
+    ) : (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.46 12C3.73 7.94 7.52 5 12 5s8.27 2.94 9.54 7c-1.27 4.06-5.06 7-9.54 7s-8.27-2.94-9.54-7z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+      </>
+    )}
+  </svg>
+);
+
+const PrivacyToggle = ({ isPublic, onToggle, label, disabled = false }) => (
+  <button
+    type="button"
+    onClick={disabled ? undefined : onToggle}
+    disabled={disabled}
+    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+      disabled
+        ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+        : isPublic
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+        : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
+    }`}
+    title={`${label} is ${isPublic ? 'public' : 'private'}${disabled ? '. Click Edit Profile to change.' : '. Click to change.'}`}
+    aria-label={`${label} visibility is ${isPublic ? 'public' : 'private'}`}
+  >
+    <EyeIcon hidden={!isPublic} />
+    {isPublic ? 'Public' : 'Private'}
+  </button>
+);
+
 const Profile = () => {
   const [user, setUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -114,14 +216,26 @@ const Profile = () => {
     currentPosition: '',
     company: '',
     location: '',
+    contactNumber: '',
     skills: ''
   });
+  const [privacySettings, setPrivacySettings] = useState(DEFAULT_PRIVACY_SETTINGS);
 
   const [loading, setLoading] = useState(false);
   const [socialLinks, setSocialLinks] = useState([]);
   const [newSocialLink, setNewSocialLink] = useState({ url: '' });
   const [showAddSocialLink, setShowAddSocialLink] = useState(false);
   const [educationHistory, setEducationHistory] = useState([createEducationEntry()]);
+
+  const togglePrivacy = (key) => {
+    if (!isEditing) return;
+    setPrivacySettings((prev) => {
+      return {
+        ...prev,
+        [key]: !prev[key]
+      };
+    });
+  };
 
   const refreshProfileFromServer = async (targetUserId) => {
     if (!targetUserId) return;
@@ -144,7 +258,8 @@ const Profile = () => {
             studentId: serverUser.alumni.studentId || serverUser.alumni.student_id || '',
             student_id: serverUser.alumni.student_id || serverUser.alumni.studentId || '',
             graduationYear: serverUser.alumni.graduationYear || serverUser.alumni.graduation_year || '',
-            currentPosition: serverUser.alumni.currentPosition || serverUser.alumni.current_position || ''
+            currentPosition: serverUser.alumni.currentPosition || serverUser.alumni.current_position || '',
+            contactNumber: serverUser.alumni.contactNumber || serverUser.alumni.contact_number || ''
           }
         : null;
       const normalizedHistory = normalizeEducationHistory(normalizedAlumni || {});
@@ -175,8 +290,10 @@ const Profile = () => {
         currentPosition: normalizedAlumni?.currentPosition || '',
         company: normalizedAlumni?.company || '',
         location: normalizedAlumni?.location || '',
+        contactNumber: normalizedAlumni?.contactNumber || normalizedAlumni?.contact_number || '',
         skills: normalizedAlumni?.skills || ''
       }));
+      setPrivacySettings(normalizePrivacySettings(normalizedAlumni || {}));
       setEducationHistory(normalizedHistory);
 
       if (updatedUser.profile_image) {
@@ -223,8 +340,10 @@ const Profile = () => {
         currentPosition: userData.alumni?.currentPosition || userData.alumni?.current_position || '',
         company: userData.alumni?.company || '',
         location: userData.alumni?.location || '',
+        contactNumber: userData.alumni?.contactNumber || userData.alumni?.contact_number || '',
         skills: userData.alumni?.skills || ''
       });
+      setPrivacySettings(normalizePrivacySettings(userData.alumni || {}));
       setEducationHistory(userEducationHistory);
       if (userData.profile_image) {
         setProfileImagePreview(`${IMAGE_BASE_URL}${userData.profile_image}`);
@@ -293,7 +412,8 @@ const Profile = () => {
           student_id: data.student_id || data.studentId || '',
           graduationYear: data.graduationYear || data.graduation_year || '',
           dateOfBirth: formatDateForInput(data.dateOfBirth || data.date_of_birth),
-          currentPosition: data.currentPosition || data.current_position || ''
+          currentPosition: data.currentPosition || data.current_position || '',
+          contactNumber: data.contactNumber || data.contact_number || ''
         };
         const normalizedHistory = normalizeEducationHistory(normalizedAlumni);
         const primaryEducation = getPrimaryEducation(normalizedHistory);
@@ -319,8 +439,10 @@ const Profile = () => {
           currentPosition: normalizedAlumni.currentPosition || '',
           company: normalizedAlumni.company || '',
           location: normalizedAlumni.location || '',
+          contactNumber: normalizedAlumni.contactNumber || normalizedAlumni.contact_number || '',
           skills: normalizedAlumni.skills || ''
         }));
+        setPrivacySettings(normalizePrivacySettings(normalizedAlumni));
         setEducationHistory(normalizedHistory);
       }
     } catch (error) {
@@ -449,7 +571,21 @@ const Profile = () => {
       formDataToSend.append('currentPosition', formData.currentPosition);
       formDataToSend.append('company', formData.company);
       formDataToSend.append('location', formData.location);
+      formDataToSend.append('contactNumber', formData.contactNumber || '');
       formDataToSend.append('skills', formData.skills);
+      formDataToSend.append('isStudentIdPublic', String(privacySettings.isStudentIdPublic));
+      formDataToSend.append('isDateOfBirthPublic', String(privacySettings.isDateOfBirthPublic));
+      formDataToSend.append('isCoursePublic', String(privacySettings.isCoursePublic));
+      formDataToSend.append('isGraduationYearPublic', String(privacySettings.isGraduationYearPublic));
+      formDataToSend.append('isEducationHistoryPublic', String(privacySettings.isEducationHistoryPublic));
+      formDataToSend.append('isEmailPublic', String(privacySettings.isEmailPublic));
+      formDataToSend.append('isPhonePublic', String(privacySettings.isPhonePublic));
+      formDataToSend.append('isPositionPublic', String(privacySettings.isPositionPublic));
+      formDataToSend.append('isEmploymentPublic', String(privacySettings.isPositionPublic));
+      formDataToSend.append('isCompanyPublic', String(privacySettings.isCompanyPublic));
+      formDataToSend.append('isLocationPublic', String(privacySettings.isLocationPublic));
+      formDataToSend.append('isSocialLinksPublic', String(privacySettings.isSocialLinksPublic));
+      formDataToSend.append('isSkillsPublic', String(privacySettings.isSkillsPublic));
       
       if (profileImageFile) {
         formDataToSend.append('profileImage', profileImageFile);
@@ -478,9 +614,11 @@ const Profile = () => {
             lastName: data.alumni.lastName || data.alumni.last_name || '',
             studentId: data.alumni.studentId || data.alumni.student_id || '',
             student_id: data.alumni.student_id || data.alumni.studentId || '',
-            dateOfBirth: formatDateForInput(data.alumni.dateOfBirth || data.alumni.date_of_birth)
+            contactNumber: data.alumni.contactNumber || data.alumni.contact_number || '',
+            dateOfBirth: formatDateForInput(data.alumni.dateOfBirth || data.alumni.date_of_birth),
+            ...privacySettingsToAlumniFields(privacySettings)
           }
-        : user.alumni;
+        : { ...(user.alumni || {}), ...privacySettingsToAlumniFields(privacySettings) };
       const normalizedHistory = normalizeEducationHistory(normalizedAlumni || {});
       const hasReturnedHistory = normalizedHistory.some((entry) => entry.level);
       const finalEducationHistory = hasReturnedHistory ? normalizedHistory : cleanedEducationHistory;
@@ -503,6 +641,7 @@ const Profile = () => {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       setEducationHistory(finalEducationHistory.length > 0 ? finalEducationHistory : [createEducationEntry()]);
+      setPrivacySettings(privacySettings);
       setIsEditing(false);
       setProfileImageFile(null);
       toast.success('Profile updated successfully!');
@@ -719,32 +858,62 @@ const Profile = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-200 transition-colors"
-                  required
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                  required
-                />
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Email Address
+                    </label>
+                    <PrivacyToggle
+                      label="Email"
+                      isPublic={privacySettings.isEmailPublic}
+                      onToggle={() => togglePrivacy('isEmailPublic')}
+                    />
+                  </div>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Contact Number
+                    </label>
+                    <PrivacyToggle
+                      label="Contact number"
+                      isPublic={privacySettings.isPhonePublic}
+                      onToggle={() => togglePrivacy('isPhonePublic')}
+                    />
+                  </div>
+                  <input
+                    type="tel"
+                    name="contactNumber"
+                    value={formData.contactNumber}
+                    onChange={handleChange}
+                    placeholder="e.g., 0917 123 4567"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                  />
+                </div>
               </div>
 
               {/* Alumni Information Section */}
@@ -792,9 +961,16 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      School ID / Student Number
-                    </label>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        School ID / Student Number
+                      </label>
+                      <PrivacyToggle
+                        label="School ID"
+                        isPublic={privacySettings.isStudentIdPublic}
+                        onToggle={() => togglePrivacy('isStudentIdPublic')}
+                      />
+                    </div>
                     <input
                       type="text"
                       name="studentId"
@@ -806,9 +982,16 @@ const Profile = () => {
                   </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Date of Birth
-                        </label>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Date of Birth
+                          </label>
+                          <PrivacyToggle
+                            label="Date of birth"
+                            isPublic={privacySettings.isDateOfBirthPublic}
+                            onToggle={() => togglePrivacy('isDateOfBirthPublic')}
+                          />
+                        </div>
                         <input
                           type="date"
                           name="dateOfBirth"
@@ -819,9 +1002,16 @@ const Profile = () => {
                       </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Course
-                    </label>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Course
+                      </label>
+                      <PrivacyToggle
+                        label="Course"
+                        isPublic={privacySettings.isCoursePublic}
+                        onToggle={() => togglePrivacy('isCoursePublic')}
+                      />
+                    </div>
                     <input
                       type="text"
                       name="course"
@@ -833,9 +1023,16 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Graduation Year
-                    </label>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Graduation Year
+                      </label>
+                      <PrivacyToggle
+                        label="Graduation year"
+                        isPublic={privacySettings.isGraduationYearPublic}
+                        onToggle={() => togglePrivacy('isGraduationYearPublic')}
+                      />
+                    </div>
                     <input
                       type="number"
                       name="graduationYear"
@@ -849,9 +1046,16 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Current Position
-                    </label>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Current Position
+                      </label>
+                      <PrivacyToggle
+                        label="Current employment"
+                        isPublic={privacySettings.isPositionPublic}
+                        onToggle={() => togglePrivacy('isPositionPublic')}
+                      />
+                    </div>
                     <input
                       type="text"
                       name="currentPosition"
@@ -863,9 +1067,16 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Company
-                    </label>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Company
+                      </label>
+                      <PrivacyToggle
+                        label="Company"
+                        isPublic={privacySettings.isCompanyPublic}
+                        onToggle={() => togglePrivacy('isCompanyPublic')}
+                      />
+                    </div>
                     <input
                       type="text"
                       name="company"
@@ -877,9 +1088,16 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Location
-                    </label>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Location
+                      </label>
+                      <PrivacyToggle
+                        label="Address"
+                        isPublic={privacySettings.isLocationPublic}
+                        onToggle={() => togglePrivacy('isLocationPublic')}
+                      />
+                    </div>
                     <input
                       type="text"
                       name="location"
@@ -893,7 +1111,14 @@ const Profile = () => {
 
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-base font-semibold text-gray-900">Education History</h4>
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-base font-semibold text-gray-900">Education History</h4>
+                      <PrivacyToggle
+                        label="Education history"
+                        isPublic={privacySettings.isEducationHistoryPublic}
+                        onToggle={() => togglePrivacy('isEducationHistoryPublic')}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={addEducationHistoryEntry}
@@ -950,9 +1175,16 @@ const Profile = () => {
                 </div>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Skills
-                  </label>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Skills
+                    </label>
+                    <PrivacyToggle
+                      label="Skills"
+                      isPublic={privacySettings.isSkillsPublic}
+                      onToggle={() => togglePrivacy('isSkillsPublic')}
+                    />
+                  </div>
                   <textarea
                     name="skills"
                     value={formData.skills}
@@ -966,9 +1198,16 @@ const Profile = () => {
                 {/* Social Links Section */}
                 <div className="mt-6 border-t pt-6">
                   <div className="flex items-center justify-between mb-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Social Media Links
-                    </label>
+                    <div className="flex items-center gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Social Media Links
+                      </label>
+                      <PrivacyToggle
+                        label="Social media links"
+                        isPublic={privacySettings.isSocialLinksPublic}
+                        onToggle={() => togglePrivacy('isSocialLinksPublic')}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => setShowAddSocialLink(!showAddSocialLink)}
@@ -1062,8 +1301,10 @@ const Profile = () => {
                       currentPosition: user.alumni?.currentPosition || user.alumni?.current_position || '',
                       company: user.alumni?.company || '',
                       location: user.alumni?.location || '',
+                      contactNumber: user.alumni?.contactNumber || user.alumni?.contact_number || '',
                       skills: user.alumni?.skills || ''
                     });
+                    setPrivacySettings(normalizePrivacySettings(user.alumni || {}));
                   }}
                   className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
                 >
@@ -1079,8 +1320,28 @@ const Profile = () => {
                   <p className="text-lg text-gray-900">{user.username || 'Not set'}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium text-gray-500">Email</label>
+                    <PrivacyToggle
+                      label="Email"
+                      isPublic={privacySettings.isEmailPublic}
+                      onToggle={() => togglePrivacy('isEmailPublic')}
+                      disabled
+                    />
+                  </div>
                   <p className="text-lg text-gray-900">{user.email || 'Not set'}</p>
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium text-gray-500">Contact Number</label>
+                    <PrivacyToggle
+                      label="Contact number"
+                      isPublic={privacySettings.isPhonePublic}
+                      onToggle={() => togglePrivacy('isPhonePublic')}
+                      disabled
+                    />
+                  </div>
+                  <p className="text-lg text-gray-900">{profileAlumni.contactNumber || profileAlumni.contact_number || formData.contactNumber || 'Not provided'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500 mb-1">Role</label>
@@ -1111,23 +1372,63 @@ const Profile = () => {
                     <p className="text-lg text-gray-900">{profileAlumni.lastName || profileAlumni.last_name || formData.lastName || 'Not set'}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">School ID / Student Number</label>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-500">School ID / Student Number</label>
+                      <PrivacyToggle
+                        label="School ID"
+                        isPublic={privacySettings.isStudentIdPublic}
+                        onToggle={() => togglePrivacy('isStudentIdPublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-lg text-gray-900 font-mono">{profileAlumni.studentId || profileAlumni.student_id || formData.studentId || 'Not provided'}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Date of Birth</label>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Date of Birth</label>
+                      <PrivacyToggle
+                        label="Date of birth"
+                        isPublic={privacySettings.isDateOfBirthPublic}
+                        onToggle={() => togglePrivacy('isDateOfBirthPublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-lg text-gray-900">{formatDateOfBirth(profileAlumni.dateOfBirth || profileAlumni.date_of_birth || formData.dateOfBirth)}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Course</label>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Course</label>
+                      <PrivacyToggle
+                        label="Course"
+                        isPublic={privacySettings.isCoursePublic}
+                        onToggle={() => togglePrivacy('isCoursePublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-lg text-gray-900">{profileAlumni.course || formData.course || 'Not set'}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Graduation Year</label>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Graduation Year</label>
+                      <PrivacyToggle
+                        label="Graduation year"
+                        isPublic={privacySettings.isGraduationYearPublic}
+                        onToggle={() => togglePrivacy('isGraduationYearPublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-lg text-gray-900">{profileAlumni.graduationYear || profileAlumni.graduation_year || formData.graduationYear || 'Not set'}</p>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-500 mb-2">Education History</label>
+                    <div className="mb-2 flex items-center gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Education History</label>
+                      <PrivacyToggle
+                        label="Education history"
+                        isPublic={privacySettings.isEducationHistoryPublic}
+                        onToggle={() => togglePrivacy('isEducationHistoryPublic')}
+                        disabled
+                      />
+                    </div>
                     <div className="space-y-2">
                       {normalizeEducationHistory(profileAlumni).filter((entry) => entry.level).length > 0 ? (
                         normalizeEducationHistory(profileAlumni)
@@ -1144,20 +1445,64 @@ const Profile = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Current Position</label>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Current Position</label>
+                      <PrivacyToggle
+                        label="Current employment"
+                        isPublic={privacySettings.isPositionPublic}
+                        onToggle={() => togglePrivacy('isPositionPublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-lg text-gray-900">{profileAlumni.currentPosition || profileAlumni.current_position || formData.currentPosition || 'Not set'}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Company</label>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Company</label>
+                      <PrivacyToggle
+                        label="Company"
+                        isPublic={privacySettings.isCompanyPublic}
+                        onToggle={() => togglePrivacy('isCompanyPublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-lg text-gray-900">{profileAlumni.company || formData.company || 'Not set'}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Location</label>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Location</label>
+                      <PrivacyToggle
+                        label="Address"
+                        isPublic={privacySettings.isLocationPublic}
+                        onToggle={() => togglePrivacy('isLocationPublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-lg text-gray-900">{profileAlumni.location || formData.location || 'Not set'}</p>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Skills</label>
+                    <div className="mb-1 flex items-center gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Skills</label>
+                      <PrivacyToggle
+                        label="Skills"
+                        isPublic={privacySettings.isSkillsPublic}
+                        onToggle={() => togglePrivacy('isSkillsPublic')}
+                        disabled
+                      />
+                    </div>
                     <p className="text-gray-900">{profileAlumni.skills || formData.skills || 'Not set'}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <div className="mb-1 flex items-center gap-3">
+                      <label className="block text-sm font-medium text-gray-500">Social Media Links</label>
+                      <PrivacyToggle
+                        label="Social media links"
+                        isPublic={privacySettings.isSocialLinksPublic}
+                        onToggle={() => togglePrivacy('isSocialLinksPublic')}
+                        disabled
+                      />
+                    </div>
+                    <p className="text-gray-900">{socialLinks.length > 0 ? `${socialLinks.length} link${socialLinks.length === 1 ? '' : 's'} added` : 'No social links added yet'}</p>
                   </div>
                 </div>
               </div>

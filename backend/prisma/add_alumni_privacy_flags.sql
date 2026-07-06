@@ -1,0 +1,14 @@
+ALTER TABLE `alumni`
+  ADD COLUMN `is_student_id_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_date_of_birth_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_course_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_graduation_year_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_education_history_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_email_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_phone_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_position_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_company_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_employment_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_location_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_social_links_public` BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN `is_skills_public` BOOLEAN NOT NULL DEFAULT TRUE;

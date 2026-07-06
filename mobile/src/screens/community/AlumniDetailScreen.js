@@ -214,6 +214,23 @@ export default function AlumniDetailScreen({ route, navigation }) {
     educationHistory.length > 0
       ? educationHistory[educationHistory.length - 1]
       : {};
+  const privateLabel = "Hidden by User";
+  const isStudentIdPublic = (alumni.isStudentIdPublic ?? alumni.is_student_id_public ?? true) !== false;
+  const isDateOfBirthPublic = (alumni.isDateOfBirthPublic ?? alumni.is_date_of_birth_public ?? true) !== false;
+  const isCoursePublic = (alumni.isCoursePublic ?? alumni.is_course_public ?? true) !== false;
+  const isGraduationYearPublic = (alumni.isGraduationYearPublic ?? alumni.is_graduation_year_public ?? true) !== false;
+  const isEducationHistoryPublic = (alumni.isEducationHistoryPublic ?? alumni.is_education_history_public ?? true) !== false;
+  const isEmailPublic = (alumni.isEmailPublic ?? alumni.is_email_public ?? true) !== false;
+  const isPhonePublic = (alumni.isPhonePublic ?? alumni.is_phone_public ?? true) !== false;
+  const isPositionPublic =
+    (alumni.isPositionPublic ?? alumni.is_position_public ?? true) !== false &&
+    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? true) !== false;
+  const isCompanyPublic = (alumni.isCompanyPublic ?? alumni.is_company_public ?? true) !== false;
+  const isLocationPublic = (alumni.isLocationPublic ?? alumni.is_location_public ?? true) !== false;
+  const isSocialLinksPublic = (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? true) !== false;
+  const isSkillsPublic = (alumni.isSkillsPublic ?? alumni.is_skills_public ?? true) !== false;
+  const visibleOrPrivate = (isPublic, value, fallback = "Not provided") =>
+    isPublic ? (value || fallback) : privateLabel;
 
   return (
     <ScreenContainer>
@@ -238,15 +255,17 @@ export default function AlumniDetailScreen({ route, navigation }) {
           <View style={styles.headerInfo}>
             <Text style={styles.fullName}>{fullName}</Text>
             <Text style={styles.role}>
-              {alumni.current_position || "Alumni Member"}
+              {visibleOrPrivate(isPositionPublic, alumni.current_position, "Alumni Member")}
             </Text>
-            {alumni.company && (
+            {isCompanyPublic && alumni.company && (
               <Text style={styles.company}>{alumni.company}</Text>
             )}
-            {alumni.location && (
+            {(isLocationPublic ? alumni.location : true) && (
               <View style={styles.locationRow}>
                 <Ionicons name="location" size={14} color="#64748b" />
-                <Text style={styles.locationText}>{alumni.location}</Text>
+                <Text style={styles.locationText}>
+                  {visibleOrPrivate(isLocationPublic, alumni.location)}
+                </Text>
               </View>
             )}
           </View>
@@ -263,25 +282,32 @@ export default function AlumniDetailScreen({ route, navigation }) {
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>School ID / Student Number</Text>
               <Text style={styles.infoValue}>
-                {alumni.student_id || alumni.studentId || "Not provided"}
+                {visibleOrPrivate(isStudentIdPublic, alumni.student_id || alumni.studentId)}
               </Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>Course</Text>
-              <Text style={styles.infoValue}>{alumni.course || "Not set"}</Text>
+              <Text style={styles.infoValue}>
+                {visibleOrPrivate(isCoursePublic, alumni.course, "Not set")}
+              </Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>Graduation Year</Text>
               <Text style={styles.infoValue}>
-                {alumni.graduationYear ||
-                  alumni.graduation_year ||
-                  primaryEducation.graduationYear ||
-                  "Not set"}
+                {visibleOrPrivate(
+                  isGraduationYearPublic,
+                  alumni.graduationYear ||
+                    alumni.graduation_year ||
+                    primaryEducation.graduationYear,
+                  "Not set",
+                )}
               </Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.infoLabel}>Level & Batch</Text>
-              {educationHistory.length > 0 ? (
+              {!isEducationHistoryPublic ? (
+                <Text style={styles.infoValue}>{privateLabel}</Text>
+              ) : educationHistory.length > 0 ? (
                 <View style={styles.historyWrap}>
                   {educationHistory.map((entry, index) => (
                     <View key={`education-${index}`} style={styles.historyCard}>
@@ -313,25 +339,27 @@ export default function AlumniDetailScreen({ route, navigation }) {
           <View style={styles.infoBlock}>
             <Text style={styles.infoLabel}>Email</Text>
             <Text style={styles.infoValue}>
-              {alumni.email || "Not provided"}
+              {visibleOrPrivate(isEmailPublic, alumni.email)}
             </Text>
           </View>
 
           <View style={styles.infoBlock}>
             <Text style={styles.infoLabel}>Birthday</Text>
             <Text style={styles.infoValue}>
-              {formatBirthday(alumni.date_of_birth || alumni.dateOfBirth)}
+              {visibleOrPrivate(isDateOfBirthPublic, formatBirthday(alumni.date_of_birth || alumni.dateOfBirth))}
             </Text>
           </View>
 
-          {alumni.contact_number && (
+          {(isPhonePublic ? alumni.contact_number : true) && (
             <View style={styles.infoBlock}>
               <Text style={styles.infoLabel}>Contact Number</Text>
-              <Text style={styles.infoValue}>{alumni.contact_number}</Text>
+              <Text style={styles.infoValue}>
+                {visibleOrPrivate(isPhonePublic, alumni.contact_number)}
+              </Text>
             </View>
           )}
 
-          {socialLinks.length > 0 && (
+          {isSocialLinksPublic && socialLinks.length > 0 && (
             <View style={styles.infoBlockNoBorder}>
               <Text style={styles.infoLabel}>Social Media</Text>
               <View style={styles.chipRow}>
@@ -369,27 +397,31 @@ export default function AlumniDetailScreen({ route, navigation }) {
           <View style={styles.infoBlock}>
             <Text style={styles.infoLabel}>Current Position</Text>
             <Text style={styles.infoValue}>
-              {alumni.current_position || "Not provided"}
+              {visibleOrPrivate(isPositionPublic, alumni.current_position)}
             </Text>
           </View>
 
-          {alumni.company && (
+          {(isCompanyPublic ? alumni.company : true) && (
             <View style={styles.infoBlock}>
               <Text style={styles.infoLabel}>Company</Text>
-              <Text style={styles.infoValue}>{alumni.company}</Text>
+              <Text style={styles.infoValue}>
+                {visibleOrPrivate(isCompanyPublic, alumni.company)}
+              </Text>
             </View>
           )}
 
-          {alumni.location && (
+          {(isLocationPublic ? alumni.location : true) && (
             <View style={styles.infoBlock}>
               <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{alumni.location}</Text>
+              <Text style={styles.infoValue}>
+                {visibleOrPrivate(isLocationPublic, alumni.location)}
+              </Text>
             </View>
           )}
         </View>
 
         {/* Skills */}
-        {skills.length > 0 && (
+        {isSkillsPublic && skills.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="star" size={18} color="#1d4ed8" />

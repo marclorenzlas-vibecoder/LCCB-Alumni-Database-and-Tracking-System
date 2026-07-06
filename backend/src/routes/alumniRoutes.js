@@ -41,6 +41,171 @@ const softAuth = (req, res, next) => {
   next();
 };
 
+const PRIVACY_FIELD_MAP = [
+  {
+    bodyKeys: ["isStudentIdPublic", "is_student_id_public"],
+    dbKey: "is_student_id_public",
+  },
+  {
+    bodyKeys: ["isDateOfBirthPublic", "is_date_of_birth_public"],
+    dbKey: "is_date_of_birth_public",
+  },
+  {
+    bodyKeys: ["isCoursePublic", "is_course_public"],
+    dbKey: "is_course_public",
+  },
+  {
+    bodyKeys: ["isGraduationYearPublic", "is_graduation_year_public"],
+    dbKey: "is_graduation_year_public",
+  },
+  {
+    bodyKeys: ["isEducationHistoryPublic", "is_education_history_public"],
+    dbKey: "is_education_history_public",
+  },
+  {
+    bodyKeys: ["isEmailPublic", "is_email_public"],
+    dbKey: "is_email_public",
+  },
+  {
+    bodyKeys: ["isPhonePublic", "is_phone_public"],
+    dbKey: "is_phone_public",
+  },
+  {
+    bodyKeys: [
+      "isPositionPublic",
+      "is_position_public",
+      "isEmploymentPublic",
+      "is_employment_public",
+    ],
+    dbKey: "is_position_public",
+  },
+  {
+    bodyKeys: ["isCompanyPublic", "is_company_public"],
+    dbKey: "is_company_public",
+  },
+  {
+    bodyKeys: ["isLocationPublic", "is_location_public"],
+    dbKey: "is_location_public",
+  },
+  {
+    bodyKeys: ["isSocialLinksPublic", "is_social_links_public"],
+    dbKey: "is_social_links_public",
+  },
+  {
+    bodyKeys: ["isSkillsPublic", "is_skills_public"],
+    dbKey: "is_skills_public",
+  },
+];
+
+const parseBooleanFlag = (value) => {
+  if (value === true || value === 1 || value === "1") return true;
+  if (value === false || value === 0 || value === "0") return false;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "yes", "public"].includes(normalized)) return true;
+    if (["false", "no", "private"].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
+const appendPrivacyUpdates = (body, target) => {
+  PRIVACY_FIELD_MAP.forEach(({ bodyKeys, dbKey }) => {
+    const foundKey = bodyKeys.find((key) => body[key] !== undefined);
+    if (!foundKey) return;
+    const parsed = parseBooleanFlag(body[foundKey]);
+    if (parsed !== undefined) target[dbKey] = parsed;
+  });
+
+  if (
+    target.is_position_public !== undefined &&
+    (body.isEmploymentPublic !== undefined || body.is_employment_public !== undefined)
+  ) {
+    target.is_employment_public = target.is_position_public;
+  }
+};
+
+const hasPrivacyInput = (body) =>
+  PRIVACY_FIELD_MAP.some(({ bodyKeys }) =>
+    bodyKeys.some((key) => body[key] !== undefined),
+  );
+
+const isPublicFlag = (entry, key) => entry?.[key] !== false;
+
+const isStaffViewer = (viewer) => {
+  const roleUpper = String(viewer?.role || "").toUpperCase();
+  return roleUpper === "TEACHER" || roleUpper === "ADMIN";
+};
+
+const canViewPrivateAlumniFields = (viewer, alumni) => {
+  if (!viewer || !alumni) return false;
+  if (isStaffViewer(viewer)) return true;
+  const viewerId = Number(viewer.id);
+  if (viewerId && Number(alumni.user_id) === viewerId) return true;
+  if (viewer.alumniId && Number(viewer.alumniId) === Number(alumni.id)) return true;
+  if (viewer.alumni_id && Number(viewer.alumni_id) === Number(alumni.id)) return true;
+  const viewerEmail = String(viewer.email || "").toLowerCase();
+  const alumniEmail = String(alumni.email || alumni.user?.email || "").toLowerCase();
+  return Boolean(viewerEmail && alumniEmail && viewerEmail === alumniEmail);
+};
+
+const sanitizeAlumniForViewer = (entry, viewer) => {
+  if (canViewPrivateAlumniFields(viewer, entry)) return entry;
+
+  const sanitized = {
+    ...entry,
+    user: entry.user ? { ...entry.user } : entry.user,
+  };
+
+  if (!isPublicFlag(entry, "is_email_public")) {
+    sanitized.email = null;
+    if (sanitized.user) sanitized.user.email = null;
+  }
+  if (!isPublicFlag(entry, "is_student_id_public")) {
+    sanitized.student_id = null;
+    sanitized.studentId = null;
+  }
+  if (!isPublicFlag(entry, "is_date_of_birth_public")) {
+    sanitized.date_of_birth = null;
+    sanitized.dateOfBirth = null;
+  }
+  if (!isPublicFlag(entry, "is_course_public")) {
+    sanitized.course = null;
+  }
+  if (!isPublicFlag(entry, "is_graduation_year_public")) {
+    sanitized.graduation_year = null;
+    sanitized.graduationYear = null;
+  }
+  if (!isPublicFlag(entry, "is_education_history_public")) {
+    sanitized.level = null;
+    sanitized.batch = null;
+    sanitized.education_history = [];
+    sanitized.educationHistory = [];
+  }
+  if (!isPublicFlag(entry, "is_phone_public")) {
+    sanitized.contact_number = null;
+    sanitized.contactNumber = null;
+  }
+  if (!isPublicFlag(entry, "is_position_public") || !isPublicFlag(entry, "is_employment_public")) {
+    sanitized.current_position = null;
+    sanitized.currentPosition = null;
+  }
+  if (!isPublicFlag(entry, "is_company_public")) {
+    sanitized.company = null;
+  }
+  if (!isPublicFlag(entry, "is_location_public")) {
+    sanitized.location = null;
+  }
+  if (!isPublicFlag(entry, "is_social_links_public")) {
+    sanitized.social_link = [];
+    sanitized.socialLinks = [];
+  }
+  if (!isPublicFlag(entry, "is_skills_public")) {
+    sanitized.skills = null;
+  }
+
+  return sanitized;
+};
+
 // Get all alumni.
 // Teachers and admins receive the full list (including private profiles so they
 // can manage the directory). Regular alumni and unauthenticated requests only
@@ -50,8 +215,7 @@ router.get("/", softAuth, async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');
-    const roleUpper = String(req.user?.role || "").toUpperCase();
-    const isStaff = roleUpper === "TEACHER" || roleUpper === "ADMIN";
+    const isStaff = isStaffViewer(req.user);
 
     const where = {
       NOT: {
@@ -86,12 +250,16 @@ router.get("/", softAuth, async (req, res) => {
     );
 
     const payload = alumni.map((entry) => {
+      const canViewPrivate = canViewPrivateAlumniFields(req.user, entry);
+      const visibleEntry = sanitizeAlumniForViewer(entry, req.user);
       const history = getEducationHistoryWithFallback(
-        entry,
-        historyByAlumniId.get(entry.id) || [],
+        visibleEntry,
+        canViewPrivate || isPublicFlag(visibleEntry, "is_education_history_public")
+          ? historyByAlumniId.get(entry.id) || []
+          : [],
       );
       return {
-        ...entry,
+        ...visibleEntry,
         education_history: history,
         educationHistory: history,
       };
@@ -209,6 +377,7 @@ router.post("/", runProfileUpload, async (req, res) => {
         ? `/uploads/profiles/${req.file.filename}`
         : profileImage || null,
     };
+    appendPrivacyUpdates(req.body, alumniData);
 
     // Only add user_id if we found an existing user
     if (user) {
@@ -237,8 +406,19 @@ router.post("/", runProfileUpload, async (req, res) => {
         msg.includes("Unknown column") ||
         msg.includes("batch");
 
-      if (badContact || badLevel || badBatch) {
-        const { contact_number, level, batch, ...rest } = alumniData;
+      const badPrivacy = PRIVACY_FIELD_MAP.some(({ dbKey }) =>
+        msg.includes(dbKey) || msg.includes(`Unknown arg \`${dbKey}\``),
+      );
+
+      if (badContact || badLevel || badBatch || badPrivacy) {
+        const {
+          contact_number,
+          level,
+          batch,
+          ...rest
+        } = alumniData;
+        PRIVACY_FIELD_MAP.forEach(({ dbKey }) => delete rest[dbKey]);
+        delete rest.is_employment_public;
         newAlumni = await prisma.alumni.create({ data: rest });
       } else {
         throw err;
@@ -331,7 +511,7 @@ router.get("/birthdays/today", authMiddleware, async (req, res) => {
 });
 
 // Get alumni by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", softAuth, async (req, res) => {
   try {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
     res.set("Pragma", "no-cache");
@@ -356,13 +536,17 @@ router.get("/:id", async (req, res) => {
     const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [
       alumni.id,
     ]);
+    const canViewPrivate = canViewPrivateAlumniFields(req.user, alumni);
+    const visibleAlumni = sanitizeAlumniForViewer(alumni, req.user);
     const history = getEducationHistoryWithFallback(
-      alumni,
-      historyByAlumniId.get(alumni.id) || [],
+      visibleAlumni,
+      canViewPrivate || isPublicFlag(visibleAlumni, "is_education_history_public")
+        ? historyByAlumniId.get(alumni.id) || []
+        : [],
     );
 
     res.json({
-      ...alumni,
+      ...visibleAlumni,
       education_history: history,
       educationHistory: history,
     });
@@ -503,6 +687,7 @@ router.put("/:id", runProfileUpload, async (req, res) => {
         visibilityValue === "true" ||
         visibilityValue === 1;
     }
+    appendPrivacyUpdates(req.body, updateData);
 
     // Handle profile image upload
     if (req.file) {
@@ -561,8 +746,18 @@ router.put("/:id", runProfileUpload, async (req, res) => {
         msg.includes("Unknown arg `batch`") ||
         msg.includes("Unknown column") ||
         msg.includes("batch");
-      if (badContact || badLevel || badBatch) {
-        const { contact_number, level, batch, ...rest } = updateData;
+      const badPrivacy = PRIVACY_FIELD_MAP.some(({ dbKey }) =>
+        msg.includes(dbKey) || msg.includes(`Unknown arg \`${dbKey}\``),
+      );
+      if (badContact || badLevel || badBatch || badPrivacy) {
+        const {
+          contact_number,
+          level,
+          batch,
+          ...rest
+        } = updateData;
+        PRIVACY_FIELD_MAP.forEach(({ dbKey }) => delete rest[dbKey]);
+        delete rest.is_employment_public;
         updatedAlumni = await prisma.alumni.update({
           where: { id: Number(id) },
           data: rest,

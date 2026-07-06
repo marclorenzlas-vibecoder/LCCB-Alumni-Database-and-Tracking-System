@@ -50,6 +50,80 @@ const upload = multer({
   }
 });
 
+const PRIVACY_FIELD_MAP = [
+  { bodyKeys: ['isStudentIdPublic', 'is_student_id_public'], dbKey: 'is_student_id_public' },
+  { bodyKeys: ['isDateOfBirthPublic', 'is_date_of_birth_public'], dbKey: 'is_date_of_birth_public' },
+  { bodyKeys: ['isCoursePublic', 'is_course_public'], dbKey: 'is_course_public' },
+  { bodyKeys: ['isGraduationYearPublic', 'is_graduation_year_public'], dbKey: 'is_graduation_year_public' },
+  { bodyKeys: ['isEducationHistoryPublic', 'is_education_history_public'], dbKey: 'is_education_history_public' },
+  { bodyKeys: ['isEmailPublic', 'is_email_public'], dbKey: 'is_email_public' },
+  { bodyKeys: ['isPhonePublic', 'is_phone_public'], dbKey: 'is_phone_public' },
+  { bodyKeys: ['isPositionPublic', 'is_position_public', 'isEmploymentPublic', 'is_employment_public'], dbKey: 'is_position_public' },
+  { bodyKeys: ['isCompanyPublic', 'is_company_public'], dbKey: 'is_company_public' },
+  { bodyKeys: ['isLocationPublic', 'is_location_public'], dbKey: 'is_location_public' },
+  { bodyKeys: ['isSocialLinksPublic', 'is_social_links_public'], dbKey: 'is_social_links_public' },
+  { bodyKeys: ['isSkillsPublic', 'is_skills_public'], dbKey: 'is_skills_public' }
+];
+
+const parseBooleanFlag = (value) => {
+  if (value === true || value === 1 || value === '1') return true;
+  if (value === false || value === 0 || value === '0') return false;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', 'public'].includes(normalized)) return true;
+    if (['false', 'no', 'private'].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
+const appendPrivacyUpdates = (body, target) => {
+  PRIVACY_FIELD_MAP.forEach(({ bodyKeys, dbKey }) => {
+    const foundKey = bodyKeys.find((key) => body[key] !== undefined);
+    if (!foundKey) return;
+    const parsed = parseBooleanFlag(body[foundKey]);
+    if (parsed !== undefined) target[dbKey] = parsed;
+  });
+
+  if (
+    target.is_position_public !== undefined &&
+    (body.isEmploymentPublic !== undefined || body.is_employment_public !== undefined)
+  ) {
+    target.is_employment_public = target.is_position_public;
+  }
+};
+
+const hasPrivacyInput = (body) =>
+  PRIVACY_FIELD_MAP.some(({ bodyKeys }) => bodyKeys.some((key) => body[key] !== undefined));
+
+const alumniPrivacyPayload = (alumni = {}) => ({
+  isStudentIdPublic: alumni.is_student_id_public !== false,
+  is_student_id_public: alumni.is_student_id_public !== false,
+  isDateOfBirthPublic: alumni.is_date_of_birth_public !== false,
+  is_date_of_birth_public: alumni.is_date_of_birth_public !== false,
+  isCoursePublic: alumni.is_course_public !== false,
+  is_course_public: alumni.is_course_public !== false,
+  isGraduationYearPublic: alumni.is_graduation_year_public !== false,
+  is_graduation_year_public: alumni.is_graduation_year_public !== false,
+  isEducationHistoryPublic: alumni.is_education_history_public !== false,
+  is_education_history_public: alumni.is_education_history_public !== false,
+  isEmailPublic: alumni.is_email_public !== false,
+  is_email_public: alumni.is_email_public !== false,
+  isPhonePublic: alumni.is_phone_public !== false,
+  is_phone_public: alumni.is_phone_public !== false,
+  isPositionPublic: alumni.is_position_public !== false && alumni.is_employment_public !== false,
+  is_position_public: alumni.is_position_public !== false && alumni.is_employment_public !== false,
+  isEmploymentPublic: alumni.is_position_public !== false && alumni.is_employment_public !== false,
+  is_employment_public: alumni.is_position_public !== false && alumni.is_employment_public !== false,
+  isCompanyPublic: alumni.is_company_public !== false,
+  is_company_public: alumni.is_company_public !== false,
+  isLocationPublic: alumni.is_location_public !== false,
+  is_location_public: alumni.is_location_public !== false,
+  isSocialLinksPublic: alumni.is_social_links_public !== false,
+  is_social_links_public: alumni.is_social_links_public !== false,
+  isSkillsPublic: alumni.is_skills_public !== false,
+  is_skills_public: alumni.is_skills_public !== false
+});
+
 // Register route (Alumni/Students only - Gmail)
 router.post('/register', async (req, res) => {
   try {
@@ -679,6 +753,7 @@ router.get('/profile/:id', async (req, res) => {
         contactNumber: alumni.contact_number,
         contact_number: alumni.contact_number,
         skills: alumni.skills,
+        ...alumniPrivacyPayload(alumni),
         dateOfBirth: alumni.date_of_birth || null,
         date_of_birth: alumni.date_of_birth || null,
         educationHistory: alumni.educationHistory || [],
@@ -694,7 +769,7 @@ router.get('/profile/:id', async (req, res) => {
 router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const { username, email, department, firstName, middleName, lastName, studentId, level, course, batch, graduationYear, currentPosition, company, location, skills, dateOfBirth, date_of_birth } = req.body;
+    const { username, email, department, firstName, middleName, lastName, studentId, level, course, batch, graduationYear, currentPosition, company, location, contactNumber, skills, dateOfBirth, date_of_birth } = req.body;
     const parsedEducationHistory = parseEducationHistory(
       req.body.educationHistory ?? req.body.education_history
     );
@@ -705,6 +780,7 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
       : null;
     const normalizedUsername = typeof username === 'string' ? username.trim() : '';
     const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+    const hasPrivacyUpdate = hasPrivacyInput(req.body);
     
     const updateData = {};
     if (normalizedUsername) updateData.username = normalizedUsername;
@@ -734,7 +810,7 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
       role = 'TEACHER';
       
       // Also sync alumni information for teachers if profile fields, username/email, or image changed
-      if (firstName || lastName || middleName || level || course || batch || graduationYear || currentPosition || company || location || skills || dateOfBirth !== undefined || date_of_birth !== undefined || normalizedUsername || normalizedEmail || req.file || hasEducationHistoryInput) {
+      if (firstName || lastName || middleName || level || course || batch || graduationYear || currentPosition || company || location || contactNumber !== undefined || skills || dateOfBirth !== undefined || date_of_birth !== undefined || normalizedUsername || normalizedEmail || req.file || hasEducationHistoryInput || hasPrivacyUpdate) {
         const alumniUpdateData = {};
         if (firstName && firstName.trim()) alumniUpdateData.first_name = firstName.trim();
         if (middleName !== undefined) alumniUpdateData.middle_name = middleName && middleName.trim() ? middleName.trim() : null;
@@ -756,6 +832,7 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
         }
         if (currentPosition !== undefined) alumniUpdateData.current_position = currentPosition && currentPosition.trim() ? currentPosition.trim() : null;
         if (company !== undefined) alumniUpdateData.company = company && company.trim() ? company.trim() : null;
+        if (contactNumber !== undefined) alumniUpdateData.contact_number = contactNumber && String(contactNumber).trim() ? String(contactNumber).trim() : null;
         if (dateOfBirth !== undefined || date_of_birth !== undefined) {
           const dobValue = dateOfBirth !== undefined ? dateOfBirth : date_of_birth;
           const parsedDob = dobValue ? new Date(dobValue) : null;
@@ -764,6 +841,7 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
         if (location !== undefined) alumniUpdateData.location = location && location.trim() ? location.trim() : null;
         if (skills !== undefined) alumniUpdateData.skills = skills && skills.trim() ? skills.trim() : null;
         if (normalizedEmail) alumniUpdateData.email = normalizedEmail;
+        appendPrivacyUpdates(req.body, alumniUpdateData);
         
         // If username changed and firstName/lastName were not provided, split username for display
         if (normalizedUsername && !alumniUpdateData.first_name && !alumniUpdateData.last_name) {
@@ -829,6 +907,12 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
               current_position: alumniUpdateData.current_position,
               company: alumniUpdateData.company,
               location: alumniUpdateData.location,
+              contact_number: alumniUpdateData.contact_number,
+              ...PRIVACY_FIELD_MAP.reduce((acc, { dbKey }) => {
+                if (alumniUpdateData[dbKey] !== undefined) acc[dbKey] = alumniUpdateData[dbKey];
+                return acc;
+              }, {}),
+              ...(alumniUpdateData.is_employment_public !== undefined && { is_employment_public: alumniUpdateData.is_employment_public }),
               skills: alumniUpdateData.skills,
               profile_image: alumniUpdateData.profile_image,
               date_of_birth: alumniUpdateData.date_of_birth ?? null
@@ -851,8 +935,11 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
           current_position: updatedAlumni.current_position,
           company: updatedAlumni.company,
           location: updatedAlumni.location,
+          contactNumber: updatedAlumni.contact_number,
+          contact_number: updatedAlumni.contact_number,
           dateOfBirth: updatedAlumni.date_of_birth || null,
           date_of_birth: updatedAlumni.date_of_birth || null,
+          ...alumniPrivacyPayload(updatedAlumni),
           skills: updatedAlumni.skills
         };
       }
@@ -865,7 +952,7 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
       role = updatedUser.role || 'ALUMNI';
       
       // Sync alumni information when any profile, username/email, or image changed
-      if (firstName || lastName || middleName || studentId !== undefined || level || course || batch || graduationYear || currentPosition || company || location || skills || normalizedUsername || normalizedEmail || req.file || hasEducationHistoryInput) {
+      if (firstName || lastName || middleName || studentId !== undefined || level || course || batch || graduationYear || currentPosition || company || location || contactNumber !== undefined || skills || normalizedUsername || normalizedEmail || req.file || hasEducationHistoryInput || hasPrivacyUpdate) {
         const alumniUpdateData = {};
         if (firstName && firstName.trim()) alumniUpdateData.first_name = firstName.trim();
         if (middleName !== undefined) alumniUpdateData.middle_name = middleName && middleName.trim() ? middleName.trim() : null;
@@ -888,6 +975,7 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
         }
         if (currentPosition !== undefined) alumniUpdateData.current_position = currentPosition && currentPosition.trim() ? currentPosition.trim() : null;
         if (company !== undefined) alumniUpdateData.company = company && company.trim() ? company.trim() : null;
+        if (contactNumber !== undefined) alumniUpdateData.contact_number = contactNumber && String(contactNumber).trim() ? String(contactNumber).trim() : null;
         if (dateOfBirth !== undefined || date_of_birth !== undefined) {
           const dobValue = dateOfBirth !== undefined ? dateOfBirth : date_of_birth;
           const parsedDob = dobValue ? new Date(dobValue) : null;
@@ -896,6 +984,7 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
         if (location !== undefined) alumniUpdateData.location = location && location.trim() ? location.trim() : null;
         if (skills !== undefined) alumniUpdateData.skills = skills && skills.trim() ? skills.trim() : null;
         if (normalizedEmail) alumniUpdateData.email = normalizedEmail;
+        appendPrivacyUpdates(req.body, alumniUpdateData);
         
         // If username changed and firstName/lastName were not provided, split username for display
         if (normalizedUsername && !alumniUpdateData.first_name && !alumniUpdateData.last_name) {
@@ -964,8 +1053,11 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
           current_position: updatedAlumni.current_position,
           company: updatedAlumni.company,
           location: updatedAlumni.location,
+          contactNumber: updatedAlumni.contact_number,
+          contact_number: updatedAlumni.contact_number,
           dateOfBirth: updatedAlumni.date_of_birth || null,
           date_of_birth: updatedAlumni.date_of_birth || null,
+          ...alumniPrivacyPayload(updatedAlumni),
           skills: updatedAlumni.skills
         };
 

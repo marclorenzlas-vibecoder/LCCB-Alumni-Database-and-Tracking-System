@@ -158,6 +158,12 @@ const registerCourseSections = groupSectionDefinitions.map((section) => {
 const AlumniDirectory = () => {
   // Role
   const isTeacher = authService.isTeacher();
+  const privateLabel = 'Hidden by User';
+  const fieldIsPublic = (record, camelKey, snakeKey) => isTeacher || (record?.[camelKey] ?? record?.[snakeKey] ?? true) !== false;
+  const visibleOrPrivate = (record, value, camelKey, snakeKey, fallback = 'Not specified') => {
+    if (!fieldIsPublic(record, camelKey, snakeKey)) return privateLabel;
+    return value || fallback;
+  };
 
   // Core data
   const [alumni, setAlumni] = useState([]);
@@ -783,7 +789,9 @@ const AlumniDirectory = () => {
                   <div className="text-center sm:text-left flex-1 pb-1">
                     <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">{viewingAlumni.firstName} {viewingAlumni.lastName}</h2>
                     <p className="text-gray-600 text-base sm:text-lg mt-1 font-medium">
-                      {(viewingAlumni.currentPosition) && viewingAlumni.company ? `${viewingAlumni.currentPosition} · ${viewingAlumni.company}` : (viewingAlumni.currentPosition) || 'Alumni'}
+                      {fieldIsPublic(viewingAlumni, 'isPositionPublic', 'is_position_public')
+                        ? ((viewingAlumni.currentPosition) && fieldIsPublic(viewingAlumni, 'isCompanyPublic', 'is_company_public') && viewingAlumni.company ? `${viewingAlumni.currentPosition} · ${viewingAlumni.company}` : (viewingAlumni.currentPosition) || 'Alumni')
+                        : privateLabel}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-3 justify-center sm:justify-start">
                       {viewingAlumni.course && (
@@ -795,7 +803,7 @@ const AlumniDirectory = () => {
                       {viewingAlumni.batch && (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">Batch {viewingAlumni.batch}</span>
                       )}
-                      {viewingAlumni.location && (
+                      {fieldIsPublic(viewingAlumni, 'isLocationPublic', 'is_location_public') && viewingAlumni.location && (
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                           {viewingAlumni.location}
@@ -814,11 +822,11 @@ const AlumniDirectory = () => {
                   <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" /></svg>Academic Information</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                      <div><label className="text-sm font-medium text-gray-500">School ID / Student Number</label><p className="text-gray-900 mt-1 font-mono">{viewingAlumni.student_id || 'Not provided'}</p></div>
-                      <div><label className="text-sm font-medium text-gray-500">Course</label><p className="text-gray-900 mt-1">{viewingAlumni.course || 'Not provided'}</p></div>
-                      <div><label className="text-sm font-medium text-gray-500">Graduation Year</label><p className="text-gray-900 mt-1">{viewingAlumni.graduation_year || viewingAlumni.graduationYear || 'Not provided'}</p></div>
+                      {fieldIsPublic(viewingAlumni, 'isStudentIdPublic', 'is_student_id_public') && <div><label className="text-sm font-medium text-gray-500">School ID / Student Number</label><p className="text-gray-900 mt-1 font-mono">{viewingAlumni.student_id || 'Not provided'}</p></div>}
+                      {fieldIsPublic(viewingAlumni, 'isCoursePublic', 'is_course_public') && <div><label className="text-sm font-medium text-gray-500">Course</label><p className="text-gray-900 mt-1">{viewingAlumni.course || 'Not provided'}</p></div>}
+                      {fieldIsPublic(viewingAlumni, 'isGraduationYearPublic', 'is_graduation_year_public') && <div><label className="text-sm font-medium text-gray-500">Graduation Year</label><p className="text-gray-900 mt-1">{viewingAlumni.graduation_year || viewingAlumni.graduationYear || 'Not provided'}</p></div>}
                     </div>
-                    <div className="pt-6">
+                    {fieldIsPublic(viewingAlumni, 'isEducationHistoryPublic', 'is_education_history_public') && <div className="pt-6">
                       <h4 className="text-md font-medium text-gray-900 mb-3">Education History</h4>
                       <div className="grid grid-cols-3 gap-3">
                         {viewingAlumni.educationHistory && viewingAlumni.educationHistory.length > 0 ? (
@@ -834,7 +842,7 @@ const AlumniDirectory = () => {
                           <p className="text-xs text-gray-500 italic">No education history entries</p>
                         )}
                       </div>
-                    </div>
+                    </div>}
                   </div>
                   <div className="rounded-lg border border-transparent bg-transparent p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -856,11 +864,11 @@ const AlumniDirectory = () => {
                           </div>
                         </>
                       )}
-                      <div>
+                      {fieldIsPublic(viewingAlumni, 'isDateOfBirthPublic', 'is_date_of_birth_public') && <div>
                         <label className="text-sm font-medium text-gray-500">Birthday</label>
                         <p className="text-gray-900">{formatBirthday(viewingAlumni.dateOfBirth || viewingAlumni.date_of_birth, isTeacher) || 'Not provided'}</p>
-                      </div>
-                      <div>
+                      </div>}
+                      {fieldIsPublic(viewingAlumni, 'isSocialLinksPublic', 'is_social_links_public') && <div>
                         <label className="text-sm font-medium text-gray-500">Social Media</label>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {viewingAlumni.social_link && viewingAlumni.social_link.length > 0 ? (
@@ -903,18 +911,18 @@ const AlumniDirectory = () => {
                             <p className="text-sm text-gray-500">No social media links added</p>
                           )}
                         </div>
-                      </div>
+                      </div>}
                     </div>
                   </div>
                   <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Professional Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="text-sm font-medium text-gray-500">Current Position</label><p className="text-gray-900">{(viewingAlumni.current_position || viewingAlumni.currentPosition) || 'Not specified'}</p></div>
-                      <div><label className="text-sm font-medium text-gray-500">Company</label><p className="text-gray-900">{viewingAlumni.company || 'Not specified'}</p></div>
-                      <div><label className="text-sm font-medium text-gray-500">Location</label><p className="text-gray-900">{viewingAlumni.location || 'Not specified'}</p></div>
+                      {fieldIsPublic(viewingAlumni, 'isPositionPublic', 'is_position_public') && <div><label className="text-sm font-medium text-gray-500">Current Position</label><p className="text-gray-900">{viewingAlumni.current_position || viewingAlumni.currentPosition || 'Not specified'}</p></div>}
+                      {fieldIsPublic(viewingAlumni, 'isCompanyPublic', 'is_company_public') && <div><label className="text-sm font-medium text-gray-500">Company</label><p className="text-gray-900">{viewingAlumni.company || 'Not specified'}</p></div>}
+                      {fieldIsPublic(viewingAlumni, 'isLocationPublic', 'is_location_public') && <div><label className="text-sm font-medium text-gray-500">Location</label><p className="text-gray-900">{viewingAlumni.location || 'Not specified'}</p></div>}
                     </div>
                   </div>
-                  {viewingAlumni.skills && (
+                  {fieldIsPublic(viewingAlumni, 'isSkillsPublic', 'is_skills_public') && viewingAlumni.skills && (
                     <div className="bg-gray-50 rounded-lg p-6 md:col-span-2">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>Skills</h3>
                       <div className="flex flex-wrap gap-2">{viewingAlumni.skills.split(',').map((skill, i) => (<span key={i} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">{skill.trim()}</span>))}</div>
@@ -1631,19 +1639,21 @@ const AlumniDirectory = () => {
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-gray-900">{a.firstName} {a.lastName}</div>
                         <div className="text-xs text-gray-500 break-words line-clamp-2">
-                          {a.currentPosition || a.company ? `${a.currentPosition || ''}${a.company ? ` ${a.company}` : ''}` : a.course}
+                          {fieldIsPublic(a, 'isPositionPublic', 'is_position_public') && (a.currentPosition || a.company)
+                            ? `${a.currentPosition || ''}${fieldIsPublic(a, 'isCompanyPublic', 'is_company_public') && a.company ? ` ${a.company}` : ''}`
+                            : fieldIsPublic(a, 'isCoursePublic', 'is_course_public') ? a.course : ''}
                         </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-4 pl-8 text-sm text-gray-700 whitespace-nowrap">
-                    <span className="font-mono">{a.student_id || 'N/A'}</span>
+                    <span className="font-mono">{fieldIsPublic(a, 'isStudentIdPublic', 'is_student_id_public') ? (a.student_id || 'N/A') : ''}</span>
                   </td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{a.course || ''}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{a.email || ''}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{getLevelLabel(a.level)}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{a.batch || ''}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{a.graduationYear || ''}</td>
+                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isCoursePublic', 'is_course_public') ? (a.course || '') : ''}</td>
+                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isEmailPublic', 'is_email_public') ? (a.email || '') : ''}</td>
+                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public') ? getLevelLabel(a.level) : ''}</td>
+                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public') ? (a.batch || '') : ''}</td>
+                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isGraduationYearPublic', 'is_graduation_year_public') ? (a.graduationYear || '') : ''}</td>
                   {isTeacher && (
                     <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
                       <div className="inline-flex items-center gap-2">

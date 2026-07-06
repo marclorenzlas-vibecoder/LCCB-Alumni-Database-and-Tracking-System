@@ -157,29 +157,51 @@ const AlumniProfile = () => {
     );
   }
 
+  const privateLabel = 'Hidden by User';
+  const canViewPrivate = authService.isTeacher();
+  const flagIsPublic = (camelKey, snakeKey) => canViewPrivate || (profile[camelKey] ?? profile[snakeKey] ?? true) !== false;
+  const isStudentIdPublic = flagIsPublic('isStudentIdPublic', 'is_student_id_public');
+  const isDateOfBirthPublic = flagIsPublic('isDateOfBirthPublic', 'is_date_of_birth_public');
+  const isCoursePublic = flagIsPublic('isCoursePublic', 'is_course_public');
+  const isGraduationYearPublic = flagIsPublic('isGraduationYearPublic', 'is_graduation_year_public');
+  const isEducationHistoryPublic = flagIsPublic('isEducationHistoryPublic', 'is_education_history_public');
+  const isEmailPublic = flagIsPublic('isEmailPublic', 'is_email_public');
+  const isPhonePublic = flagIsPublic('isPhonePublic', 'is_phone_public');
+  const isPositionPublic = flagIsPublic('isPositionPublic', 'is_position_public') && flagIsPublic('isEmploymentPublic', 'is_employment_public');
+  const isCompanyPublic = flagIsPublic('isCompanyPublic', 'is_company_public');
+  const isLocationPublic = flagIsPublic('isLocationPublic', 'is_location_public');
+  const isSocialLinksPublic = flagIsPublic('isSocialLinksPublic', 'is_social_links_public');
+  const isSkillsPublic = flagIsPublic('isSkillsPublic', 'is_skills_public');
+
   // Merge actual profile data with default structure for compatibility
   const displayProfile = {
     ...profile,
     batch: profile.batch || `${(profile.graduationYear || 2020) - 4}-${profile.graduationYear || 2020}`,
     level: profile.level || '',
-    dateOfBirth: profile.dateOfBirth || profile.date_of_birth || null,
-    contactNumber: profile.contactNumber || 'Not provided',
-    currentJob: profile.currentPosition || profile.currentJob || 'Not specified',
-    bio: profile.bio || `${profile.firstName || 'Alumni'} ${profile.lastName || ''} graduated from LCCB in ${profile.graduationYear || 'N/A'} with a degree in ${profile.course || 'N/A'}${profile.currentPosition ? `. Currently working as ${profile.currentPosition}` : ''}${profile.company ? ` at ${profile.company}` : ''}.`,
+    dateOfBirth: isDateOfBirthPublic ? (profile.dateOfBirth || profile.date_of_birth || null) : null,
+    student_id: isStudentIdPublic ? profile.student_id : null,
+    course: isCoursePublic ? profile.course : null,
+    graduationYear: isGraduationYearPublic ? profile.graduationYear : null,
+    email: isEmailPublic ? (profile.email || 'Not provided') : privateLabel,
+    contactNumber: isPhonePublic ? (profile.contactNumber || 'Not provided') : privateLabel,
+    currentJob: isPositionPublic ? (profile.currentPosition || profile.currentJob || 'Not specified') : privateLabel,
+    company: isCompanyPublic ? (profile.company || '') : '',
+    location: isLocationPublic ? (profile.location || 'Not provided') : privateLabel,
+    bio: profile.bio || `${profile.firstName || 'Alumni'} ${profile.lastName || ''} graduated from LCCB${isGraduationYearPublic && profile.graduationYear ? ` in ${profile.graduationYear}` : ''}${isCoursePublic && profile.course ? ` with a degree in ${profile.course}` : ''}${isPositionPublic && profile.currentPosition ? `. Currently working as ${profile.currentPosition}` : ''}${isCompanyPublic && profile.company ? ` at ${profile.company}` : ''}.`,
     coverImage: profile.coverImage || '',
-    socialLinks: profile.socialLinks || {
+    socialLinks: isSocialLinksPublic ? (profile.socialLinks || {
       linkedin: profile.linkedin || '#',
       github: '#',
       twitter: '#'
-    },
-    skills: profile.skills && Array.isArray(profile.skills) && profile.skills.length > 0 ? profile.skills.map(skill => ({
+    }) : {},
+    skills: isSkillsPublic && profile.skills && Array.isArray(profile.skills) && profile.skills.length > 0 ? profile.skills.map(skill => ({
       name: typeof skill === 'string' ? skill : skill.name || 'Unknown',
       level: Math.floor(Math.random() * 30) + 70, // Random level between 70-100
       category: 'Technical'
     })) : [
       { name: 'No skills listed', level: 0, category: 'General' }
     ],
-    careerHistory: profile.careerHistory && profile.careerHistory.length > 0 ? profile.careerHistory : (profile.currentPosition && profile.company ? [
+    careerHistory: profile.careerHistory && profile.careerHistory.length > 0 && isPositionPublic ? profile.careerHistory : (isPositionPublic && isCompanyPublic && profile.currentPosition && profile.company ? [
       { 
         id: '1', 
         company: profile.company || 'Not specified', 
@@ -191,7 +213,7 @@ const AlumniProfile = () => {
         type: 'Current Position'
       }
     ] : []),
-    education: profile.education && profile.education.length > 0 ? profile.education : [
+    education: isEducationHistoryPublic && profile.education && profile.education.length > 0 ? profile.education : (isEducationHistoryPublic ? [
       {
         id: '1',
         institution: 'LCCB - La Consolacion College of Biñan',
@@ -201,7 +223,7 @@ const AlumniProfile = () => {
         gpa: 'N/A',
         achievements: []
       }
-    ],
+    ] : []),
     achievements: profile.achievements && profile.achievements.length > 0 ? profile.achievements : [],
     projects: profile.projects && profile.projects.length > 0 ? profile.projects : [],
     interests: profile.interests || ['Technology', 'Mentoring', 'Open Source'],
