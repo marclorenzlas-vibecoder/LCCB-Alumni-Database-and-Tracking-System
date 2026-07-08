@@ -89,7 +89,7 @@ export default function LoginScreen({ navigation, setUser }) {
         </Pressable>
 
         <Pressable onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.link}>Don't have an account? <Text style={styles.linkBold}>Register</Text></Text>
+          <Text style={styles.link}>Do not have an account? <Text style={styles.linkBold}>Register</Text></Text>
         </Pressable>
       </View>
     </ScreenContainer>

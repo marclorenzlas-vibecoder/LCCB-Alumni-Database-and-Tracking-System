@@ -214,11 +214,12 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
 
 // ─── Item Gallery Modal ──────────────────────────────────────────────────────
 
-function ItemGalleryModal({ entry, campaign, campaignImages, loadingImages, onClose }) {
-  if (!entry) return null;
+function ItemGalleryModal({ entry, campaign, campaignImages = [], loadingImages, onClose }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [isZoomed, setIsZoomed] = useState(false);
   const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
+
+  if (!entry) return null;
 
   const hasLightbox = lightboxIndex !== null && campaignImages[lightboxIndex];
   const currentLightboxSrc = hasLightbox ? campaignImages[lightboxIndex] : null;

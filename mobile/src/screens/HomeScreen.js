@@ -458,7 +458,6 @@ function EntityCard({ image, title, description, meta, onPress, showReadMore, on
   const [descLines, setDescLines] = useState(4);
 
   const handleTitleLayout = (e) => {
-    const lineHeight = 22;
     const lines = Math.ceil(e.nativeEvent.lines.length);
     setDescLines(lines <= 1 ? 5 : 4);
   };

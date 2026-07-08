@@ -10,6 +10,7 @@ import { authService } from '../services/authService';
 import ConfirmModal from './ConfirmModal';
 import FilterMenu from './FilterMenu';
 import UserLayout from './UserLayout';
+import AlumniChatPanel from './AlumniChatPanel';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { groupSectionDefinitions, levelOptions as sharedLevelOptions } from '../config/groupSections';
 
@@ -158,6 +159,7 @@ const registerCourseSections = groupSectionDefinitions.map((section) => {
 const AlumniDirectory = () => {
   // Role
   const isTeacher = authService.isTeacher();
+  const currentUser = useMemo(() => authService.getCurrentUser(), []);
   const privateLabel = 'Hidden by User';
   const fieldIsPublic = (record, camelKey, snakeKey) => isTeacher || (record?.[camelKey] ?? record?.[snakeKey] ?? true) !== false;
   const visibleOrPrivate = (record, value, camelKey, snakeKey, fallback = 'Not specified') => {
@@ -1807,6 +1809,7 @@ const AlumniDirectory = () => {
           </div>
         )}
       </div>
+      <AlumniChatPanel currentUser={currentUser} alumniContacts={alumni} />
     </UserLayout>
   );
 };

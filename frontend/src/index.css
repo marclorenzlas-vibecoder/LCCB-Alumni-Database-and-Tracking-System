@@ -1321,3 +1321,184 @@ body::-webkit-scrollbar,
     content: "→";
     font-size: 13px;
 }
+
+/* Firebase chat motion */
+.lccb-chat-widget {
+    --lccb-chat-button-width: 132px;
+    pointer-events: none;
+}
+
+.lccb-chat-toggle-button {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    width: var(--lccb-chat-button-width);
+    height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 9999px;
+    background: #1d4ed8;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    pointer-events: auto;
+    box-shadow: 0 10px 28px rgba(37, 99, 235, 0.35), 0 3px 8px rgba(0, 0, 0, 0.18);
+    transition:
+        background 180ms ease,
+        box-shadow 180ms ease,
+        transform 180ms ease;
+}
+
+.lccb-chat-toggle-button:hover {
+    background: #1e40af;
+    box-shadow: 0 12px 32px rgba(37, 99, 235, 0.45), 0 4px 10px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+}
+
+.lccb-chat-toggle-button:active {
+    transform: translateY(0) scale(0.98);
+}
+
+.lccb-chat-toggle-button--hidden {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+    transition:
+        opacity 120ms ease,
+        visibility 0s linear 120ms;
+}
+
+.lccb-chat-panel {
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    bottom: 0;
+    max-height: calc(100vh - 40px);
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+    border-radius: 16px;
+    border-color: #e2e8f0;
+    background: #ffffff;
+    transform: none;
+    will-change: opacity;
+    contain: layout paint;
+    transition:
+        opacity 220ms ease,
+        visibility 0s linear 220ms;
+}
+
+.lccb-chat-panel::after {
+    content: none;
+}
+
+.lccb-chat-panel--open {
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    transition:
+        opacity 220ms ease,
+        visibility 0s linear 0s;
+}
+
+.lccb-chat-panel--closing {
+    opacity: 0;
+    pointer-events: none;
+    visibility: visible;
+    transition:
+        opacity 220ms ease,
+        visibility 0s linear 220ms;
+}
+
+.lccb-chat-panel-content {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+    visibility: hidden;
+    transition: none;
+}
+
+.lccb-chat-panel--open .lccb-chat-panel-content {
+    pointer-events: auto;
+    visibility: visible;
+}
+
+.lccb-chat-panel--closing .lccb-chat-panel-content {
+    pointer-events: none;
+    visibility: visible;
+}
+
+@media (max-width: 480px) {
+    .lccb-chat-widget {
+        --lccb-chat-button-width: 124px;
+    }
+
+    .lccb-chat-panel {
+        right: 0;
+        bottom: 0;
+        width: calc(100vw - 40px);
+        height: calc(100vh - 40px);
+    }
+}
+
+.lccb-chat-conversation {
+    animation: none;
+}
+
+.lccb-chat-requests {
+    overflow: hidden;
+    transition:
+        max-height 220ms cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 180ms ease-out,
+        transform 180ms ease-out;
+}
+
+.lccb-chat-requests--open {
+    max-height: 520px;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.lccb-chat-requests--closed {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+}
+
+.lccb-chat-request-banner {
+    animation: none;
+}
+
+.lccb-chat-message {
+    animation: none;
+}
+
+.lccb-chat-chevron {
+    display: inline-flex;
+    transition: transform 160ms ease-out;
+}
+
+.lccb-chat-chevron--open {
+    transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lccb-chat-conversation,
+    .lccb-chat-request-banner,
+    .lccb-chat-message {
+        animation: none !important;
+    }
+
+    .lccb-chat-panel,
+    .lccb-chat-panel::after,
+    .lccb-chat-panel-content,
+    .lccb-chat-toggle-button,
+    .lccb-chat-requests,
+    .lccb-chat-chevron {
+        transition: none !important;
+    }
+}

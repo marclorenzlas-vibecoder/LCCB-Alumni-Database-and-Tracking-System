@@ -341,7 +341,7 @@ export default function EventsListScreen({ navigation, route }) {
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.screenTitle}>Events</Text>
-        <Text style={styles.screenSubtitle}>Find upcoming activities, today's events, and past gatherings.</Text>
+        <Text style={styles.screenSubtitle}>Find upcoming activities, current events, and past gatherings.</Text>
 
         <View style={styles.searchRow}>
           <View style={styles.searchShell}>
