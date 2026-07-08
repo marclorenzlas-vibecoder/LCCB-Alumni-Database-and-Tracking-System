@@ -1362,6 +1362,23 @@ body::-webkit-scrollbar,
     transform: translateY(0) scale(0.98);
 }
 
+@media (max-width: 768px) {
+    .lccb-chat-widget {
+        --lccb-chat-button-width: 48px;
+    }
+
+    .lccb-chat-toggle-button {
+        width: 48px;
+        padding: 0;
+        border-radius: 9999px;
+        gap: 0;
+    }
+
+    .lccb-chat-toggle-button span:not(.absolute) {
+        display: none;
+    }
+}
+
 .lccb-chat-toggle-button--hidden {
     opacity: 0;
     pointer-events: none;

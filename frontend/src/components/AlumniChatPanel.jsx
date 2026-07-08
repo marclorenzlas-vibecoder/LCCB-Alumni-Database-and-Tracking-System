@@ -390,6 +390,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
     ? resolveContactChatId(currentUserId, selectedContact, conversationSummaries)
     : '';
   const selectedSummary = selectedChatId ? conversationSummaries[selectedChatId] : null;
+  const selectedUnreadCount = Number(selectedSummary?.unreadCount) || 0;
   const selectedConversationStatus = getConversationStatus(selectedSummary);
   const isSelectedIncomingRequest =
     selectedConversationStatus === 'pending' &&
@@ -489,10 +490,9 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   }, [selectedChatId]);
 
   useEffect(() => {
-    if (!currentUserId || !selectedChatId || !selectedSummary) return;
-    if ((Number(selectedSummary?.unreadCount) || 0) <= 0) return;
+    if (!currentUserId || !selectedChatId || selectedUnreadCount <= 0) return;
     markConversationRead(currentUserId, selectedChatId).catch(() => {});
-  }, [currentUserId, messages.length, selectedChatId, selectedSummary?.unreadCount]);
+  }, [currentUserId, messages.length, selectedChatId, selectedUnreadCount]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });

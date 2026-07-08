@@ -313,6 +313,7 @@ export default function AlumniDirectoryScreen({ navigation }) {
   const groupLabel = selectedGroup === 'ALL' ? 'All Program' : (groupLabelMap[selectedGroup] || selectedGroup);
 
   return (
+    <View style={styles.screenRoot}>
     <ScreenContainer>
       <View style={styles.heroWrap}>
         <Text style={styles.heroTitle}>Alumni Directory</Text>
@@ -418,7 +419,6 @@ export default function AlumniDirectoryScreen({ navigation }) {
                   <Text style={styles.metaLine}>{role}</Text>
                   {company ? <Text style={styles.metaLine}>{company}</Text> : null}
                 </View>
-
               </View>
             </Pressable>
           );
@@ -512,6 +512,16 @@ export default function AlumniDirectoryScreen({ navigation }) {
         </Pressable>
       </Modal>
     </ScreenContainer>
+      <Pressable
+        style={styles.floatingMessageButton}
+        onPress={() => navigation.navigate('AlumniChat')}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Open messages"
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={24} color="#fff" />
+      </Pressable>
+    </View>
   );
 }
 
@@ -578,6 +588,10 @@ function OptionPicker({ visible, title, options, sections, selected, onSelect, o
 }
 
 const styles = StyleSheet.create({
+  screenRoot: {
+    flex: 1,
+    backgroundColor: '#ffffff'
+  },
   heroWrap: {
     alignItems: 'flex-start',
     paddingHorizontal: 14,
@@ -593,6 +607,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     lineHeight: 20
+  },
+  floatingMessageButton: {
+    position: 'absolute',
+    right: 22,
+    bottom: 22,
+    zIndex: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 8
   },
   filterPanel: {
     borderWidth: 1,
