@@ -30,6 +30,8 @@ const AuthForm = ({ isLogin, toggleForm }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [isConsentChecked, setIsConsentChecked] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -43,10 +45,16 @@ const AuthForm = ({ isLogin, toggleForm }) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (!isLogin) {
+      setIsConsentChecked(false);
+      setShowConsentModal(true);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      if (isLogin) {
         // Login logic
         const response = await authService.login(formData.email, formData.password);
         setSuccess('Login successful! Redirecting...');
@@ -59,33 +67,49 @@ const AuthForm = ({ isLogin, toggleForm }) => {
         setTimeout(() => {
           navigate('/');
         }, 1500);
-      } else {
-        // Registration logic
-        const registrationData = {
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          studentId: formData.studentId,
-          contactNumber: formData.contactNumber,
-          level: formData.level,
-          course: formData.course,
-          batch: formData.batch,
-          graduationYear: formData.graduation
-        };
-
-        const response = await authService.register(registrationData);
-        setSuccess('Registration successful! Redirecting to login...');
-        try { console.log('TOAST: AuthForm registration success - ready to show toast'); toast.success(response.message || 'Registration successful!'); } catch (e) {}
-        
-        // Redirect to login after successful registration
-        setTimeout(() => {
-          toggleForm(); // Switch to login form
-        }, 1500);
-      }
     } catch (err) {
       // Handle errors
+      setError(err.response?.data?.message || 'An error occurred');
+      console.error('Authentication error:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const submitRegistration = async () => {
+    if (!isConsentChecked) {
+      setError('Please check the consent box before registering.');
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setIsSubmitting(true);
+
+    try {
+      const registrationData = {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        studentId: formData.studentId,
+        contactNumber: formData.contactNumber,
+        level: formData.level,
+        course: formData.course,
+        batch: formData.batch,
+        graduationYear: formData.graduation
+      };
+
+      const response = await authService.register(registrationData);
+      setShowConsentModal(false);
+      setSuccess('Registration successful! Redirecting to login...');
+      try { console.log('TOAST: AuthForm registration success - ready to show toast'); toast.success(response.message || 'Registration successful!'); } catch (e) {}
+
+      setTimeout(() => {
+        toggleForm();
+      }, 1500);
+    } catch (err) {
       setError(err.response?.data?.message || 'An error occurred');
       console.error('Authentication error:', err);
     } finally {
@@ -323,6 +347,78 @@ const AuthForm = ({ isLogin, toggleForm }) => {
           </button>
         </div>
       </form>
+      {showConsentModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/65 px-4 py-6 backdrop-blur-sm" style={{ animation: 'privacyBackdropFadeIn 180ms ease-out both' }}>
+          <style>{`
+            @keyframes privacyBackdropFadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes privacyModalFadeIn {
+              from { opacity: 0; transform: translateY(12px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10" style={{ animation: 'privacyModalFadeIn 220ms ease-out both' }}>
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Data Privacy Consent Notice</p>
+              <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Before creating your account</h2>
+            </div>
+            <div className="max-h-[62vh] overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700">
+              <p>
+                As a graduate/alumnus of La Consolacion College Bacolod (LCCB), your privacy is important to us.
+                By creating an account in the LCCB Alumni Tracking System, you explicitly consent to the collection,
+                processing, and secure storage of your personal, academic, and employment information.
+              </p>
+              <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                <h3 className="text-sm font-bold text-slate-950">Our Commitment to You:</h3>
+                <ul className="mt-3 space-y-3">
+                  <li><span className="font-bold text-slate-900">Secure Storage:</span> Your information will be securely stored inside our institutional database.</li>
+                  <li><span className="font-bold text-slate-900">Privacy First:</span> Your sensitive details, such as contact information and location, can be completely hidden from the directory using your personal profile privacy toggles.</li>
+                  <li><span className="font-bold text-slate-900">No Third-Party Sharing:</span> Your data will never be shared, sold, or distributed to outside organizations and is strictly used for school community tracking, events, employment opportunities, and donation tracking.</li>
+                </ul>
+              </div>
+              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
+                <input
+                  type="checkbox"
+                  checked={isConsentChecked}
+                  onChange={(event) => setIsConsentChecked(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
+                />
+                <span className="text-sm font-semibold text-slate-900">
+                  I have read and agree to the Data Privacy Terms and Conditions.
+                </span>
+              </label>
+            </div>
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsConsentChecked(false);
+                  setShowConsentModal(false);
+                }}
+                disabled={isSubmitting}
+                className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitRegistration}
+                disabled={isSubmitting || !isConsentChecked}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-lg transition ${
+                  isConsentChecked && !isSubmitting
+                    ? 'bg-blue-900 shadow-blue-900/25 hover:bg-blue-800'
+                    : 'cursor-not-allowed bg-slate-400 shadow-slate-400/10'
+                }`}
+              >
+                {isSubmitting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                {isSubmitting ? 'Processing...' : 'I Agree & Register'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

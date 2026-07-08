@@ -7,6 +7,19 @@ import UserLayout from './UserLayout';
 import { toast } from 'react-toastify';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
+const initialJobForm = {
+  alumni_id: '',
+  company: '',
+  job_title: '',
+  location: '',
+  department: '',
+  type: '',
+  requirements: '',
+  benefits: '',
+  application_url: '',
+  description: ''
+};
+
 /**
  * Employment Component - Job Postings
  * 
@@ -20,19 +33,7 @@ const Employment = () => {
   const [alumniList, setAlumniList] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({
-    alumni_id: '',
-    company: '',
-    job_title: '',
-    location: '',
-    department: '',
-    type: '',
-    salary: '',
-    requirements: '',
-    benefits: '',
-    deadline: '',
-    description: ''
-  });
+  const [formData, setFormData] = useState(initialJobForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -142,13 +143,39 @@ const Employment = () => {
     }));
   };
 
+  const normalizeExternalUrl = (url) => {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    try {
+      return new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).toString();
+    } catch {
+      return '';
+    }
+  };
+
+  const openApplicationLink = (job) => {
+    const externalUrl = normalizeExternalUrl(job?.application_url);
+    if (!externalUrl) {
+      toast.warning('No application link is available for this job.');
+      return;
+    }
+    window.open(externalUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      // Prepare job data for job_posting table
+      const applicationUrl = normalizeExternalUrl(formData.application_url);
+      if (!applicationUrl) {
+        setError('Please enter a valid Application Link.');
+        setLoading(false);
+        return;
+      }
+
+      // Prepare external job directory data for job_posting table
       const jobData = {
         posted_by_alumni_id: parseInt(formData.alumni_id),
         job_title: formData.job_title,
@@ -156,11 +183,10 @@ const Employment = () => {
         location: formData.location,
         department: formData.department || null,
         job_type: formData.type,
-        salary_range: formData.salary || null,
         requirements: formData.requirements || null,
         benefits: formData.benefits || null,
         description: formData.description || null,
-        application_deadline: formData.deadline ? new Date(formData.deadline).toISOString() : null
+        application_url: applicationUrl
       };
 
       if (editingId) {
@@ -177,19 +203,7 @@ const Employment = () => {
       
       setShowModal(false);
       setEditingId(null);
-      setFormData({
-        alumni_id: '',
-        company: '',
-        job_title: '',
-        location: '',
-        department: '',
-        type: '',
-        salary: '',
-        requirements: '',
-        benefits: '',
-        deadline: '',
-        description: ''
-      });
+      setFormData(initialJobForm);
     } catch (err) {
       console.error('Error saving job:', err);
       setError(err.response?.data?.error || 'Failed to save job');
@@ -207,10 +221,9 @@ const Employment = () => {
       location: job.location || '',
       department: job.department || '',
       type: job.job_type || '',
-      salary: job.salary_range || '',
       requirements: job.requirements || '',
       benefits: job.benefits || '',
-      deadline: job.application_deadline ? new Date(job.application_deadline).toISOString().split('T')[0] : '',
+      application_url: job.application_url || '',
       description: job.description || ''
     });
     setShowModal(true);
@@ -284,7 +297,7 @@ const Employment = () => {
             </div>
             {isTeacher && (
               <button
-                onClick={() => { setEditingId(null); setFormData({ alumni_id: '', company: '', job_title: '', location: '', department: '', type: '', salary: '', requirements: '', benefits: '', deadline: '', description: '' }); setError(''); setShowModal(true); }}
+                onClick={() => { setEditingId(null); setFormData(initialJobForm); setError(''); setShowModal(true); }}
                 className="app-primary-button"
               >
                 Add New
@@ -587,30 +600,19 @@ const Employment = () => {
                       </select>
                     </div>
 
-                    <div>
+                    <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Salary Range
+                        Application Link *
                       </label>
                       <input
                         type="text"
-                        name="salary"
-                        value={formData.salary}
+                        inputMode="url"
+                        name="application_url"
+                        value={formData.application_url}
                         onChange={handleInputChange}
+                        required
                         className={fieldClass}
-                        placeholder="e.g. ₱80,000 - ₱120,000"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Application Deadline
-                      </label>
-                      <input
-                        type="date"
-                        name="deadline"
-                        value={formData.deadline}
-                        onChange={handleInputChange}
-                        className={fieldClass}
+                        placeholder="https://www.linkedin.com/jobs/view/..."
                       />
                     </div>
 
@@ -706,6 +708,13 @@ const Employment = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                   Back to Jobs
                 </button>
+                <button
+                  type="button"
+                  onClick={() => openApplicationLink(selectedJob)}
+                  className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                >
+                  Apply
+                </button>
               </div>
             </div>
 
@@ -715,38 +724,12 @@ const Employment = () => {
                   <div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900">{selectedJob.job_title}</h1>
                     <p className="mt-2 text-lg text-slate-500">{selectedJob.company}</p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {selectedJob.location && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                          {selectedJob.location}
-                        </span>
-                      )}
-                      {selectedJob.job_type && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          {selectedJob.job_type}
-                        </span>
-                      )}
-                      {selectedJob.salary_range && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          {selectedJob.salary_range}
-                        </span>
-                      )}
-                      {selectedJob.application_deadline && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          Deadline: {new Date(selectedJob.application_deadline).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                       <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Job Details</h3>
-                      <div className="space-y-3">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
@@ -766,36 +749,12 @@ const Employment = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500">Salary Range</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedJob.salary_range || 'Not specified'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Timeline</h3>
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                           </div>
                           <div>
                             <p className="text-xs text-slate-500">Posted</p>
                             <p className="text-sm font-semibold text-slate-900">{selectedJob.created_at ? new Date(selectedJob.created_at).toLocaleDateString() : 'N/A'}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500">Application Deadline</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedJob.application_deadline ? new Date(selectedJob.application_deadline).toLocaleDateString() : 'Open until filled'}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">

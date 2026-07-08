@@ -25,6 +25,9 @@ const Register = () => {
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [isConsentChecked, setIsConsentChecked] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -69,29 +72,47 @@ const Register = () => {
     };
   });
 
-  const handleSubmit = async (e) => {
+  const validateRegistrationForm = () => {
+    if (!formData.username || !formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.contactNumber || !formData.level || !formData.course || !formData.batch) {
+      toast.error('Please fill in all required fields marked with *');
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Please enter a valid email address');
+      return false;
+    }
+
+    const emailDomain = formData.email.split('@')[1];
+    if (emailDomain !== 'gmail.com') {
+      toast.error('Alumni registration is only available for Gmail accounts. Teachers should contact admin for @lccbonline.com accounts.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = (e) => {
     e.preventDefault();
+    if (!validateRegistrationForm()) return;
+    setIsConsentChecked(false);
+    setShowConsentModal(true);
+  };
+
+  const submitRegistration = async () => {
+    if (!validateRegistrationForm()) {
+      setShowConsentModal(false);
+      return;
+    }
+    if (!isConsentChecked) {
+      toast.error('Please check the consent box before registering.');
+      return;
+    }
+
+    setIsRegistering(true);
 
     try {
-      // Validate inputs
-      if (!formData.username || !formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.contactNumber || !formData.level || !formData.course || !formData.batch) {
-        toast.error('Please fill in all required fields marked with *');
-        return;
-      }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        toast.error('Please enter a valid email address');
-        return;
-      }
-
-      // Check email domain - only allow gmail.com for self-registration
-      const emailDomain = formData.email.split('@')[1];
-      if (emailDomain !== 'gmail.com') {
-        toast.error('Alumni registration is only available for Gmail accounts. Teachers should contact admin for @lccbonline.com accounts.');
-        return;
-      }
 
       // Log data being sent (for debugging)
       console.log('📤 Sending registration data:', {
@@ -140,6 +161,10 @@ const Register = () => {
       } else {
         toast.error('Registration failed. Please try again.');
       }
+    } finally {
+      setIsRegistering(false);
+      setShowConsentModal(false);
+      setIsConsentChecked(false);
     }
   };
 
@@ -338,7 +363,7 @@ const Register = () => {
                 icon={<svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3h12v2H4V3zM4 7h12v2H4V7zM4 11h12v2H4v-2z"/></svg>}
                 sections={registerCourseSections}
                 onSelect={(v) => { setFormData(prev => ({ ...prev, course: prev.course === v ? '' : v })); setShowCourseMenu(false); }}
-                panelTitle="All Groups"
+                panelTitle="All Program"
                 panelWidthClass="w-full"
                 alignClass="right-0"
               />
@@ -436,6 +461,90 @@ const Register = () => {
           </div>
         </div>
       </div>
+      {showConsentModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/65 px-4 py-6 backdrop-blur-sm" style={{ animation: 'privacyBackdropFadeIn 180ms ease-out both' }}>
+          <style>{`
+            @keyframes privacyBackdropFadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes privacyModalFadeIn {
+              from { opacity: 0; transform: translateY(12px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10" style={{ animation: 'privacyModalFadeIn 220ms ease-out both' }}>
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Data Privacy Consent Notice</p>
+              <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Before creating your account</h2>
+            </div>
+
+            <div className="max-h-[62vh] overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700">
+              <p>
+                As a graduate/alumnus of La Consolacion College Bacolod (LCCB), your privacy is important to us.
+                By creating an account in the LCCB Alumni Tracking System, you explicitly consent to the collection,
+                processing, and secure storage of your personal, academic, and employment information.
+              </p>
+
+              <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                <h3 className="text-sm font-bold text-slate-950">Our Commitment to You:</h3>
+                <ul className="mt-3 space-y-3">
+                  <li>
+                    <span className="font-bold text-slate-900">Secure Storage:</span> Your information will be securely stored inside our institutional database.
+                  </li>
+                  <li>
+                    <span className="font-bold text-slate-900">Privacy First:</span> Your sensitive details, such as contact information and location, can be completely hidden from the directory using your personal profile privacy toggles.
+                  </li>
+                  <li>
+                    <span className="font-bold text-slate-900">No Third-Party Sharing:</span> Your data will never be shared, sold, or distributed to outside organizations and is strictly used for school community tracking, events, employment opportunities, and donation tracking.
+                  </li>
+                </ul>
+              </div>
+
+              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
+                <input
+                  type="checkbox"
+                  checked={isConsentChecked}
+                  onChange={(event) => setIsConsentChecked(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
+                />
+                <span className="text-sm font-semibold text-slate-900">
+                  I have read and agree to the Data Privacy Terms and Conditions.
+                </span>
+              </label>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsConsentChecked(false);
+                  setShowConsentModal(false);
+                }}
+                disabled={isRegistering}
+                className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitRegistration}
+                disabled={isRegistering || !isConsentChecked}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-lg transition ${
+                  isConsentChecked && !isRegistering
+                    ? 'bg-blue-900 shadow-blue-900/25 hover:bg-blue-800'
+                    : 'cursor-not-allowed bg-slate-400 shadow-slate-400/10'
+                }`}
+              >
+                {isRegistering && (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                )}
+                {isRegistering ? 'Processing...' : 'I Agree & Register'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

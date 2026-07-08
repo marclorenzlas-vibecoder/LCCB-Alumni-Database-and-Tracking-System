@@ -7,6 +7,8 @@ const path = require('path');
 const fs = require('fs');
 const { alumniAuthMiddleware, teacherAuthMiddleware, flexibleAuthMiddleware } = require('../middleware/auth');
 
+const MAX_ITEM_IMAGES = 6;
+
 // ensure uploads/donations exists
 const donationsDir = path.join(__dirname, '../../uploads/donations');
 if (!fs.existsSync(donationsDir)) {
@@ -33,6 +35,22 @@ const upload = multer({
     else cb(new Error('Only image files are allowed'));
   }
 });
+
+const uploadItemImages = (req, res, next) => {
+  upload.array('images', MAX_ITEM_IMAGES)(req, res, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_UNEXPECTED_FILE') {
+      res.status(400).json({ error: `You can upload up to ${MAX_ITEM_IMAGES} item photos.` });
+      return;
+    }
+
+    res.status(400).json({ error: error.message || 'Unable to upload item photos.' });
+  });
+};
 
 const { broadcastUpdate } = require('../services/realtimeService');
 
@@ -77,9 +95,16 @@ const buildDescriptionWithMeta = (cleanDescription = '', meta = {}) => {
     itemInstructions: typeof meta.itemInstructions === 'string' ? meta.itemInstructions.trim() : '',
     qrCodeUrl: typeof meta.qrCodeUrl === 'string' ? meta.qrCodeUrl.trim() : '',
     qrImagePath: typeof meta.qrImagePath === 'string' ? meta.qrImagePath.trim() : '',
+    paymentCurrency: typeof meta.paymentCurrency === 'string' ? meta.paymentCurrency.trim() : '',
     paymentNumber: typeof meta.paymentNumber === 'string' ? meta.paymentNumber.trim() : '',
     paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : '',
-    deliveryInstructions: typeof meta.deliveryInstructions === 'string' ? meta.deliveryInstructions.trim() : ''
+    deliveryInstructions: typeof meta.deliveryInstructions === 'string' ? meta.deliveryInstructions.trim() : '',
+    deliveryMethod: typeof meta.deliveryMethod === 'string' ? meta.deliveryMethod.trim() : '',
+    deliveryAddress: typeof meta.deliveryAddress === 'string' ? meta.deliveryAddress.trim() : '',
+    deliverySchedule: typeof meta.deliverySchedule === 'string' ? meta.deliverySchedule.trim() : '',
+    itemImagePaths: Array.isArray(meta.itemImagePaths)
+      ? meta.itemImagePaths.filter((imagePath) => typeof imagePath === 'string' && imagePath.trim()).map((imagePath) => imagePath.trim())
+      : []
   };
 
   const hasMeta = Boolean(
@@ -88,9 +113,14 @@ const buildDescriptionWithMeta = (cleanDescription = '', meta = {}) => {
     normalizedMeta.itemInstructions ||
     normalizedMeta.qrCodeUrl ||
     normalizedMeta.qrImagePath ||
+    normalizedMeta.paymentCurrency ||
     normalizedMeta.paymentNumber ||
     normalizedMeta.paymentMethods ||
-    normalizedMeta.deliveryInstructions
+    normalizedMeta.deliveryInstructions ||
+    normalizedMeta.deliveryMethod ||
+    normalizedMeta.deliveryAddress ||
+    normalizedMeta.deliverySchedule ||
+    normalizedMeta.itemImagePaths.length > 0
   );
 
   const base = (cleanDescription || '').trim();
@@ -633,14 +663,11 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
 ]), async (req, res) => {
   try {
     const { amount, date, purpose, description, category, goal } = req.body;
-    const { meta: incomingMeta } = parseDescriptionMeta(description || '');
-    const donationMode = (incomingMeta.donationMode || '').toLowerCase();
-    const isItemDonation = donationMode === 'items' || donationMode === 'item' || donationMode === 'goods';
 
-    if ((!amount && !isItemDonation) || !purpose) {
+    if (!amount || !purpose) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        required: isItemDonation ? ['purpose'] : ['amount', 'purpose']
+        required: ['amount', 'purpose']
       });
     }
 
@@ -662,6 +689,7 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
     const imagePath = imageFile ? `/uploads/donations/${imageFile.filename}` : null;
 
     const { cleanDescription, meta } = parseDescriptionMeta(description || '');
+    meta.donationMode = 'both';
     if (qrImageFile) {
       meta.qrImagePath = `/uploads/donations/${qrImageFile.filename}`;
     }
@@ -670,15 +698,22 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
     const donation = await prisma.donation.create({
       data: {
         alumni_id: alumniIdNum, // Will be null for teacher-created campaigns
-        amount: isItemDonation ? 0 : parseFloat(amount),
+        amount: parseFloat(amount),
         date: date ? new Date(date) : new Date(),
         purpose: purpose.trim(),
         description: descriptionWithMeta || null,
         image: imagePath,
         category: category ? category.trim() : null,
-        goal: goal ? parseFloat(goal) : null
+        goal: goal ? parseFloat(goal) : null,
+        donation_type: 'both'
       }
     });
+
+    await prisma.$executeRaw`
+      UPDATE donation
+      SET accepts_money = 1, accepts_items = 1, donation_type = 'both'
+      WHERE id = ${donation.id}
+    `;
 
     res.status(201).json(donation);
   } catch (error) {
@@ -759,7 +794,7 @@ router.post('/:id/broadcast-toast', flexibleAuthMiddleware, async (req, res) => 
 });
 
 // Contribute to an existing donation campaign
-router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), async (req, res) => {
+router.post('/:id/contribute', flexibleAuthMiddleware, uploadItemImages, async (req, res) => {
   try {
     const { id } = req.params;
     const { amount, description, donation_type, item_name, item_description } = req.body;
@@ -833,6 +868,7 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
       itemDetailsText = `Item: ${item_name}${item_description ? ` — ${item_description}` : ''}`;
       if (uploadedImagePaths.length > 0) {
         itemDetailsText += ` (${uploadedImagePaths.length} image${uploadedImagePaths.length > 1 ? 's' : ''} attached)`;
+        itemDetailsText += `\nItem photos: ${uploadedImagePaths.join(', ')}`;
       }
     }
 
@@ -856,7 +892,7 @@ router.post('/:id/contribute', flexibleAuthMiddleware, upload.array('images'), a
         amount: donationType === 'money' && contributionAmount > 0 ? Number(existingCampaign.amount) + contributionAmount : existingCampaign.amount,
         description: updatedDescription || existingCampaign.description,
         date: new Date(),
-        donation_type: donationType,
+        donation_type: 'both',
         item_name: donationType === 'item' ? item_name : existingCampaign.item_name,
         item_description: donationType === 'item' ? (item_description || null) : existingCampaign.item_description
       }
@@ -959,6 +995,7 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
     if (purpose !== undefined) updateData.purpose = purpose ? purpose.trim() : null;
     if (category !== undefined) updateData.category = category ? category.trim() : null;
     if (goal !== undefined) updateData.goal = goal ? parseFloat(goal) : null;
+    updateData.donation_type = 'both';
 
     if (description !== undefined || req.files?.qr_image?.[0]) {
       const incoming = parseDescriptionMeta(description !== undefined ? description : (oldDonation.description || ''));
@@ -977,6 +1014,7 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
       }
 
       const clean = description !== undefined ? incoming.cleanDescription : existing.cleanDescription;
+      mergedMeta.donationMode = 'both';
       updateData.description = buildDescriptionWithMeta(clean, mergedMeta) || null;
     }
 
@@ -998,6 +1036,12 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
       where: { id: Number(id) },
       data: updateData
     });
+
+    await prisma.$executeRaw`
+      UPDATE donation
+      SET accepts_money = 1, accepts_items = 1, donation_type = 'both'
+      WHERE id = ${Number(id)}
+    `;
 
     res.json(donation);
   } catch (error) {
@@ -1139,6 +1183,13 @@ router.get('/:id/contributions', flexibleAuthMiddleware, async (req, res) => {
           entry.itemDescription = itemMatch?.[2]?.trim() || '';
           const imagesMatch = block.match(/\((\d+)\s+image/);
           entry.imageCount = imagesMatch ? Number(imagesMatch[1]) : 0;
+          entry.deliveryMethod = extractLineValue(block, 'Delivery method');
+          entry.pickupAddress = extractLineValue(block, 'Pickup address');
+          entry.preferredSchedule = extractLineValue(block, 'Preferred schedule');
+          entry.itemImages = extractLineValue(block, 'Item photos')
+            .split(',')
+            .map((imagePath) => imagePath.trim())
+            .filter(Boolean);
           items.push(entry);
         } else {
           money.push(entry);

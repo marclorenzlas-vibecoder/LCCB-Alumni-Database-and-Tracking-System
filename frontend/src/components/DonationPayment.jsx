@@ -7,6 +7,8 @@ import paypalLogo from '../assets/paypal.png';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 
+const MAX_ITEM_IMAGES = 6;
+
 const DonationPayment = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -324,7 +326,7 @@ const DonationPayment = () => {
                 {/* Item Images */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Item Photos * (up to 5)
+                    Item Photos * (up to {MAX_ITEM_IMAGES})
                   </label>
                   <div className="flex items-center gap-3">
                     <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-all text-sm font-medium text-gray-700">
@@ -338,8 +340,15 @@ const DonationPayment = () => {
                         multiple
                         className="hidden"
                         onChange={(e) => {
-                          const files = Array.from(e.target.files).slice(0, 5);
-                          setItemImages(prev => [...prev, ...files].slice(0, 5));
+                          const incomingFiles = Array.from(e.target.files);
+                          setItemImages((prev) => {
+                            const nextFiles = [...prev, ...incomingFiles].slice(0, MAX_ITEM_IMAGES);
+                            if (prev.length + incomingFiles.length > MAX_ITEM_IMAGES) {
+                              toast.warning(`You can upload up to ${MAX_ITEM_IMAGES} item photos.`);
+                            }
+                            return nextFiles;
+                          });
+                          e.target.value = '';
                         }}
                       />
                     </label>

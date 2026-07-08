@@ -11,6 +11,8 @@ import { isAlumni, isTeacher } from '../../utils/auth';
 import { safeGoBack } from '../../utils/safeGoBack';
 import { extractDonationMeta, withDonationMeta } from '../../utils/donationMeta';
 
+const MAX_ITEM_IMAGES = 6;
+
 const CURRENCY_OPTIONS = [
   { value: 'PHP', label: 'Philippine Peso (PHP)' },
   { value: 'USD', label: 'US Dollar (USD)' },
@@ -366,7 +368,13 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.length) {
-      setItemImages(prev => [...prev, ...result.assets].slice(0, 5));
+      setItemImages((prev) => {
+        const nextImages = [...prev, ...result.assets].slice(0, MAX_ITEM_IMAGES);
+        if (prev.length + result.assets.length > MAX_ITEM_IMAGES) {
+          Alert.alert('Image limit reached', `You can upload up to ${MAX_ITEM_IMAGES} item photos.`);
+        }
+        return nextImages;
+      });
     }
   };
 
@@ -438,8 +446,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     donorName: getDonorDisplayName(),
     campaignName: campaign?.purpose || 'Donation Campaign',
     donationTypeLabel: donationType === 'item' ? `Item: ${itemName}` : 'Money',
-    amountLabel: donationType === 'item' ? 'Item' : formatAmount(amount, currency),
-    paymentMethod: donationType === 'item' ? 'Item' : (PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Debit / credit card')
+    amountLabel: donationType === 'item' ? 'Item' : formatAmount(amount, currency)
   });
 
   const handleSubmit = async () => {
@@ -486,9 +493,12 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         : 'Do not contact';
       const donationMeta = {
         donationMode: donationType === 'item' ? 'item' : 'money',
-        paymentCurrency: currency,
-        paymentNumber,
-        paymentMethods
+        paymentCurrency: donationType === 'money' ? currency : null,
+        paymentNumber: donationType === 'money' ? paymentNumber : null,
+        paymentMethods: donationType === 'money' ? paymentMethods : null,
+        deliveryMethod: donationType === 'item' ? deliveryMethod : null,
+        deliveryAddress: donationType === 'item' && deliveryMethod === 'pickup' ? deliveryAddress : null,
+        deliverySchedule: donationType === 'item' ? deliverySchedule : null
       };
       const donorSummary = [
         `Donor: ${[firstName, lastName].filter(Boolean).join(' ')}`,
@@ -607,10 +617,6 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               <Text style={styles.receiptLabel}>Type</Text>
               <Text style={styles.receiptValue}>{successState.donationTypeLabel || 'Money'}</Text>
             </View>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Payment</Text>
-              <Text style={styles.receiptValue}>{successState.paymentMethod}</Text>
-            </View>
             <View style={styles.receiptDivider} />
             <View style={styles.receiptTotalRow}>
               <Text style={styles.receiptTotalLabel}>Total Amount</Text>
@@ -675,7 +681,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         {currentStep === 1 && (
           <View style={styles.stepCard}>
             <Text style={styles.stepCardTitle}>Donation Type</Text>
-            <Text style={styles.stepCardSub}>Choose how you'd like to contribute.</Text>
+            <Text style={styles.stepCardSub}>Choose how you would like to contribute.</Text>
 
             {/* Type Toggle */}
             <View style={styles.typeToggle}>
@@ -751,7 +757,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Item Photos * (up to 5)</Text>
+                  <Text style={styles.fieldLabel}>Item Photos * (up to {MAX_ITEM_IMAGES})</Text>
                   <Pressable style={styles.currencyBtn} onPress={pickItemImages}>
                     <Ionicons name="camera-outline" size={18} color="#475569" />
                     <Text style={styles.currencyBtnLabel}>Choose Photos</Text>

@@ -7,7 +7,6 @@ import PrimaryButton from '../../components/PrimaryButton';
 import ScreenContainer from '../../components/ScreenContainer';
 import { jobService } from '../../services/jobService';
 import { getAlumniId } from '../../utils/auth';
-import { formatDate } from '../../utils/formatters';
 import { theme } from '../../theme';
 
 const initialForm = {
@@ -16,10 +15,9 @@ const initialForm = {
   location: '',
   department: '',
   job_type: '',
-  salary_range: '',
   requirements: '',
   benefits: '',
-  application_deadline: '',
+  application_url: '',
   description: ''
 };
 
@@ -55,8 +53,8 @@ export default function JobManagementScreen({ user }) {
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const onSubmit = async () => {
-    if (!form.job_title || !form.company) {
-      Alert.alert('Missing fields', 'Job title and company are required.');
+    if (!form.job_title || !form.company || !form.application_url) {
+      Alert.alert('Missing fields', 'Job title, company, and application link are required.');
       return;
     }
 
@@ -91,10 +89,9 @@ export default function JobManagementScreen({ user }) {
       location: job.location || '',
       department: job.department || '',
       job_type: job.job_type || '',
-      salary_range: job.salary_range || '',
       requirements: job.requirements || '',
       benefits: job.benefits || '',
-      application_deadline: job.application_deadline ? String(job.application_deadline).slice(0, 10) : '',
+      application_url: job.application_url || '',
       description: job.description || ''
     });
   };
@@ -117,11 +114,17 @@ export default function JobManagementScreen({ user }) {
         <TextInput style={styles.input} placeholder="Location" value={form.location} onChangeText={(v) => setField('location', v)} />
         <TextInput style={styles.input} placeholder="Department (e.g. Technology, Marketing)" value={form.department} onChangeText={(v) => setField('department', v)} />
         <TextInput style={styles.input} placeholder="Job Type" value={form.job_type} onChangeText={(v) => setField('job_type', v)} />
-        <TextInput style={styles.input} placeholder="Salary Range" value={form.salary_range} onChangeText={(v) => setField('salary_range', v)} />
         <TextInput style={[styles.input, styles.textArea]} placeholder="Requirements" multiline value={form.requirements} onChangeText={(v) => setField('requirements', v)} />
         <TextInput style={[styles.input, styles.textArea]} placeholder="Benefits" multiline value={form.benefits} onChangeText={(v) => setField('benefits', v)} />
-        <TextInput style={styles.input} placeholder="Application Deadline (YYYY-MM-DD)" value={form.application_deadline} onChangeText={(v) => setField('application_deadline', v)} />
-        <TextInput style={[styles.input, styles.textArea]} placeholder="Description" multiline value={form.description} onChangeText={(v) => setField('description', v)} />
+        <TextInput
+          style={styles.input}
+          placeholder="Application Link / Job URL"
+          autoCapitalize="none"
+          keyboardType="url"
+          value={form.application_url}
+          onChangeText={(v) => setField('application_url', v)}
+        />
+        <TextInput style={[styles.input, styles.textAreaLarge]} placeholder="Job Description" multiline value={form.description} onChangeText={(v) => setField('description', v)} />
         <PrimaryButton label={saving ? 'Saving...' : editingId ? 'Update Job' : 'Create Job'} onPress={onSubmit} disabled={saving} />
       </View>
 
@@ -132,7 +135,6 @@ export default function JobManagementScreen({ user }) {
         <View key={job.id} style={styles.card}>
           <Text style={styles.title}>{job.job_title}</Text>
           <Text style={styles.meta}>{job.company} • {job.location || 'TBA'}</Text>
-          <Text style={styles.meta}>Deadline: {formatDate(job.application_deadline)}</Text>
 
           <View style={styles.actions}>
             <Pressable style={styles.editBtn} onPress={() => onEdit(job)}>
@@ -171,6 +173,10 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 84,
+    textAlignVertical: 'top'
+  },
+  textAreaLarge: {
+    minHeight: 132,
     textAlignVertical: 'top'
   },
   card: {

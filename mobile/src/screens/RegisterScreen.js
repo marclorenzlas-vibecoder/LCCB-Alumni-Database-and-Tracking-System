@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/ScreenContainer';
 import ScreenHeader from '../components/ScreenHeader';
@@ -78,8 +78,11 @@ export default function RegisterScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [levelMenuOpen, setLevelMenuOpen] = useState(false);
   const [courseMenuOpen, setCourseMenuOpen] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [isConsentChecked, setIsConsentChecked] = useState(false);
   const [levelOptions, setLevelOptions] = useState(DEFAULT_LEVEL_OPTIONS);
   const [courseGroups, setCourseGroups] = useState(DEFAULT_COURSE_GROUPS);
+  const consentFade = useRef(new Animated.Value(0)).current;
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -113,7 +116,17 @@ export default function RegisterScreen({ navigation }) {
     return () => { mounted = false; };
   }, []);
 
-  const onRegister = async () => {
+  useEffect(() => {
+    if (!showConsentModal) return;
+    consentFade.setValue(0);
+    Animated.timing(consentFade, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true
+    }).start();
+  }, [consentFade, showConsentModal]);
+
+  const validateRegistrationForm = () => {
     if (
       !form.username ||
       !form.email ||
@@ -126,12 +139,33 @@ export default function RegisterScreen({ navigation }) {
       !form.batch
     ) {
       Alert.alert('Missing fields', 'Please fill in all required fields.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const onRegister = () => {
+    if (!validateRegistrationForm()) return;
+    setIsConsentChecked(false);
+    setShowConsentModal(true);
+  };
+
+  const submitRegistration = async () => {
+    if (!validateRegistrationForm()) {
+      setShowConsentModal(false);
+      return;
+    }
+    if (!isConsentChecked) {
+      Alert.alert('Consent required', 'Please check the consent box before registering.');
       return;
     }
 
     setSubmitting(true);
     try {
       const response = await authService.register(form);
+      setShowConsentModal(false);
+      setIsConsentChecked(false);
 
       Alert.alert('Submitted', response.message || 'Registration submitted for approval.', [
         {
@@ -334,6 +368,85 @@ export default function RegisterScreen({ navigation }) {
               </ScrollView>
             </Pressable>
           </Pressable>
+        </Modal>
+
+        <Modal visible={showConsentModal} transparent animationType="fade" onRequestClose={() => setShowConsentModal(false)}>
+          <View style={styles.consentBackdrop}>
+            <Animated.View
+              style={[
+                styles.consentCard,
+                {
+                  opacity: consentFade,
+                  transform: [{
+                    translateY: consentFade.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0]
+                    })
+                  }]
+                }
+              ]}
+            >
+              <View style={styles.consentHeader}>
+                <Text style={styles.consentEyebrow}>DATA PRIVACY CONSENT NOTICE</Text>
+                <Text style={styles.consentTitle}>Before creating your account</Text>
+              </View>
+
+              <ScrollView style={styles.consentScroll} contentContainerStyle={styles.consentContent} showsVerticalScrollIndicator>
+                <Text style={styles.consentParagraph}>
+                  As a graduate/alumnus of La Consolacion College Bacolod (LCCB), your privacy is important to us.
+                  By creating an account in the LCCB Alumni Tracking System, you explicitly consent to the collection,
+                  processing, and secure storage of your personal, academic, and employment information.
+                </Text>
+
+                <View style={styles.commitmentBox}>
+                  <Text style={styles.commitmentTitle}>Our Commitment to You:</Text>
+                  <Text style={styles.commitmentItem}>
+                    <Text style={styles.commitmentStrong}>Secure Storage:</Text> Your information will be securely stored inside our institutional database.
+                  </Text>
+                  <Text style={styles.commitmentItem}>
+                    <Text style={styles.commitmentStrong}>Privacy First:</Text> Your sensitive details, such as contact information and location, can be completely hidden from the directory using your personal profile privacy toggles.
+                  </Text>
+                  <Text style={styles.commitmentItem}>
+                    <Text style={styles.commitmentStrong}>No Third-Party Sharing:</Text> Your data will never be shared, sold, or distributed to outside organizations and is strictly used for school community tracking, events, employment opportunities, and donation tracking.
+                  </Text>
+                </View>
+
+                <Pressable
+                  style={styles.checkboxRow}
+                  onPress={() => setIsConsentChecked((value) => !value)}
+                  disabled={submitting}
+                >
+                  <View style={[styles.checkboxBox, isConsentChecked && styles.checkboxBoxChecked]}>
+                    {isConsentChecked ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+                  </View>
+                  <Text style={styles.consentQuestion}>I have read and agree to the Data Privacy Terms and Conditions.</Text>
+                </Pressable>
+              </ScrollView>
+
+              <View style={styles.consentActions}>
+                <Pressable
+                  style={[styles.consentButton, styles.declineButton, submitting && styles.buttonDisabled]}
+                  onPress={() => {
+                    setIsConsentChecked(false);
+                    setShowConsentModal(false);
+                  }}
+                  disabled={submitting}
+                >
+                  <Text style={styles.declineText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.consentButton,
+                    isConsentChecked && !submitting ? styles.agreeButton : styles.agreeButtonDisabled
+                  ]}
+                  onPress={submitRegistration}
+                  disabled={submitting || !isConsentChecked}
+                >
+                  <Text style={styles.agreeText}>{submitting ? 'Processing...' : 'I Agree & Register'}</Text>
+                </Pressable>
+              </View>
+            </Animated.View>
+          </View>
         </Modal>
       </ScrollView>
     </ScreenContainer>
@@ -544,5 +657,136 @@ const styles = StyleSheet.create({
   linkBold: {
     color: '#1d4ed8',
     fontWeight: '600'
+  },
+  consentBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.62)',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 24
+  },
+  consentCard: {
+    maxHeight: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    overflow: 'hidden'
+  },
+  consentHeader: {
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 18,
+    paddingVertical: 16
+  },
+  consentEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1d4ed8',
+    letterSpacing: 1.2
+  },
+  consentTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 6
+  },
+  consentScroll: {
+    maxHeight: 380
+  },
+  consentContent: {
+    padding: 18,
+    gap: 14
+  },
+  consentParagraph: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#334155'
+  },
+  commitmentBox: {
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10
+  },
+  commitmentTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  commitmentItem: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#334155'
+  },
+  commitmentStrong: {
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  consentQuestion: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    padding: 12
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1
+  },
+  checkboxBoxChecked: {
+    borderColor: '#1d4ed8',
+    backgroundColor: '#1d4ed8'
+  },
+  consentActions: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0'
+  },
+  consentButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  declineButton: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff'
+  },
+  agreeButton: {
+    backgroundColor: '#1d4ed8'
+  },
+  agreeButtonDisabled: {
+    backgroundColor: '#94a3b8'
+  },
+  declineText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#475569'
+  },
+  agreeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#fff'
   }
 });

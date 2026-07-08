@@ -9,6 +9,24 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import { extractDonationMeta, withDonationMeta } from '../utils/donationMeta';
 
+const initialDonationForm = {
+  purpose: '',
+  description: '',
+  category: '',
+  amount: '',
+  goal: '',
+  date: '',
+  image: null,
+  qrImage: null,
+  qrCodeUrl: '',
+  qrImagePath: '',
+  paymentNumber: '',
+  paymentMethods: '',
+  acceptedItems: '',
+  itemInstructions: '',
+  deliveryInstructions: ''
+};
+
 function DonationCard({ donation, isTeacher, onEdit, onDelete, onDonate, onShare, formatAmount, calculateProgress }) {
   const titleRef = useRef(null);
   const [descLines, setDescLines] = useState(4);
@@ -135,21 +153,7 @@ const Donations = () => {
   const isTeacher = authService.isTeacher();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({
-    purpose: '',
-    description: '',
-    category: '',
-    amount: '',
-    goal: '',
-    date: '',
-    image: null,
-    qrImage: null,
-    qrCodeUrl: '',
-    qrImagePath: '',
-    paymentNumber: '',
-    paymentMethods: '',
-    deliveryInstructions: ''
-  });
+  const [formData, setFormData] = useState(initialDonationForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedQrDonation, setSelectedQrDonation] = useState(null);
@@ -241,6 +245,9 @@ const Donations = () => {
 
     try {
       const descriptionWithMeta = withDonationMeta(formData.description, {
+        donationMode: 'both',
+        acceptedItems: formData.acceptedItems,
+        itemInstructions: formData.itemInstructions,
         qrCodeUrl: formData.qrCodeUrl,
         qrImagePath: formData.qrImagePath,
         paymentNumber: formData.paymentNumber,
@@ -256,7 +263,8 @@ const Donations = () => {
         fd.append('purpose', formData.purpose);
         fd.append('description', descriptionWithMeta);
         fd.append('category', formData.category);
-        fd.append('amount', formData.amount);
+        fd.append('amount', formData.amount || '0');
+        fd.append('donation_type', 'both');
         if (formData.goal) fd.append('goal', formData.goal);
         if (formData.date) fd.append('date', formData.date);
         if (formData.image) fd.append('image', formData.image);
@@ -266,6 +274,8 @@ const Donations = () => {
         const { image, qrImage, ...rest } = formData;
         payload = {
           ...rest,
+          amount: formData.amount,
+          donation_type: 'both',
           description: descriptionWithMeta
         };
       }
@@ -282,21 +292,7 @@ const Donations = () => {
 
       setShowModal(false);
       setEditingId(null);
-      setFormData({
-        purpose: '',
-        description: '',
-        category: '',
-        amount: '',
-        goal: '',
-        date: '',
-        image: null,
-        qrImage: null,
-        qrCodeUrl: '',
-        qrImagePath: '',
-        paymentNumber: '',
-        paymentMethods: '',
-        deliveryInstructions: ''
-      });
+      setFormData(initialDonationForm);
     } catch (err) {
       console.error('Error saving donation:', err);
       const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to save campaign';
@@ -323,6 +319,8 @@ const Donations = () => {
       qrImagePath: meta.qrImagePath || '',
       paymentNumber: meta.paymentNumber || '',
       paymentMethods: meta.paymentMethods || '',
+      acceptedItems: meta.acceptedItems || '',
+      itemInstructions: meta.itemInstructions || '',
       deliveryInstructions: meta.deliveryInstructions || ''
     });
     setShowModal(true);
@@ -454,7 +452,12 @@ const Donations = () => {
             </div>
             {isTeacher && (
               <button 
-                onClick={() => setShowModal(true)}
+                onClick={() => {
+                  setEditingId(null);
+                  setError('');
+                  setFormData(initialDonationForm);
+                  setShowModal(true);
+                }}
                 className="app-primary-button">
                 Add New
               </button>
@@ -634,6 +637,48 @@ const Donations = () => {
                       )}
                     </div>
 
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Accepted Item Classifications
+                      </label>
+                      <textarea
+                        name="acceptedItems"
+                        value={formData.acceptedItems}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="app-textarea"
+                        placeholder="Educational Supplies / Books&#10;IT Hardware / Electronic Equipment&#10;Classroom Furniture / General Supplies"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Item Donation Instructions
+                      </label>
+                      <textarea
+                        name="itemInstructions"
+                        value={formData.itemInstructions}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="app-textarea"
+                        placeholder="Describe required item condition, documentation, or preparation notes..."
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Delivery Instructions
+                      </label>
+                      <textarea
+                        name="deliveryInstructions"
+                        value={formData.deliveryInstructions}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="app-textarea"
+                        placeholder="Drop-off location, pickup availability, receiving hours, or contact instructions..."
+                      />
+                    </div>
+
 
 
                     <div>
@@ -678,21 +723,7 @@ const Donations = () => {
                         setShowModal(false);
                         setEditingId(null);
                         setError('');
-                        setFormData({
-                          purpose: '',
-                          description: '',
-                          category: '',
-                          amount: '',
-                          goal: '',
-                          date: '',
-                          image: null,
-                          qrImage: null,
-                          qrCodeUrl: '',
-                          qrImagePath: '',
-                          paymentNumber: '',
-                          paymentMethods: '',
-                          deliveryInstructions: ''
-                        });
+                        setFormData(initialDonationForm);
                       }}
                       className="app-secondary-button"
                     >

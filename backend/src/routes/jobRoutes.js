@@ -1,25 +1,107 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+
 const prisma = new PrismaClient();
 const router = express.Router();
+
+const normalizeJobRow = (row) => {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    posted_by_alumni_id: row.posted_by_alumni_id,
+    job_title: row.job_title,
+    company: row.company,
+    location: row.location,
+    department: row.department,
+    job_type: row.job_type,
+    salary_range: row.salary_range,
+    requirements: row.requirements,
+    benefits: row.benefits,
+    description: row.description,
+    application_url: row.application_url,
+    application_deadline: row.application_deadline,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    alumni: row.alumni_id
+      ? {
+          id: row.alumni_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          email: row.email
+        }
+      : null
+  };
+};
+
+const normalizeApplicationUrl = (value, { required = false } = {}) => {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    if (required) {
+      const error = new Error('Application Link is required');
+      error.statusCode = 400;
+      throw error;
+    }
+    return null;
+  }
+
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    const error = new Error('Application Link must be a valid URL');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    const error = new Error('Application Link must use http or https');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return parsed.toString();
+};
+
+const selectJobSql = `
+  SELECT
+    jp.id,
+    jp.posted_by_alumni_id,
+    jp.job_title,
+    jp.company,
+    jp.location,
+    jp.department,
+    jp.job_type,
+    jp.salary_range,
+    jp.requirements,
+    jp.benefits,
+    jp.description,
+    jp.application_url,
+    jp.application_deadline,
+    jp.created_at,
+    jp.updated_at,
+    a.id AS alumni_id,
+    a.first_name,
+    a.last_name,
+    a.email
+  FROM job_posting jp
+  LEFT JOIN alumni a ON a.id = jp.posted_by_alumni_id
+`;
+
+const getJobById = async (client, id) => {
+  const rows = await client.$queryRawUnsafe(
+    `${selectJobSql} WHERE jp.id = ? LIMIT 1`,
+    Number(id)
+  );
+  return normalizeJobRow(rows[0]);
+};
 
 // Get all job postings
 router.get('/', async (req, res) => {
   try {
-    const jobs = await prisma.job_posting.findMany({
-      include: {
-        alumni: {
-          select: {
-            id: true,
-            first_name: true,
-            last_name: true,
-            email: true
-          }
-        }
-      },
-      orderBy: { created_at: 'desc' }
-    });
-    res.json(jobs);
+    const rows = await prisma.$queryRawUnsafe(`${selectJobSql} ORDER BY jp.created_at DESC`);
+    res.json(rows.map(normalizeJobRow));
   } catch (error) {
     console.error('Error fetching job postings:', error);
     res.status(500).json({ error: 'Failed to fetch job postings' });
@@ -29,20 +111,7 @@ router.get('/', async (req, res) => {
 // Get job posting by ID
 router.get('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const job = await prisma.job_posting.findUnique({
-      where: { id: Number(id) },
-      include: {
-        alumni: {
-          select: {
-            id: true,
-            first_name: true,
-            last_name: true,
-            email: true
-          }
-        }
-      }
-    });
+    const job = await getJobById(prisma, req.params.id);
 
     if (!job) {
       return res.status(404).json({ error: 'Job posting not found' });
@@ -55,7 +124,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create new job posting
+// Create new external job posting
 router.post('/', async (req, res) => {
   try {
     const {
@@ -69,38 +138,61 @@ router.post('/', async (req, res) => {
       requirements,
       benefits,
       description,
+      application_url,
       application_deadline
     } = req.body;
+
+    const normalizedApplicationUrl = normalizeApplicationUrl(application_url, { required: true });
 
     if (!job_title || !company) {
       return res.status(400).json({
         error: 'Missing required fields',
-        required: ['job_title', 'company']
+        required: ['job_title', 'company', 'application_url']
       });
     }
 
-    const job = await prisma.job_posting.create({
-      data: {
-        posted_by_alumni_id: posted_by_alumni_id ? Number(posted_by_alumni_id) : null,
-        job_title,
-        company,
-        location,
-        department,
-        job_type,
-        salary_range,
-        requirements,
-        benefits,
-        description,
-        application_deadline: application_deadline ? new Date(application_deadline) : null
-      }
+    const job = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        INSERT INTO job_posting (
+          posted_by_alumni_id,
+          job_title,
+          company,
+          location,
+          department,
+          job_type,
+          salary_range,
+          requirements,
+          benefits,
+          description,
+          application_url,
+          application_deadline
+        ) VALUES (
+          ${posted_by_alumni_id ? Number(posted_by_alumni_id) : null},
+          ${job_title},
+          ${company},
+          ${location || null},
+          ${department || null},
+          ${job_type || null},
+          ${salary_range || null},
+          ${requirements || null},
+          ${benefits || null},
+          ${description || null},
+          ${normalizedApplicationUrl},
+          ${application_deadline ? new Date(application_deadline) : null}
+        )
+      `;
+
+      const inserted = await tx.$queryRaw`SELECT LAST_INSERT_ID() AS id`;
+      const createdId = Number(inserted?.[0]?.id);
+      return getJobById(tx, createdId);
     });
 
     res.status(201).json(job);
   } catch (error) {
     console.error('Error creating job posting:', error);
-    res.status(500).json({
-      error: 'Failed to create job posting',
-      details: error.message
+    res.status(error.statusCode || 500).json({
+      error: error.statusCode ? error.message : 'Failed to create job posting',
+      details: error.statusCode ? undefined : error.message
     });
   }
 });
@@ -119,34 +211,52 @@ router.put('/:id', async (req, res) => {
       requirements,
       benefits,
       description,
+      application_url,
       application_deadline
     } = req.body;
 
-    const updateData = {};
-    if (job_title) updateData.job_title = job_title;
-    if (company) updateData.company = company;
-    if (location !== undefined) updateData.location = location;
-    if (department !== undefined) updateData.department = department;
-    if (job_type !== undefined) updateData.job_type = job_type;
-    if (salary_range !== undefined) updateData.salary_range = salary_range;
-    if (requirements !== undefined) updateData.requirements = requirements;
-    if (benefits !== undefined) updateData.benefits = benefits;
-    if (description !== undefined) updateData.description = description;
+    const updateFields = [];
+    const values = [];
+    const addField = (column, value) => {
+      updateFields.push(`${column} = ?`);
+      values.push(value);
+    };
+
+    if (job_title !== undefined) addField('job_title', job_title);
+    if (company !== undefined) addField('company', company);
+    if (location !== undefined) addField('location', location || null);
+    if (department !== undefined) addField('department', department || null);
+    if (job_type !== undefined) addField('job_type', job_type || null);
+    if (salary_range !== undefined) addField('salary_range', salary_range || null);
+    if (requirements !== undefined) addField('requirements', requirements || null);
+    if (benefits !== undefined) addField('benefits', benefits || null);
+    if (description !== undefined) addField('description', description || null);
+    if (application_url !== undefined) {
+      addField('application_url', normalizeApplicationUrl(application_url, { required: true }));
+    }
     if (application_deadline !== undefined) {
-      updateData.application_deadline = application_deadline ? new Date(application_deadline) : null;
+      addField('application_deadline', application_deadline ? new Date(application_deadline) : null);
     }
 
-    const job = await prisma.job_posting.update({
-      where: { id: Number(id) },
-      data: updateData
-    });
+    if (updateFields.length > 0) {
+      values.push(Number(id));
+      await prisma.$executeRawUnsafe(
+        `UPDATE job_posting SET ${updateFields.join(', ')} WHERE id = ?`,
+        ...values
+      );
+    }
+
+    const job = await getJobById(prisma, id);
+    if (!job) {
+      return res.status(404).json({ error: 'Job posting not found' });
+    }
 
     res.json(job);
   } catch (error) {
     console.error('Error updating job posting:', error);
-    res.status(500).json({
-      error: 'Failed to update job posting',
-      details: error.message
+    res.status(error.statusCode || 500).json({
+      error: error.statusCode ? error.message : 'Failed to update job posting',
+      details: error.statusCode ? undefined : error.message
     });
   }
 });

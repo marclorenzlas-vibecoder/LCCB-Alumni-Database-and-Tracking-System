@@ -52,13 +52,32 @@ export const withDonationMeta = (cleanDescription = '', meta = {}) => {
     itemInstructions: typeof meta.itemInstructions === 'string' ? meta.itemInstructions.trim() : '',
     qrCodeUrl: typeof meta.qrCodeUrl === 'string' ? meta.qrCodeUrl.trim() : '',
     qrImagePath: typeof meta.qrImagePath === 'string' ? meta.qrImagePath.trim() : '',
+    paymentCurrency: typeof meta.paymentCurrency === 'string' ? meta.paymentCurrency.trim() : '',
     paymentNumber: typeof meta.paymentNumber === 'string' ? meta.paymentNumber.trim() : '',
     paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : '',
-    deliveryInstructions: typeof meta.deliveryInstructions === 'string' ? meta.deliveryInstructions.trim() : ''
+    deliveryInstructions: typeof meta.deliveryInstructions === 'string' ? meta.deliveryInstructions.trim() : '',
+    deliveryMethod: typeof meta.deliveryMethod === 'string' ? meta.deliveryMethod.trim() : '',
+    deliveryAddress: typeof meta.deliveryAddress === 'string' ? meta.deliveryAddress.trim() : '',
+    deliverySchedule: typeof meta.deliverySchedule === 'string' ? meta.deliverySchedule.trim() : '',
+    itemImagePaths: Array.isArray(meta.itemImagePaths)
+      ? meta.itemImagePaths.filter((path) => typeof path === 'string' && path.trim()).map((path) => path.trim())
+      : []
   };
 
   const hasMeta = Boolean(
-    sanitizedMeta.donationMode || sanitizedMeta.acceptedItems || sanitizedMeta.itemInstructions || sanitizedMeta.qrCodeUrl || sanitizedMeta.qrImagePath || sanitizedMeta.paymentNumber || sanitizedMeta.paymentMethods || sanitizedMeta.deliveryInstructions
+    sanitizedMeta.donationMode ||
+    sanitizedMeta.acceptedItems ||
+    sanitizedMeta.itemInstructions ||
+    sanitizedMeta.qrCodeUrl ||
+    sanitizedMeta.qrImagePath ||
+    sanitizedMeta.paymentCurrency ||
+    sanitizedMeta.paymentNumber ||
+    sanitizedMeta.paymentMethods ||
+    sanitizedMeta.deliveryInstructions ||
+    sanitizedMeta.deliveryMethod ||
+    sanitizedMeta.deliveryAddress ||
+    sanitizedMeta.deliverySchedule ||
+    sanitizedMeta.itemImagePaths.length > 0
   );
 
   const base = (cleanDescription || '').trim();

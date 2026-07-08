@@ -495,7 +495,6 @@ function JobCard({ job, onPress }) {
         <View style={styles.jobMetaRow}><Ionicons name="grid-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.department}</Text></View>
       ) : null}
       <View style={styles.jobMetaRow}><Ionicons name="time-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.job_type || 'Not specified'}</Text></View>
-      <View style={styles.jobMetaRow}><Ionicons name="cash-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.salary_range || 'Not specified'}</Text></View>
     </Pressable>
   );
 }

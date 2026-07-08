@@ -39,14 +39,37 @@ export const extractDonationMeta = (rawDescription = '') => {
 
 export const withDonationMeta = (cleanDescription = '', meta = {}) => {
   const normalizedMeta = {
+    donationMode: typeof meta.donationMode === 'string' ? meta.donationMode.trim() : '',
+    acceptedItems: typeof meta.acceptedItems === 'string' ? meta.acceptedItems.trim() : '',
+    itemInstructions: typeof meta.itemInstructions === 'string' ? meta.itemInstructions.trim() : '',
     qrCodeUrl: typeof meta.qrCodeUrl === 'string' ? meta.qrCodeUrl.trim() : '',
     qrImagePath: typeof meta.qrImagePath === 'string' ? meta.qrImagePath.trim() : '',
+    paymentCurrency: typeof meta.paymentCurrency === 'string' ? meta.paymentCurrency.trim() : '',
     paymentNumber: typeof meta.paymentNumber === 'string' ? meta.paymentNumber.trim() : '',
-    paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : ''
+    paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : '',
+    deliveryInstructions: typeof meta.deliveryInstructions === 'string' ? meta.deliveryInstructions.trim() : '',
+    deliveryMethod: typeof meta.deliveryMethod === 'string' ? meta.deliveryMethod.trim() : '',
+    deliveryAddress: typeof meta.deliveryAddress === 'string' ? meta.deliveryAddress.trim() : '',
+    deliverySchedule: typeof meta.deliverySchedule === 'string' ? meta.deliverySchedule.trim() : '',
+    itemImagePaths: Array.isArray(meta.itemImagePaths)
+      ? meta.itemImagePaths.filter((path) => typeof path === 'string' && path.trim()).map((path) => path.trim())
+      : []
   };
 
   const hasMeta = Boolean(
-    normalizedMeta.qrCodeUrl || normalizedMeta.qrImagePath || normalizedMeta.paymentNumber || normalizedMeta.paymentMethods
+    normalizedMeta.donationMode ||
+    normalizedMeta.acceptedItems ||
+    normalizedMeta.itemInstructions ||
+    normalizedMeta.qrCodeUrl ||
+    normalizedMeta.qrImagePath ||
+    normalizedMeta.paymentCurrency ||
+    normalizedMeta.paymentNumber ||
+    normalizedMeta.paymentMethods ||
+    normalizedMeta.deliveryInstructions ||
+    normalizedMeta.deliveryMethod ||
+    normalizedMeta.deliveryAddress ||
+    normalizedMeta.deliverySchedule ||
+    normalizedMeta.itemImagePaths.length > 0
   );
 
   const base = (cleanDescription || '').trim();

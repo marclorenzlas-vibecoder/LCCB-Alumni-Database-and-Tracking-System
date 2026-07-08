@@ -8,7 +8,7 @@ const cards = [
   {
     key: 'JobManagement',
     title: 'Job Posting Management',
-    description: 'Create, edit, and remove job postings. Review applications status.'
+    description: 'Create, edit, and remove external job directory postings.'
   },
   {
     key: 'PendingApprovals',

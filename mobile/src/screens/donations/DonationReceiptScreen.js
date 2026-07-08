@@ -48,13 +48,6 @@ export default function DonationReceiptScreen({ route, navigation }) {
             </View>
           ) : null}
 
-          {item.currency ? (
-            <View style={styles.metaRow}>
-              <Ionicons name="cash-outline" size={14} color="#64748b" />
-              <Text style={styles.metaText}>Currency: {item.currency}</Text>
-            </View>
-          ) : null}
-
           {item.message ? (
             <View style={styles.descSection}>
               <Text style={styles.descLabel}>Message</Text>

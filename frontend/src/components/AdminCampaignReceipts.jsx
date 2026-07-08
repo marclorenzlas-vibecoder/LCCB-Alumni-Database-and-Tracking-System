@@ -216,7 +216,89 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
 
 function ItemGalleryModal({ entry, campaign, campaignImages, loadingImages, onClose }) {
   if (!entry) return null;
-  const [lightboxSrc, setLightboxSrc] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
+
+  const hasLightbox = lightboxIndex !== null && campaignImages[lightboxIndex];
+  const currentLightboxSrc = hasLightbox ? campaignImages[lightboxIndex] : null;
+  const deliveryMethod = String(entry.deliveryMethod || '').trim();
+  const deliveryMethodLabel = deliveryMethod.toLowerCase().includes('pickup')
+    ? 'Pickup'
+    : deliveryMethod
+      ? 'Drop-off'
+      : '';
+  const galleryGridClass = campaignImages.length === 1
+    ? 'grid grid-cols-1 gap-2'
+    : campaignImages.length === 2
+      ? 'grid grid-cols-2 gap-2'
+      : 'grid grid-cols-2 gap-2 sm:grid-cols-3';
+
+  const openLightbox = (index) => {
+    setLightboxIndex(index);
+    setIsZoomed(false);
+    setZoomOrigin({ x: 50, y: 50 });
+  };
+
+  const closeLightbox = () => {
+    setLightboxIndex(null);
+    setIsZoomed(false);
+    setZoomOrigin({ x: 50, y: 50 });
+  };
+
+  const handlePrev = (event) => {
+    event.stopPropagation();
+    setIsZoomed(false);
+    setZoomOrigin({ x: 50, y: 50 });
+    setLightboxIndex((index) => {
+      if (index === null || campaignImages.length === 0) return null;
+      return index === 0 ? campaignImages.length - 1 : index - 1;
+    });
+  };
+
+  const handleNext = (event) => {
+    event.stopPropagation();
+    setIsZoomed(false);
+    setZoomOrigin({ x: 50, y: 50 });
+    setLightboxIndex((index) => {
+      if (index === null || campaignImages.length === 0) return null;
+      return index === campaignImages.length - 1 ? 0 : index + 1;
+    });
+  };
+
+  const handleLightboxBackdropClick = (event) => {
+    event.stopPropagation();
+    closeLightbox();
+  };
+
+  const toggleZoom = (event) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const nextOrigin = {
+      x: Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100))
+    };
+
+    setIsZoomed((zoomed) => {
+      if (zoomed) {
+        setZoomOrigin({ x: 50, y: 50 });
+        return false;
+      }
+
+      setZoomOrigin(nextOrigin);
+      return true;
+    });
+  };
+
+  const handleZoomPan = (event) => {
+    if (!isZoomed) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    setZoomOrigin({
+      x: Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100))
+    });
+  };
 
   return (
     <div
@@ -268,6 +350,15 @@ function ItemGalleryModal({ entry, campaign, campaignImages, loadingImages, onCl
             <ReceiptRow label="Campaign" value={campaign?.purpose || '—'} />
             <ReceiptRow label="Date Recorded" value={formatDateLong(entry.recordedAt)} />
             {entry.alumniId && <ReceiptRow label="Donor ID" value={`#${entry.alumniId}`} />}
+            {deliveryMethodLabel && (
+              <ReceiptRow label="Delivery Method" value={deliveryMethodLabel} />
+            )}
+            {deliveryMethodLabel === 'Pickup' && entry.pickupAddress && (
+              <ReceiptRow label="Pickup Address" value={entry.pickupAddress} />
+            )}
+            {entry.preferredSchedule && (
+              <ReceiptRow label="Preferred Schedule" value={entry.preferredSchedule} />
+            )}
           </div>
 
           {/* Image gallery */}
@@ -291,11 +382,11 @@ function ItemGalleryModal({ entry, campaign, campaignImages, loadingImages, onCl
                 <p className="text-sm text-slate-400">No images uploaded for this campaign</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className={galleryGridClass}>
                 {campaignImages.map((imgUrl, i) => (
                   <button
                     key={i}
-                    onClick={(e) => { e.stopPropagation(); setLightboxSrc(imgUrl); }}
+                    onClick={(e) => { e.stopPropagation(); openLightbox(i); }}
                     className="relative aspect-square rounded-xl overflow-hidden group border border-slate-200 hover:border-amber-400 transition-all focus:outline-none focus:ring-2 focus:ring-amber-400"
                   >
                     <img
@@ -315,35 +406,74 @@ function ItemGalleryModal({ entry, campaign, campaignImages, loadingImages, onCl
             )}
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-2xl bg-amber-600 text-white font-semibold hover:bg-amber-500 transition-colors"
-          >
-            Close
-          </button>
         </div>
       </div>
 
       {/* Lightbox */}
-      {lightboxSrc && (
+      {hasLightbox && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
-          onClick={() => setLightboxSrc(null)}
+          onClick={handleLightboxBackdropClick}
         >
           <button
             className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
-            onClick={() => setLightboxSrc(null)}
+            onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
+            aria-label="Close image gallery"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <img
-            src={lightboxSrc}
-            alt="Full size item"
-            className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain"
+
+          {campaignImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={handlePrev}
+                className="absolute left-4 top-1/2 z-[61] -translate-y-1/2 rounded-full bg-white/10 p-3 text-white shadow-xl transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70"
+                aria-label="Previous image"
+              >
+                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="absolute right-4 top-1/2 z-[61] -translate-y-1/2 rounded-full bg-white/10 p-3 text-white shadow-xl transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70"
+                aria-label="Next image"
+              >
+                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </>
+          )}
+
+          <div
+            className="flex max-h-[92vh] max-w-[92vw] flex-col items-center gap-3"
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <div
+              className={`max-h-[84vh] max-w-[92vw] overflow-hidden rounded-2xl ${isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+              onClick={toggleZoom}
+              onMouseMove={handleZoomPan}
+            >
+              <img
+                src={currentLightboxSrc}
+                alt={`Item photo ${lightboxIndex + 1} of ${campaignImages.length}`}
+                draggable={false}
+                className="max-h-[84vh] max-w-[92vw] select-none rounded-2xl object-contain shadow-2xl transition-transform duration-200"
+                style={{
+                  transform: isZoomed ? 'scale(2)' : 'scale(1)',
+                  transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`
+                }}
+              />
+            </div>
+            <div className="rounded-full bg-white/10 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur">
+              {lightboxIndex + 1} / {campaignImages.length}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -398,6 +528,17 @@ function AdminCampaignReceipts() {
     setSelectedEntry(entry);
     setModalType('items');
     setLoadingImages(true);
+
+    const entryImages = (entry.itemImages || [])
+      .map((imgUrl) => resolveImage(imgUrl))
+      .filter(Boolean);
+
+    if (entryImages.length > 0) {
+      setCampaignImages(entryImages);
+      setLoadingImages(false);
+      return;
+    }
+
     try {
       const fullCampaign = await donationService.getDonationById(campaignId);
       const images = (fullCampaign?.donation_images || []).map((img) =>

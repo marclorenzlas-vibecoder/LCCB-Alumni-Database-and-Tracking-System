@@ -136,6 +136,7 @@ model job_posting {
   requirements        String?   @db.Text
   benefits            String?   @db.Text
   description         String?   @db.Text
+  application_url     String?   @db.VarChar(1000)
   application_deadline DateTime? @db.Date
   created_at          DateTime? @default(now()) @db.DateTime(0)
   updated_at          DateTime? @default(now()) @db.DateTime(0)
@@ -181,7 +182,9 @@ model donation {
   image           String?   @db.VarChar(255)
   category        String?   @db.VarChar(100)
   goal            Decimal?  @db.Decimal(10, 2)
-  donation_type   String?   @default("money") @db.VarChar(20)
+  donation_type   String?   @default("both") @db.VarChar(20)
+  accepts_money   Boolean?  @default(true)
+  accepts_items   Boolean?  @default(true)
   item_name       String?   @db.VarChar(255)
   item_description String?  @db.Text
   alumni          alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "donation_ibfk_1")

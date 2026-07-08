@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
@@ -49,10 +49,32 @@ export default function JobDetailScreen({ route, navigation }) {
     ? job.requirements.split('\n').map((r) => r.trim()).filter(Boolean)
     : [];
 
+  const openApplicationLink = async () => {
+    const rawUrl = String(job.application_url || '').trim();
+    if (!rawUrl) {
+      Alert.alert('Application link unavailable', 'No external application link was provided for this job.');
+      return;
+    }
+
+    const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+    const canOpen = await Linking.canOpenURL(url);
+    if (!canOpen) {
+      Alert.alert('Unable to open link', 'The application link is not valid.');
+      return;
+    }
+
+    Linking.openURL(url);
+  };
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <BackButton navigation={navigation} label="Back to Jobs" />
+        <View style={styles.topBar}>
+          <BackButton navigation={navigation} label="Back to Jobs" />
+          <Pressable style={styles.applyButton} onPress={openApplicationLink}>
+            <Text style={styles.applyButtonText}>Apply</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
@@ -61,29 +83,35 @@ export default function JobDetailScreen({ route, navigation }) {
 
           <Text style={styles.heroCompany}>{job.company || 'Company not specified'}</Text>
 
-          {job.created_at ? (
-            <Text style={styles.heroPosted}>Posted {formatDate(job.created_at)}</Text>
-          ) : null}
         </View>
 
         <View style={styles.logisticsCard}>
           <View style={styles.logisticsGrid}>
             <View style={styles.logisticsItem}>
               <View style={[styles.logisticsIcon, { backgroundColor: '#dbeafe' }]}>
+                <Ionicons name="business-outline" size={16} color="#2563eb" />
+              </View>
+              <View style={styles.logisticsContent}>
+                <Text style={styles.logisticsLabel}>Company</Text>
+                <Text style={styles.logisticsValue}>{job.company || '-'}</Text>
+              </View>
+            </View>
+            <View style={styles.logisticsItem}>
+              <View style={[styles.logisticsIcon, { backgroundColor: '#dbeafe' }]}>
                 <Ionicons name="location-outline" size={16} color="#2563eb" />
               </View>
               <View style={styles.logisticsContent}>
                 <Text style={styles.logisticsLabel}>Location</Text>
-                <Text style={styles.logisticsValue}>{job.location || '—'}</Text>
+                <Text style={styles.logisticsValue}>{job.location || '-'}</Text>
               </View>
             </View>
             <View style={styles.logisticsItem}>
               <View style={[styles.logisticsIcon, { backgroundColor: '#f0fdf4' }]}>
-                <Ionicons name="business-outline" size={16} color="#16a34a" />
+                <Ionicons name="calendar-outline" size={16} color="#16a34a" />
               </View>
               <View style={styles.logisticsContent}>
-                <Text style={styles.logisticsLabel}>Department</Text>
-                <Text style={styles.logisticsValue}>{job.department || '—'}</Text>
+                <Text style={styles.logisticsLabel}>Posted</Text>
+                <Text style={styles.logisticsValue}>{job.created_at ? formatDate(job.created_at) : '-'}</Text>
               </View>
             </View>
             <View style={styles.logisticsItem}>
@@ -91,26 +119,11 @@ export default function JobDetailScreen({ route, navigation }) {
                 <Ionicons name="briefcase-outline" size={16} color="#d97706" />
               </View>
               <View style={styles.logisticsContent}>
-                <Text style={styles.logisticsLabel}>Work Type</Text>
-                <Text style={styles.logisticsValue}>{job.job_type || '—'}</Text>
-              </View>
-            </View>
-            <View style={styles.logisticsItem}>
-              <View style={[styles.logisticsIcon, { backgroundColor: '#fce7f3' }]}>
-                <Ionicons name="cash-outline" size={16} color="#db2777" />
-              </View>
-              <View style={styles.logisticsContent}>
-                <Text style={styles.logisticsLabel}>Salary</Text>
-                <Text style={styles.logisticsValue}>{job.salary_range || '—'}</Text>
+                <Text style={styles.logisticsLabel}>Employment Type</Text>
+                <Text style={styles.logisticsValue}>{job.job_type || '-'}</Text>
               </View>
             </View>
           </View>
-          {job.application_deadline ? (
-            <View style={styles.deadlineRow}>
-              <Ionicons name="calendar-outline" size={14} color="#64748b" />
-              <Text style={styles.deadlineText}>Deadline: {formatDate(job.application_deadline)}</Text>
-            </View>
-          ) : null}
         </View>
 
         {requirementsList.length > 0 ? (
@@ -145,6 +158,13 @@ export default function JobDetailScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 32
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12
   },
   centered: {
     flex: 1,
@@ -182,11 +202,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748b',
     marginTop: 2
-  },
-  heroPosted: {
-    fontSize: 13,
-    color: '#94a3b8',
-    marginTop: 4
   },
   logisticsCard: {
     backgroundColor: '#fff',
@@ -231,18 +246,23 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginTop: 1
   },
-  deadlineRow: {
-    flexDirection: 'row',
+  applyButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
     alignItems: 'center',
-    gap: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingTop: 12
+    justifyContent: 'center',
+    paddingHorizontal: 22,
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    elevation: 2
   },
-  deadlineText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748b'
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800'
   },
   sectionCard: {
     backgroundColor: '#fff',
@@ -281,3 +301,4 @@ const styles = StyleSheet.create({
     lineHeight: 22
   },
 });
+

@@ -11,6 +11,8 @@ import debitLogo from '../assets/debit.png';
 import paymayaLogo from '../assets/paymaya.png';
 import gcashLogo from '../assets/gcash1.png';
 
+const MAX_ITEM_IMAGES = 6;
+
 const countryOptions = [
   'Philippines',
   'United Kingdom',
@@ -649,6 +651,38 @@ const DonatePage = () => {
     return true;
   };
 
+  const validateMoneyPaymentDetails = () => {
+    if (formData.paymentMethod === 'card') {
+      const requiredCardFields = ['cardholderName', 'cardId', 'cardNumber', 'expiryMonth', 'expiryYear', 'cvv'];
+      const missingCardField = requiredCardFields.find((field) => !paymentDetails[field].trim());
+      if (missingCardField) {
+        toast.warning('Please complete your debit card details before continuing.');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const validateItemDeliveryDetails = () => {
+    if (!deliveryMethod) {
+      toast.warning('Please select a delivery method.');
+      return false;
+    }
+
+    if (deliveryMethod === 'pickup' && !deliveryAddress.trim()) {
+      toast.warning('Please enter the pickup address.');
+      return false;
+    }
+
+    if (!deliverySchedule.trim()) {
+      toast.warning('Please enter your preferred delivery date and time.');
+      return false;
+    }
+
+    return true;
+  };
+
   const goBack = () => setCurrentStep((step) => Math.max(1, step - 1));
 
   const goNext = () => {
@@ -709,14 +743,8 @@ const DonatePage = () => {
 
     if (!validateStepOne()) return;
 
-    if (formData.paymentMethod === 'card') {
-      const requiredCardFields = ['cardholderName', 'cardId', 'cardNumber', 'expiryMonth', 'expiryYear', 'cvv'];
-      const missingCardField = requiredCardFields.find((field) => !paymentDetails[field].trim());
-      if (missingCardField) {
-        toast.warning('Please complete your debit card details before continuing.');
-        return;
-      }
-    }
+    if (isMoneyPath && !validateMoneyPaymentDetails()) return;
+    if (!isMoneyPath && !validateItemDeliveryDetails()) return;
 
     // Generate local receipt preview first
     const receipt = buildDonationReceipt();
@@ -747,22 +775,31 @@ const DonatePage = () => {
       setSubmitting(true);
       setError('');
 
-      const paymentSummary = formData.paymentMethod === 'card'
-        ? [
-            'Payment method: Debit Card',
-            `Card holder: ${paymentDetails.cardholderName}`,
-            `Card ID: ${paymentDetails.cardId}`,
-            `Card number: **** **** **** ${paymentDetails.cardNumber.replace(/\D/g, '').slice(-4)}`,
-            `Expiry: ${paymentDetails.expiryMonth}/${paymentDetails.expiryYear}`,
-            `Currency: ${formData.currency}`
-          ].join('\n')
-        : `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}\nCurrency: ${formData.currency}`;
+      const paymentSummary = isMoneyPath
+        ? (formData.paymentMethod === 'card'
+            ? [
+                'Payment method: Debit Card',
+                `Card holder: ${paymentDetails.cardholderName}`,
+                `Card ID: ${paymentDetails.cardId}`,
+                `Card number: **** **** **** ${paymentDetails.cardNumber.replace(/\D/g, '').slice(-4)}`,
+                `Expiry: ${paymentDetails.expiryMonth}/${paymentDetails.expiryYear}`,
+                `Currency: ${formData.currency}`
+              ].join('\n')
+            : `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}\nCurrency: ${formData.currency}`)
+        : [
+            `Delivery method: ${deliveryMethod === 'pickup' ? 'Pickup' : 'Drop-off'}`,
+            deliveryMethod === 'pickup' ? `Pickup address: ${deliveryAddress}` : null,
+            `Preferred schedule: ${deliverySchedule}`
+          ].filter(Boolean).join('\n');
 
       const donationMeta = {
         donationMode: formData.donationType === 'items' ? 'item' : 'money',
-        paymentCurrency: formData.currency,
-        paymentNumber,
-        paymentMethods,
+        paymentCurrency: isMoneyPath ? formData.currency : null,
+        paymentNumber: isMoneyPath ? paymentNumber : null,
+        paymentMethods: isMoneyPath ? paymentMethods : null,
+        deliveryMethod: !isMoneyPath ? deliveryMethod : null,
+        deliveryAddress: !isMoneyPath && deliveryMethod === 'pickup' ? deliveryAddress : null,
+        deliverySchedule: !isMoneyPath ? deliverySchedule : null,
       };
 
       const donorSummary = [
@@ -1362,7 +1399,7 @@ const DonatePage = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Item Photos * (up to 5)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Item Photos * (up to {MAX_ITEM_IMAGES})</label>
                         <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700 cursor-pointer hover:bg-slate-50 transition-all">
                           <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1374,8 +1411,15 @@ const DonatePage = () => {
                             multiple
                             className="hidden"
                             onChange={(e) => {
-                              const files = Array.from(e.target.files).slice(0, 5);
-                              setItemImages(prev => [...prev, ...files].slice(0, 5));
+                              const incomingFiles = Array.from(e.target.files);
+                              setItemImages((prev) => {
+                                const nextFiles = [...prev, ...incomingFiles].slice(0, MAX_ITEM_IMAGES);
+                                if (prev.length + incomingFiles.length > MAX_ITEM_IMAGES) {
+                                  toast.warning(`You can upload up to ${MAX_ITEM_IMAGES} item photos.`);
+                                }
+                                return nextFiles;
+                              });
+                              e.target.value = '';
                             }}
                           />
                         </label>
