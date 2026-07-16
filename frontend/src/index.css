@@ -1325,6 +1325,7 @@ body::-webkit-scrollbar,
 /* Firebase chat motion */
 .lccb-chat-widget {
     --lccb-chat-button-width: 132px;
+    display: inline-flex;
     pointer-events: none;
 }
 
@@ -1362,6 +1363,28 @@ body::-webkit-scrollbar,
     transform: translateY(0) scale(0.98);
 }
 
+.lccb-chat-unread-badge {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    z-index: 2;
+    display: inline-flex;
+    min-width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff;
+    border-radius: 9999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    padding: 0 6px;
+    pointer-events: none;
+    box-shadow: 0 6px 14px rgba(185, 28, 28, 0.35);
+}
+
 @media (max-width: 768px) {
     .lccb-chat-widget {
         --lccb-chat-button-width: 48px;
@@ -1374,8 +1397,17 @@ body::-webkit-scrollbar,
         gap: 0;
     }
 
-    .lccb-chat-toggle-button span:not(.absolute) {
+    .lccb-chat-toggle-label {
         display: none;
+    }
+
+    .lccb-chat-unread-badge {
+        top: -8px;
+        right: -8px;
+        min-width: 22px;
+        height: 22px;
+        font-size: 11px;
+        padding: 0 5px;
     }
 }
 

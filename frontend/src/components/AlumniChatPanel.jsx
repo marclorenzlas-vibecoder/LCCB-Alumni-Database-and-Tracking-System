@@ -490,9 +490,9 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   }, [selectedChatId]);
 
   useEffect(() => {
-    if (!currentUserId || !selectedChatId || selectedUnreadCount <= 0) return;
+    if (!currentUserId || !selectedChatId || selectedUnreadCount <= 0 || !isOpen || isClosing) return;
     markConversationRead(currentUserId, selectedChatId).catch(() => {});
-  }, [currentUserId, messages.length, selectedChatId, selectedUnreadCount]);
+  }, [currentUserId, isClosing, isOpen, messages.length, selectedChatId, selectedUnreadCount]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -1120,13 +1120,13 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
         </svg>
-        <span>Messages</span>
-        {totalUnread > 0 && (
-          <span className="absolute right-1 top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
-            {totalUnread > 99 ? '99+' : totalUnread}
-          </span>
-        )}
+        <span className="lccb-chat-toggle-label">Messages</span>
       </button>
+      {totalUnread > 0 && !(isOpen && !isClosing) && (
+        <span className="lccb-chat-unread-badge" aria-hidden="true">
+          {totalUnread > 99 ? '99+' : totalUnread}
+        </span>
+      )}
     </div>
   );
 };

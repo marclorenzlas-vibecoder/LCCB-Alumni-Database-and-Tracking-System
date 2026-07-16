@@ -12,6 +12,7 @@ import {
   View
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
@@ -190,6 +191,8 @@ function SectionTitle({ children }) {
 }
 
 function ContactRow({ contact, status, subtitle, unreadCount = 0, badge, selected, onPress, rightAction }) {
+  const hasUnread = unreadCount > 0;
+
   return (
     <Pressable style={[styles.contactRow, selected && styles.contactRowActive]} onPress={onPress}>
       <ContactAvatar contact={contact} status={status} />
@@ -197,13 +200,19 @@ function ContactRow({ contact, status, subtitle, unreadCount = 0, badge, selecte
         <View style={styles.contactNameLine}>
           <Text style={styles.contactName} numberOfLines={1}>{contact.displayName}</Text>
           {badge ? <Text style={styles.badge}>{badge}</Text> : null}
-          {unreadCount > 0 ? (
-            <Text style={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-          ) : null}
         </View>
         <Text style={styles.contactSubtitle} numberOfLines={1}>{subtitle}</Text>
       </View>
-      {rightAction}
+      {(hasUnread || rightAction) ? (
+        <View style={styles.contactTrailing}>
+          {hasUnread ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          ) : null}
+          {rightAction}
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -223,6 +232,7 @@ export default function AlumniChatScreen({ navigation, user }) {
   const [requestActionId, setRequestActionId] = useState('');
   const listRef = useRef(null);
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
 
   const currentUserId = getSystemUserId(user);
 
@@ -492,9 +502,9 @@ export default function AlumniChatScreen({ navigation, user }) {
   }, [selectedChatId]);
 
   useEffect(() => {
-    if (!currentUserId || !selectedChatId || selectedUnreadCount <= 0) return;
+    if (!isFocused || !selectedContact || !currentUserId || !selectedChatId || selectedUnreadCount <= 0) return;
     markConversationRead(currentUserId, selectedChatId).catch(() => {});
-  }, [currentUserId, messages.length, selectedChatId, selectedUnreadCount]);
+  }, [currentUserId, isFocused, messages.length, selectedChatId, selectedContact, selectedUnreadCount]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -975,7 +985,8 @@ const styles = StyleSheet.create({
   },
   contactBody: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    paddingRight: 4
   },
   contactNameLine: {
     flexDirection: 'row',
@@ -993,6 +1004,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 12
   },
+  contactTrailing: {
+    marginLeft: 4,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 6
+  },
   badge: {
     borderRadius: 999,
     backgroundColor: '#eff6ff',
@@ -1004,17 +1021,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   unreadBadge: {
-    minWidth: 22,
-    minHeight: 22,
-    borderRadius: 11,
-    backgroundColor: '#2563eb',
+    minWidth: 28,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    shadowColor: '#991b1b',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4
+  },
+  unreadBadgeText: {
     color: '#fff',
     textAlign: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    fontSize: 11,
-    fontWeight: '800',
-    overflow: 'hidden'
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 14
   },
   requestActions: {
     gap: 6

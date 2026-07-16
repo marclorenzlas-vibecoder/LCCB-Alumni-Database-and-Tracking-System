@@ -45,10 +45,6 @@ export default function JobDetailScreen({ route, navigation }) {
     );
   }
 
-  const requirementsList = job.requirements
-    ? job.requirements.split('\n').map((r) => r.trim()).filter(Boolean)
-    : [];
-
   const openApplicationLink = async () => {
     const rawUrl = String(job.application_url || '').trim();
     if (!rawUrl) {
@@ -126,29 +122,9 @@ export default function JobDetailScreen({ route, navigation }) {
           </View>
         </View>
 
-        {requirementsList.length > 0 ? (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Requirements</Text>
-            {requirementsList.map((item, i) => (
-              <View key={i} style={styles.bulletRow}>
-                <Text style={styles.bulletDot}>{'\u2022'}</Text>
-                <Text style={styles.bulletText}>{item}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.sectionBody}>{job.description || 'No description provided.'}</Text>
         </View>
-
-        {job.benefits ? (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Benefits</Text>
-            <Text style={styles.sectionBody}>{job.benefits}</Text>
-          </View>
-        ) : null}
       </ScrollView>
 
     </ScreenContainer>
@@ -273,32 +249,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 10
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a'
-  },
   sectionBody: {
     fontSize: 15,
     color: '#334155',
     lineHeight: 23
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingLeft: 4
-  },
-  bulletDot: {
-    fontSize: 15,
-    color: '#2563eb',
-    lineHeight: 22,
-    fontWeight: '700'
-  },
-  bulletText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#334155',
-    lineHeight: 22
   },
 });
 

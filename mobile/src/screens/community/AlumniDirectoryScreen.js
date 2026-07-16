@@ -2,12 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
 import { communityService } from '../../services/communityService';
 import { adminService } from '../../services/adminService';
+import { getSystemUserId, listenToConversationSummaries } from '../../services/firebaseChatService';
 import { realtimeClient } from '../../services/realtimeClient';
 import { imageUrl } from '../../utils/formatters';
 import { dataEmitter } from '../../utils/EventEmitter';
@@ -152,11 +154,12 @@ const getDisplayName = (item = {}) => {
   return full || 'Unknown Alumni';
 };
 
-export default function AlumniDirectoryScreen({ navigation }) {
+export default function AlumniDirectoryScreen({ navigation, user }) {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [erroredImages, setErroredImages] = useState(new Set());
+  const [conversationSummaries, setConversationSummaries] = useState({});
   const [selectedLevel, setSelectedLevel] = useState('ALL');
   const [selectedBatch, setSelectedBatch] = useState('ALL');
   const [selectedGroup, setSelectedGroup] = useState('ALL');
@@ -168,6 +171,26 @@ export default function AlumniDirectoryScreen({ navigation }) {
   const [showOfficersModal, setShowOfficersModal] = useState(false);
   const [levelOptionsState, setLevelOptionsState] = useState(DEFAULT_LEVEL_OPTIONS);
   const [groupSectionsState, setGroupSectionsState] = useState(DEFAULT_GROUP_SECTIONS);
+  const insets = useSafeAreaInsets();
+  const currentUserId = getSystemUserId(user);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setConversationSummaries({});
+      return undefined;
+    }
+
+    return listenToConversationSummaries(currentUserId, setConversationSummaries);
+  }, [currentUserId]);
+
+  const totalUnreadMessages = useMemo(
+    () =>
+      Object.values(conversationSummaries).reduce(
+        (sum, summary) => sum + (Number(summary?.unreadCount) || 0),
+        0
+      ),
+    [conversationSummaries]
+  );
 
   const loadAlumni = React.useCallback((showSpinner = true) => {
     if (showSpinner) setLoading(true);
@@ -513,13 +536,24 @@ export default function AlumniDirectoryScreen({ navigation }) {
       </Modal>
     </ScreenContainer>
       <Pressable
-        style={styles.floatingMessageButton}
+        style={[styles.floatingMessageButton, { bottom: Math.max(22, insets.bottom + 16) }]}
         onPress={() => navigation.navigate('AlumniChat')}
         hitSlop={10}
         accessibilityRole="button"
-        accessibilityLabel="Open messages"
+        accessibilityLabel={
+          totalUnreadMessages > 0
+            ? `Open messages, ${totalUnreadMessages > 99 ? '99 plus' : totalUnreadMessages} unread`
+            : 'Open messages'
+        }
       >
         <Ionicons name="chatbubble-ellipses-outline" size={24} color="#fff" />
+        {totalUnreadMessages > 0 ? (
+          <View style={styles.floatingMessageUnreadBadge}>
+            <Text style={styles.floatingMessageUnreadText}>
+              {totalUnreadMessages > 99 ? '99+' : totalUnreadMessages}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );
@@ -611,7 +645,6 @@ const styles = StyleSheet.create({
   floatingMessageButton: {
     position: 'absolute',
     right: 22,
-    bottom: 22,
     zIndex: 20,
     width: 58,
     height: 58,
@@ -624,6 +657,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 14,
     elevation: 8
+  },
+  floatingMessageUnreadBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: '#fff',
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 7,
+    shadowColor: '#991b1b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 10
+  },
+  floatingMessageUnreadText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 14,
+    textAlign: 'center'
   },
   filterPanel: {
     borderWidth: 1,

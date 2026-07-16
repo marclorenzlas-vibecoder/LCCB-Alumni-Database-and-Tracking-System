@@ -14,8 +14,6 @@ const initialJobForm = {
   location: '',
   department: '',
   type: '',
-  requirements: '',
-  benefits: '',
   application_url: '',
   description: ''
 };
@@ -183,8 +181,8 @@ const Employment = () => {
         location: formData.location,
         department: formData.department || null,
         job_type: formData.type,
-        requirements: formData.requirements || null,
-        benefits: formData.benefits || null,
+        requirements: null,
+        benefits: null,
         description: formData.description || null,
         application_url: applicationUrl
       };
@@ -221,8 +219,6 @@ const Employment = () => {
       location: job.location || '',
       department: job.department || '',
       type: job.job_type || '',
-      requirements: job.requirements || '',
-      benefits: job.benefits || '',
       application_url: job.application_url || '',
       description: job.description || ''
     });
@@ -618,42 +614,14 @@ const Employment = () => {
 
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Requirements (one per line)
-                      </label>
-                      <textarea
-                        name="requirements"
-                        value={formData.requirements}
-                        onChange={handleInputChange}
-                        className={`${fieldClass} resize-none`}
-                        placeholder="Bachelor's degree in Computer Science&#10;5+ years experience in web development&#10;Strong knowledge of React and Node.js"
-                        rows="4"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Benefits
-                      </label>
-                      <textarea
-                        name="benefits"
-                        value={formData.benefits}
-                        onChange={handleInputChange}
-                        className={`${fieldClass} resize-none`}
-                        placeholder="Describe the benefits, perks, and compensation details..."
-                        rows="4"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Job Description
+                        Description
                       </label>
                       <textarea
                         name="description"
                         value={formData.description}
                         onChange={handleInputChange}
                         className={`${fieldClass} resize-none`}
-                        placeholder="Detailed job description..."
+                        placeholder="Detailed description..."
                         rows="4"
                       />
                     </div>
@@ -771,25 +739,8 @@ const Employment = () => {
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-bold text-slate-900 mb-4">Job Description</h2>
                     <div className="prose prose-slate max-w-none text-base leading-7 text-slate-700 whitespace-pre-line">
                       {selectedJob.description || 'No description provided.'}
-                    </div>
-                  </div>
-
-                  {selectedJob.requirements && (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <h2 className="text-xl font-bold text-slate-900 mb-4">Requirements & Qualifications</h2>
-                      <div className="prose prose-slate max-w-none text-base leading-7 text-slate-700 whitespace-pre-line">
-                        {selectedJob.requirements}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-bold text-slate-900 mb-4">Benefits</h2>
-                    <div className="prose prose-slate max-w-none text-base leading-7 text-slate-700 whitespace-pre-line">
-                      {selectedJob.benefits || 'No benefits listed.'}
                     </div>
                   </div>
                 </div>
