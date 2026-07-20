@@ -148,24 +148,10 @@ const AchievementDetail = () => {
             <div className="h-px bg-gray-200"></div>
           </div>
 
-          <div 
-            className="flex flex-col lg:flex-row gap-12 items-start justify-between"
-            style={{ 
-              display: 'flex',
-              gap: '40px',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between'
-            }}
-          >
-            <div 
-              className="flex-1 w-full lg:w-[70%]"
-              style={{ 
-                flex: '1 1 70%',
-                minWidth: '0'
-              }}
-            >
+          <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,30%)] xl:gap-14 items-start">
+            <div className="min-w-0 w-full">
               <div className="prose max-w-none">
-                <p className="text-gray-700 leading-relaxed text-lg mb-6 whitespace-pre-wrap">
+                <p className="text-gray-700 leading-relaxed text-lg text-justify mb-6 whitespace-pre-wrap">
                   {achievement.description || 'No description provided'}
                 </p>
               </div>
@@ -182,13 +168,7 @@ const AchievementDetail = () => {
               </div>
             </div>
 
-            <div 
-              className="w-full lg:w-[30%]"
-              style={{ 
-                flex: '1 1 30%',
-                maxWidth: '30%'
-              }}
-            >
+            <div className="w-full lg:max-w-[420px] lg:justify-self-end">
               {achievement.image ? (
                 <div className="rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
                   {/\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (

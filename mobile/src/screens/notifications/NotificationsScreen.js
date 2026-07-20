@@ -42,6 +42,51 @@ const isWithinRetention = (dateStr) => {
   return date >= cutoff;
 };
 
+const TYPE_LABELS = {
+  EVENT: 'Events',
+  ACHIEVEMENT: 'Achievements',
+  DONATION: 'Donations',
+  JOB_APPLICATION: 'Job Applications',
+  REGISTRATION: 'Registrations',
+  ANNOUNCEMENT: 'Announcements',
+  GENERAL: 'System'
+};
+
+const isPendingRegistrationNotification = (item) => {
+  const title = String(item?.title || '').toLowerCase();
+  const message = String(item?.message || '').toLowerCase();
+  const link = String(item?.link || '').toLowerCase();
+  return link === '/pending-approval' ||
+    title.includes('registration') ||
+    message.includes('needs your approval');
+};
+
+const getEffectiveType = (item) => {
+  const type = String(item?.type || 'GENERAL').toUpperCase();
+  if (type === 'JOB_APPLICATION') return 'JOB_APPLICATION';
+  if (isPendingRegistrationNotification(item)) return 'REGISTRATION';
+  return type;
+};
+
+const isUrgentNotification = (item) => (
+  !item?.is_read &&
+  ['REGISTRATION', 'JOB_APPLICATION'].includes(getEffectiveType(item))
+);
+
+const getNotificationRank = (item) => {
+  if (isUrgentNotification(item)) return 0;
+  if (!item?.is_read) return 1;
+  return 2;
+};
+
+const sortNotifications = (notifications) => (
+  [...notifications].sort((a, b) => {
+    const rankDiff = getNotificationRank(a) - getNotificationRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+  })
+);
+
 const stripDonationPaymentDetails = (message = '') => {
   if (!message || typeof message !== 'string') return '';
   return message
@@ -50,6 +95,10 @@ const stripDonationPaymentDetails = (message = '') => {
     .join('\n')
     .trim();
 };
+
+const formatNotificationPreview = (message = '') => (
+  stripDonationPaymentDetails(message).replace(/\s+/g, ' ').trim()
+);
 
 export default function NotificationsScreen({ navigation }) {
   const [items, setItems] = useState([]);
@@ -153,6 +202,11 @@ export default function NotificationsScreen({ navigation }) {
       return;
     }
 
+    if (link === '/pending-approval' || isPendingRegistrationNotification(item)) {
+      navigation.navigate('Admin', { screen: 'PendingApprovals' });
+      return;
+    }
+
     if (item?.type === 'EVENT' && item?.event_id) {
       navigation.navigate('Events', { screen: 'EventsList', params: { openEventId: item.event_id } });
       return;
@@ -214,8 +268,11 @@ export default function NotificationsScreen({ navigation }) {
           {(() => {
             const groups = [];
             let lastGroup = '';
-            items.forEach((item) => {
-              const group = getDateGroup(item.created_at);
+            sortNotifications(items).forEach((item) => {
+              const effectiveType = getEffectiveType(item);
+              const group = isUrgentNotification(item)
+                ? 'Urgent'
+                : `${getDateGroup(item.created_at)} · ${TYPE_LABELS[effectiveType] || TYPE_LABELS.GENERAL}`;
               if (group !== lastGroup) {
                 groups.push({ type: 'header', label: group, key: `header-${group}` });
                 lastGroup = group;
@@ -229,15 +286,18 @@ export default function NotificationsScreen({ navigation }) {
                 );
               }
               const item = entry.data;
+              const isUrgent = isUrgentNotification(item);
               return (
-                <Pressable key={entry.key} style={[styles.card, !item.is_read && styles.unread]} onPress={() => onPressNotification(item)}>
+                <Pressable key={entry.key} style={[styles.card, !item.is_read && styles.unread, isUrgent && styles.urgent]} onPress={() => onPressNotification(item)}>
                   <View style={styles.cardTopRow}>
-                    <View style={styles.itemIconWrap}>
-                      <Ionicons name={item.is_read ? 'mail-open-outline' : 'mail-unread-outline'} size={16} color={item.is_read ? '#475569' : '#1d4ed8'} />
+                    <View style={[styles.itemIconWrap, isUrgent && styles.urgentIconWrap]}>
+                      <Ionicons name={item.is_read ? 'mail-open-outline' : 'mail-unread-outline'} size={16} color={isUrgent ? '#b91c1c' : item.is_read ? '#475569' : '#1d4ed8'} />
                     </View>
                     <View style={styles.cardTextWrap}>
                       <Text style={styles.title}>{item.title || 'Notification'}</Text>
-                      <Text style={styles.message}>{stripDonationPaymentDetails(item.message) || 'No message'}</Text>
+                      <Text style={styles.message} numberOfLines={2} ellipsizeMode="tail">
+                        {formatNotificationPreview(item.message) || 'No message'}
+                      </Text>
                     </View>
                     {!item.is_read ? <View style={styles.unreadDot} /> : null}
                   </View>
@@ -336,6 +396,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f9ff',
     borderWidth: 1.2
   },
+  urgent: {
+    borderColor: '#fca5a5',
+    backgroundColor: '#fef2f2'
+  },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -350,6 +414,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
+  },
+  urgentIconWrap: {
+    backgroundColor: '#fee2e2'
   },
   cardTextWrap: {
     flex: 1,

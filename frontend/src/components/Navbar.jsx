@@ -25,33 +25,85 @@ const getNotificationInitial = (notification) => {
   return name.charAt(0).toUpperCase() || "U";
 };
 
-const groupNotifications = (notifications) => {
+const isPendingRegistrationNotification = (notification) => {
+  const title = String(notification?.title || "").toLowerCase();
+  const message = String(notification?.message || "").toLowerCase();
+  const link = String(notification?.link || "").toLowerCase();
+  return link === "/pending-approval" ||
+    title.includes("registration") ||
+    message.includes("needs your approval");
+};
+
+const getEffectiveNotificationType = (notification) => {
+  const type = String(notification?.type || "GENERAL").toUpperCase();
+  if (type === "JOB_APPLICATION") return "JOB_APPLICATION";
+  if (isPendingRegistrationNotification(notification)) return "REGISTRATION";
+  return type;
+};
+
+const BELL_TYPE_LABELS = {
+  EVENT: "Events",
+  ACHIEVEMENT: "Achievements",
+  ANNOUNCEMENT: "Announcements",
+  DONATION: "Donations",
+  JOB_APPLICATION: "Job Applications",
+  REGISTRATION: "Registrations",
+  GENERAL: "System",
+};
+
+const getBellDateGroup = (value) => {
+  if (!value) return "Earlier";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Earlier";
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
 
-  const newItems = [];
-  const todayItems = [];
-  const earlierItems = [];
+  if (date >= startOfToday) return "Today";
+  if (date >= startOfYesterday) return "Yesterday";
+  return "Earlier";
+};
 
-  for (const n of notifications) {
-    if (!n.is_read) {
-      newItems.push(n);
-    } else {
-      const d = new Date(n.created_at);
-      if (d >= startOfToday) {
-        todayItems.push(n);
-      } else {
-        earlierItems.push(n);
-      }
+const isUrgentNotification = (notification) => (
+  !notification?.is_read &&
+  ["REGISTRATION", "JOB_APPLICATION"].includes(getEffectiveNotificationType(notification))
+);
+
+const sortNotifications = (notifications) => (
+  [...notifications].sort((a, b) => {
+    const rankA = isUrgentNotification(a) ? 0 : !a?.is_read ? 1 : 2;
+    const rankB = isUrgentNotification(b) ? 0 : !b?.is_read ? 1 : 2;
+    if (rankA !== rankB) return rankA - rankB;
+    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+  })
+);
+
+const groupNotifications = (notifications) => {
+  const sections = [];
+  const sectionMap = new Map();
+
+  for (const notification of sortNotifications(notifications)) {
+    const effectiveType = getEffectiveNotificationType(notification);
+    const sectionLabel = isUrgentNotification(notification)
+      ? "Urgent"
+      : `${getBellDateGroup(notification.created_at)} · ${BELL_TYPE_LABELS[effectiveType] || BELL_TYPE_LABELS.GENERAL}`;
+
+    if (!sectionMap.has(sectionLabel)) {
+      const section = { label: sectionLabel, items: [] };
+      sectionMap.set(sectionLabel, section);
+      sections.push(section);
     }
+
+    sectionMap.get(sectionLabel).items.push(notification);
   }
 
-  const sections = [];
-  if (newItems.length > 0) sections.push({ label: 'New', items: newItems });
-  if (todayItems.length > 0) sections.push({ label: 'Today', items: todayItems });
-  if (earlierItems.length > 0) sections.push({ label: 'Earlier', items: earlierItems });
   return sections;
 };
+
+const formatNotificationPreview = (message = "") => String(message || "")
+  .replace(/\s+/g, " ")
+  .trim();
 
 const BellNotificationIcon = ({ notification, isBirthday }) => {
   const TYPE_COLORS = {
@@ -59,6 +111,8 @@ const BellNotificationIcon = ({ notification, isBirthday }) => {
     ACHIEVEMENT: 'from-amber-400 to-orange-500',
     ANNOUNCEMENT: 'from-sky-500 to-cyan-600',
     DONATION: 'from-emerald-500 to-teal-600',
+    JOB_APPLICATION: 'from-rose-500 to-red-600',
+    REGISTRATION: 'from-red-500 to-rose-600',
     GENERAL: 'from-blue-500 to-blue-700',
   };
   const TYPE_ICONS = {
@@ -66,10 +120,12 @@ const BellNotificationIcon = ({ notification, isBirthday }) => {
     ACHIEVEMENT: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
     ANNOUNCEMENT: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z',
     DONATION: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
+    JOB_APPLICATION: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+    REGISTRATION: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8',
   };
   const BIRTHDAY_ICON = 'M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7';
 
-  const type = (notification?.type || '').toUpperCase();
+  const type = getEffectiveNotificationType(notification);
   const color = TYPE_COLORS[type] || TYPE_COLORS.GENERAL;
   const iconPath = isBirthday ? BIRTHDAY_ICON : (TYPE_ICONS[type] || TYPE_ICONS.EVENT);
 
@@ -405,6 +461,18 @@ const Navbar = () => {
           message: `Happy Birthday, ${birthdayAlumniName}! Wishing you a wonderful day.`,
         });
         setShowNotifications(false);
+        return;
+      }
+
+      if (!notification.link && getEffectiveNotificationType(notification) === "JOB_APPLICATION") {
+        setShowNotifications(false);
+        navigate("/employment");
+        return;
+      }
+
+      if (!notification.link && getEffectiveNotificationType(notification) === "REGISTRATION") {
+        setShowNotifications(false);
+        navigate("/pending-approval");
         return;
       }
 
@@ -910,11 +978,6 @@ const Navbar = () => {
                           )}
                         </div>
                         <div className="flex items-center gap-1.5">
-                          {unreadCount > 0 && (
-                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white shadow-sm">
-                              {unreadCount > 99 ? "99+" : unreadCount}
-                            </span>
-                          )}
                           {/* Three-dot menu */}
                           {notifications.length > 0 && (
                             <div className="relative" ref={bellMenuRef}>
@@ -1014,7 +1077,7 @@ const Navbar = () => {
                       {/* Scrollable notification list */}
                       <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}>
                         {(() => {
-                          const filtered = (bellFilter === 'unread'
+                          const filtered = sortNotifications(bellFilter === 'unread'
                             ? notifications.filter((n) => !n.is_read)
                             : notifications
                           ).slice(0, 6);
@@ -1028,7 +1091,9 @@ const Navbar = () => {
                                 <div
                                   key={notif.id}
                                   className={`px-4 py-3 cursor-pointer border-b border-gray-50 transition-all duration-200 group ${
-                                    !notif.is_read
+                                    isUrgentNotification(notif)
+                                      ? "bg-red-50/80 hover:bg-red-100/80"
+                                      : !notif.is_read
                                       ? "bg-blue-50/60 hover:bg-blue-100/70"
                                       : "hover:bg-gray-50"
                                   }`}
@@ -1046,7 +1111,7 @@ const Navbar = () => {
                                         <BellNotificationIcon notification={notif} isBirthday={(notif.type || "").toLowerCase().includes("birthday") || String(notif?.title || "").toLowerCase().includes("birthday")} />
                                       )}
                                       <span
-                                        className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${!notif.is_read ? "bg-blue-500" : "bg-gray-300"}`}
+                                        className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${!notif.is_read ? (isUrgentNotification(notif) ? "bg-red-600" : "bg-blue-500") : "bg-gray-300"}`}
                                       />
                                     </div>
 
@@ -1057,7 +1122,7 @@ const Navbar = () => {
                                         {notif.title}
                                       </p>
                                       <p className="text-[12px] text-gray-500 mt-0.5 line-clamp-2 leading-snug">
-                                        {notif.message}
+                                        {formatNotificationPreview(notif.message) || "No details available."}
                                       </p>
                                       <p className="text-[11px] text-gray-400 mt-1 font-medium">
                                         {new Date(

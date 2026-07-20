@@ -1,31 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Video } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { API_ORIGIN } from '../../config/api';
 import { communityService } from '../../services/communityService';
 import { imageUrl } from '../../utils/formatters';
 import ScreenContainer from '../../components/ScreenContainer';
 import BackButton from '../../components/BackButton';
-import { theme } from '../../theme';
 
 export default function AchievementDetailScreen({ user }) {
   const route = useRoute();
   const navigation = useNavigation();
   const { achievement } = route.params;
   const [item, setItem] = useState(achievement);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (achievement && achievement.id) {
-      setLoading(true);
       communityService.getAchievementById(achievement.id)
         .then((data) => {
           if (data) setItem(data);
         })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+        .catch(console.error);
     }
   }, [achievement]);
 
@@ -46,7 +41,7 @@ export default function AchievementDetailScreen({ user }) {
 
   return (
     <ScreenContainer>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.screenContent}>
         <BackButton navigation={navigation} label="Back" />
         {item.image ? (
           /\.(mp4|mov|avi|mkv|webm)$/i.test(item.image) ? (
@@ -68,7 +63,7 @@ export default function AchievementDetailScreen({ user }) {
           <View style={[styles.heroImage, { backgroundColor: '#e2e8f0' }]} />
         )}
 
-        <View style={styles.content}>
+        <View style={styles.detailContent}>
           <View style={styles.header}>
             <Text style={styles.category}>{item.category || 'General'}</Text>
             <Text style={styles.year}>{item.date ? new Date(item.date).getFullYear() : 'N/A'}</Text>
@@ -106,15 +101,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  content: {
-    padding: 14,
+  screenContent: {
+    padding: 16,
     gap: 12,
     paddingBottom: 30,
+  },
+  detailContent: {
+    gap: 12,
   },
   heroImage: {
     width: '100%',
     height: 240,
     backgroundColor: '#e2e8f0',
+    borderRadius: 8,
   },
   header: {
     flexDirection: 'row',
@@ -163,6 +162,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     fontSize: 15,
     lineHeight: 23,
+    textAlign: 'justify',
     marginBottom: 16,
   },
   meta: {

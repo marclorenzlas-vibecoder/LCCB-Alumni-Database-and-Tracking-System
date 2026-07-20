@@ -31,38 +31,87 @@ const TYPE_CONFIG = {
   ACHIEVEMENT:  { color: 'from-amber-400 to-orange-500',  label: 'Achievement', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
   ANNOUNCEMENT: { color: 'from-sky-500 to-cyan-600',      label: 'Notice',     icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
   DONATION:     { color: 'from-emerald-500 to-teal-600',  label: 'Donation',   icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+  JOB_APPLICATION: { color: 'from-rose-500 to-red-600',   label: 'Job Application', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  REGISTRATION: { color: 'from-red-500 to-rose-600',      label: 'Registration', icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
   GENERAL:      { color: 'from-blue-500 to-blue-700',      label: 'System',    icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
 };
 
-const getConfig = (type) => TYPE_CONFIG[type] || TYPE_CONFIG.GENERAL;
+const isPendingRegistrationNotification = (notification) => {
+  const title = String(notification?.title || '').toLowerCase();
+  const message = String(notification?.message || '').toLowerCase();
+  const link = String(notification?.link || '').toLowerCase();
+  return link === '/pending-approval' ||
+    title.includes('registration') ||
+    message.includes('needs your approval');
+};
 
-const groupNotifications = (notifications) => {
+const getEffectiveType = (notification) => {
+  const type = String(notification?.type || 'GENERAL').toUpperCase();
+  if (type === 'JOB_APPLICATION') return 'JOB_APPLICATION';
+  if (isPendingRegistrationNotification(notification)) return 'REGISTRATION';
+  return type;
+};
+
+const getConfig = (notification) => TYPE_CONFIG[getEffectiveType(notification)] || TYPE_CONFIG.GENERAL;
+
+const getDateGroup = (value) => {
+  if (!value) return 'Older';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Older';
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
 
-  const newItems = [];
-  const todayItems = [];
-  const earlierItems = [];
+  if (date >= startOfToday) return 'Today';
+  if (date >= startOfYesterday) return 'Yesterday';
+  return 'Earlier';
+};
 
-  for (const n of notifications) {
-    if (!n.is_read) {
-      newItems.push(n);
-    } else {
-      const d = new Date(n.created_at);
-      if (d >= startOfToday) {
-        todayItems.push(n);
-      } else {
-        earlierItems.push(n);
-      }
+const isUrgentNotification = (notification) => (
+  !notification?.is_read &&
+  ['REGISTRATION', 'JOB_APPLICATION'].includes(getEffectiveType(notification))
+);
+
+const getNotificationRank = (notification) => {
+  if (isUrgentNotification(notification)) return 0;
+  if (!notification?.is_read) return 1;
+  return 2;
+};
+
+const sortNotifications = (notifications) => (
+  [...notifications].sort((a, b) => {
+    const rankDiff = getNotificationRank(a) - getNotificationRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+  })
+);
+
+const groupNotifications = (notifications) => {
+  const sections = [];
+  const sectionMap = new Map();
+
+  for (const notification of sortNotifications(notifications)) {
+    const cfg = getConfig(notification);
+    const sectionLabel = isUrgentNotification(notification)
+      ? 'Urgent'
+      : `${getDateGroup(notification.created_at)} · ${cfg.label}`;
+
+    if (!sectionMap.has(sectionLabel)) {
+      const section = { label: sectionLabel, items: [] };
+      sectionMap.set(sectionLabel, section);
+      sections.push(section);
     }
+
+    sectionMap.get(sectionLabel).items.push(notification);
   }
 
-  const sections = [];
-  if (newItems.length > 0) sections.push({ label: 'New', items: newItems });
-  if (todayItems.length > 0) sections.push({ label: 'Today', items: todayItems });
-  if (earlierItems.length > 0) sections.push({ label: 'Earlier', items: earlierItems });
   return sections;
 };
+
+const formatNotificationPreview = (message = '') => String(message || '')
+  .replace(/\s+/g, ' ')
+  .trim();
 
 const Notifications = () => {
   const navigate = useNavigate();
@@ -167,6 +216,16 @@ const Notifications = () => {
             message: `Happy Birthday, ${alumniName}! Wishing you a wonderful day.`,
           });
         }
+        return;
+      }
+
+      if (!notification.link && getEffectiveType(notification) === 'JOB_APPLICATION') {
+        navigate('/employment');
+        return;
+      }
+
+      if (!notification.link && getEffectiveType(notification) === 'REGISTRATION') {
+        navigate('/pending-approval');
         return;
       }
 
@@ -379,9 +438,10 @@ const Notifications = () => {
                   </div>
                   <div className="divide-y divide-gray-100/80">
                     {section.items.map((notification) => {
-                      const cfg = getConfig(notification.type);
+                      const cfg = getConfig(notification);
                       const isUnread = !notification.is_read;
                       const isBirthday = isBirthdayNotification(notification);
+                      const isUrgent = isUrgentNotification(notification);
 
                       return (
                         <button
@@ -389,7 +449,9 @@ const Notifications = () => {
                           key={notification.id}
                           onClick={() => handleNotificationClick(notification)}
                           className={`w-full px-5 py-4 text-left transition-all duration-200 group cursor-pointer ${
-                            isUnread
+                            isUrgent
+                              ? 'bg-red-50/80 hover:bg-red-100/80'
+                              : isUnread
                               ? 'bg-blue-50/50 hover:bg-blue-100/60'
                               : 'bg-white hover:bg-gray-50/80'
                           }`}
@@ -408,7 +470,7 @@ const Notifications = () => {
                                 )}
                               </div>
                               {isUnread && (
-                                <span className="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white bg-blue-500" />
+                                <span className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${isUrgent ? 'bg-red-600' : 'bg-blue-500'}`} />
                               )}
                             </div>
 
@@ -420,13 +482,15 @@ const Notifications = () => {
                                   {notification.title || 'Notification'}
                                 </p>
                                 <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                                  isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
+                                  isUrgent
+                                    ? 'bg-red-100 text-red-700'
+                                    : isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
                                 }`}>
                                   {isBirthday ? 'Birthday' : cfg.label}
                                 </span>
                               </div>
                               <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2">
-                                {notification.message || 'No details available.'}
+                                {formatNotificationPreview(notification.message) || 'No details available.'}
                               </p>
                               <div className="mt-1.5 flex items-center gap-2">
                                 <p className="text-xs text-gray-400 font-medium">{getRelativeTime(notification.created_at)}</p>
