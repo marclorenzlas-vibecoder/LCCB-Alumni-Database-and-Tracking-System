@@ -1,5 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { authenticateToken } = require('../middleware/auth');
+const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -125,7 +127,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new external job posting
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const {
       posted_by_alumni_id,
@@ -187,6 +189,16 @@ router.post('/', async (req, res) => {
       return getJobById(tx, createdId);
     });
 
+    await recordActivity({
+      req,
+      action: 'CREATE',
+      entityType: 'job_posting',
+      entityId: job.id,
+      entityLabel: job.job_title,
+      summary: `Created job posting "${job.job_title}"`,
+      details: { company: job.company, location: job.location }
+    });
+
     res.status(201).json(job);
   } catch (error) {
     console.error('Error creating job posting:', error);
@@ -198,9 +210,15 @@ router.post('/', async (req, res) => {
 });
 
 // Update job posting
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const oldJob = await getJobById(prisma, id);
+
+    if (!oldJob) {
+      return res.status(404).json({ error: 'Job posting not found' });
+    }
+
     const {
       job_title,
       company,
@@ -251,6 +269,30 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Job posting not found' });
     }
 
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'job_posting',
+      entityId: job.id,
+      entityLabel: job.job_title,
+      summary: `Updated job posting "${job.job_title}"`,
+      details: {
+        changes: buildChangeSet(oldJob, job, [
+          { key: 'job_title', label: 'Job Title' },
+          { key: 'company', label: 'Company' },
+          { key: 'location', label: 'Location' },
+          { key: 'department', label: 'Department' },
+          { key: 'job_type', label: 'Job Type' },
+          { key: 'salary_range', label: 'Salary Range' },
+          { key: 'requirements', label: 'Requirements' },
+          { key: 'benefits', label: 'Benefits' },
+          { key: 'description', label: 'Description' },
+          { key: 'application_url', label: 'Application URL' },
+          { key: 'application_deadline', label: 'Application Deadline' }
+        ])
+      }
+    });
+
     res.json(job);
   } catch (error) {
     console.error('Error updating job posting:', error);
@@ -262,12 +304,35 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete job posting
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const job = await getJobById(prisma, id);
+
+    if (!job) {
+      return res.status(404).json({ error: 'Job posting not found' });
+    }
 
     await prisma.job_posting.delete({
       where: { id: Number(id) }
+    });
+
+    await recordActivity({
+      req,
+      action: 'DELETE',
+      entityType: 'job_posting',
+      entityId: Number(id),
+      entityLabel: job.job_title,
+      summary: `Deleted job posting "${job.job_title}"`,
+      details: {
+        deletedRecord: {
+          jobTitle: job.job_title,
+          company: job.company,
+          location: job.location,
+          department: job.department,
+          applicationDeadline: job.application_deadline
+        }
+      }
     });
 
     res.json({ message: 'Job posting deleted successfully' });

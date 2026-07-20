@@ -2,6 +2,7 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { broadcastUpdate } = require("../services/realtimeService");
 const { authenticateToken } = require("../middleware/auth");
+const { buildChangeSet, recordActivity } = require("../services/activityLogService");
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -167,6 +168,16 @@ router.post(
         alumniId: achievement.alumni_id || null,
       });
 
+      await recordActivity({
+        req,
+        action: "CREATE",
+        entityType: "achievement",
+        entityId: achievement.id,
+        entityLabel: achievement.title,
+        summary: `Created achievement "${achievement.title}"`,
+        details: { alumniId: achievement.alumni_id || null }
+      });
+
       res.status(201).json(achievement);
     } catch (error) {
       console.error("Error creating achievement:", error);
@@ -187,6 +198,13 @@ router.put(
     try {
       const { id } = req.params;
       const { title, category, description, date } = req.body;
+      const oldAchievement = await prisma.achievement.findUnique({
+        where: { id: Number(id) },
+      });
+
+      if (!oldAchievement) {
+        return res.status(404).json({ error: "Achievement not found" });
+      }
 
       const updateData = {};
       if (title) updateData.title = title.trim();
@@ -202,9 +220,6 @@ router.put(
         updateData.image = `/uploads/achievements/${mediaFile.filename}`;
 
         // Delete old image if exists
-        const oldAchievement = await prisma.achievement.findUnique({
-          where: { id: Number(id) },
-        });
         if (oldAchievement?.image) {
           const oldImagePath = path.join(
             __dirname,
@@ -234,6 +249,24 @@ router.put(
       broadcastUpdate("achievement.updated", {
         achievementId: achievement.id,
         alumniId: achievement.alumni_id,
+      });
+
+      await recordActivity({
+        req,
+        action: "UPDATE",
+        entityType: "achievement",
+        entityId: achievement.id,
+        entityLabel: achievement.title,
+        summary: `Updated achievement "${achievement.title}"`,
+        details: {
+          changes: buildChangeSet(oldAchievement, achievement, [
+            { key: "title", label: "Title" },
+            { key: "category", label: "Category" },
+            { key: "description", label: "Description" },
+            { key: "date", label: "Date" },
+            { key: "image", label: "Media" }
+          ])
+        }
       });
 
       res.json(achievement);
@@ -269,6 +302,24 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     broadcastUpdate("achievement.deleted", {
       achievementId: parseInt(id),
       alumniId: achievementToDelete.alumni_id,
+    });
+
+    await recordActivity({
+      req,
+      action: "DELETE",
+      entityType: "achievement",
+      entityId: Number(id),
+      entityLabel: achievementToDelete.title,
+      summary: `Deleted achievement "${achievementToDelete.title}"`,
+      details: {
+        alumniId: achievementToDelete.alumni_id || null,
+        deletedRecord: {
+          title: achievementToDelete.title,
+          category: achievementToDelete.category,
+          date: achievementToDelete.date,
+          image: achievementToDelete.image
+        }
+      }
     });
 
     // Delete the image file if it exists

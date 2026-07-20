@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { alumniAuthMiddleware, teacherAuthMiddleware, flexibleAuthMiddleware } = require('../middleware/auth');
+const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
 const MAX_ITEM_IMAGES = 6;
 
@@ -715,6 +716,16 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
       WHERE id = ${donation.id}
     `;
 
+    await recordActivity({
+      req,
+      action: 'CREATE',
+      entityType: 'donation',
+      entityId: donation.id,
+      entityLabel: donation.purpose,
+      summary: `Created donation campaign "${donation.purpose}"`,
+      details: { amount: Number(donation.amount), goal: donation.goal ? Number(donation.goal) : null }
+    });
+
     res.status(201).json(donation);
   } catch (error) {
     console.error('Error creating donation:', error);
@@ -1043,6 +1054,26 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
       WHERE id = ${Number(id)}
     `;
 
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'donation',
+      entityId: donation.id,
+      entityLabel: donation.purpose,
+      summary: `Updated donation campaign "${donation.purpose}"`,
+      details: {
+        changes: buildChangeSet(oldDonation, donation, [
+          { key: 'purpose', label: 'Purpose' },
+          { key: 'amount', label: 'Amount' },
+          { key: 'date', label: 'Date' },
+          { key: 'category', label: 'Category' },
+          { key: 'goal', label: 'Goal' },
+          { key: 'description', label: 'Description' },
+          { key: 'image', label: 'Image' }
+        ])
+      }
+    });
+
     res.json(donation);
   } catch (error) {
     console.error('Error updating donation:', error);
@@ -1079,6 +1110,24 @@ router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
         fs.unlinkSync(imagePath);
       }
     }
+
+    await recordActivity({
+      req,
+      action: 'DELETE',
+      entityType: 'donation',
+      entityId: Number(id),
+      entityLabel: donationToDelete.purpose,
+      summary: `Deleted donation campaign "${donationToDelete.purpose}"`,
+      details: {
+        deletedRecord: {
+          purpose: donationToDelete.purpose,
+          amount: Number(donationToDelete.amount),
+          goal: donationToDelete.goal ? Number(donationToDelete.goal) : null,
+          category: donationToDelete.category,
+          image: donationToDelete.image
+        }
+      }
+    });
 
     res.json({ message: 'Donation deleted successfully' });
   } catch (error) {
@@ -1261,6 +1310,16 @@ router.post('/:id/submit-receipt', flexibleAuthMiddleware, async (req, res) => {
         notes: notes || null,
         status: 'submitted'
       }
+    });
+
+    await recordActivity({
+      req,
+      action: 'SUBMIT',
+      entityType: 'donation_receipt',
+      entityId: submission.id,
+      entityLabel: campaign.purpose,
+      summary: `Submitted receipt for donation campaign "${campaign.purpose}"`,
+      details: { campaignId: Number(id), notes: notes || null }
     });
 
     res.json(submission);

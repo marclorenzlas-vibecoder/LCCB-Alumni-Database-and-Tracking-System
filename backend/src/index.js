@@ -18,10 +18,12 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const alumniListRoutes = require('./routes/alumniListRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const configRoutes = require('./routes/configRoutes');
+const activityLogRoutes = require('./routes/activityLogRoutes');
 const { PrismaClient } = require('@prisma/client');
 const eventStatusService = require('./services/eventStatusService');
 const birthdayNotificationService = require('./services/birthdayNotificationService');
 const { initRealtime } = require('./services/realtimeService');
+const { ensureActivityLogTable } = require('./services/activityLogService');
 
 // Load environment variables
 dotenv.config();
@@ -129,6 +131,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/alumni-list', alumniListRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/activity-logs', activityLogRoutes);
 
 // Default route redirects to frontend login
 app.get(['/', '/login', '/Login'], (req, res) => {
@@ -177,6 +180,8 @@ async function main() {
   try {
     await prisma.$connect();
     console.log('Database connection successful');
+    await ensureActivityLogTable();
+    console.log('Activity log table ready');
     
     // Start event status checker
     eventStatusService.startEventStatusChecker();

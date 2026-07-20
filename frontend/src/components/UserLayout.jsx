@@ -75,6 +75,12 @@ const adminNavItems = [
     icon: "M12 14a4 4 0 100-8 4 4 0 000 8zm0 2c-3.333 0-6 1.334-6 4v2h12v-2c0-2.666-2.667-4-6-4zm7-10h3m-1.5-1.5V7.5",
     role: "TEACHER",
   },
+  {
+    path: "/activity-logs",
+    label: "Activity Logs",
+    icon: "M9 12h6m-6 4h6m-7-8h8m-9 13h10a2 2 0 002-2V7.414a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0014.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z",
+    role: "TEACHER",
+  },
 ];
 
 const isItemActive = (locationPath, itemPath) => {
@@ -391,7 +397,7 @@ const UserLayout = ({ children }) => {
             />
           </span>
           <span className="app-sidebar-label app-sidebar-fade truncate text-sm font-semibold text-white">
-            LCCB Alumni
+            LCCB Admin
           </span>
         </button>
         <SidebarPanelToggle

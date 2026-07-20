@@ -275,7 +275,6 @@ const AdminDashboard = ({ pendingOnly = false }) => {
     .slice(0, 2)
     .join('')
     .toUpperCase() || 'A';
-
   const overviewCards = [
     { label: 'Total Alumni', value: formatCount(adminStats?.totalAlumni), note: 'Verified alumni directory entries', tone: 'sky' },
     { label: 'Pending Requests', value: formatCount(adminStats?.pendingRegistrations), note: 'Waiting for admin review', tone: 'amber' },

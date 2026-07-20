@@ -30,6 +30,7 @@ import TeacherLogin from './components/TeacherLogin';
 import TeacherRegister from './components/TeacherRegister';
 import TeacherManagement from './components/TeacherManagement';
 import ManageUsers from './components/ManageUsers';
+import ActivityLogs from './components/ActivityLogs';
 import ProtectedRoute from './components/ProtectedRoute';
 import { realtimeClient } from './services/realtimeClient';
 import { API_BASE_URL } from './config/apiBaseUrl';
@@ -164,6 +165,11 @@ function AppContent() {
           <Route path="/manage-users" element={
             <ProtectedRoute allowedRoles={['TEACHER', 'ADMIN']} redirectTo="/home">
               <ManageUsers />
+            </ProtectedRoute>
+          } />
+          <Route path="/activity-logs" element={
+            <ProtectedRoute allowedRoles={['TEACHER', 'ADMIN']} redirectTo="/home">
+              <ActivityLogs />
             </ProtectedRoute>
           } />
           <Route path="/oauth-callback" element={<OAuthCallback />} />

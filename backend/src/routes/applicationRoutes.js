@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const notificationService = require('../services/notificationService');
 const { authenticateToken } = require('../middleware/auth');
+const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
 const applicationsDir = path.join(__dirname, '../../uploads/applications');
 if (!fs.existsSync(applicationsDir)) {
@@ -483,7 +484,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update application status (for employer/job poster)
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, notes } = req.body;
@@ -498,7 +499,7 @@ router.patch('/:id/status', async (req, res) => {
 
     const existingApplication = await prisma.job_application.findUnique({
       where: { id: Number(id) },
-      select: { id: true, notes: true }
+      select: { id: true, notes: true, status: true }
     });
 
     if (!existingApplication) {
@@ -644,6 +645,29 @@ router.patch('/:id/status', async (req, res) => {
         console.error('❌ Failed to create applicant notification:', notifError);
         console.error('Error stack:', notifError.stack);
       }
+    }
+
+    if (status) {
+      const applicantName = [
+        application.applicant?.first_name,
+        application.applicant?.last_name
+      ].filter(Boolean).join(' ') || application.applicant?.email || 'applicant';
+
+      await recordActivity({
+        req,
+        action: 'STATUS_CHANGE',
+        entityType: 'job_application',
+        entityId: application.id,
+        entityLabel: application.job_posting?.job_title,
+        summary: `Changed ${applicantName}'s application for "${application.job_posting?.job_title}" to ${status}`,
+        details: {
+          changes: buildChangeSet(existingApplication, application, [
+            { key: 'status', label: 'Application Status' }
+          ]),
+          jobPostingId: application.job_posting?.id || null,
+          applicantId: application.applicant?.id || null
+        }
+      });
     }
 
     res.json({

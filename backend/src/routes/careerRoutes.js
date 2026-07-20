@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
+const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -68,6 +69,16 @@ router.post('/', authenticateToken, async (req, res) => {
 
     broadcastUpdate('career.created', { careerId: career.id, alumniId: career.alumni_id });
 
+    await recordActivity({
+      req,
+      action: 'CREATE',
+      entityType: 'career_entry',
+      entityId: career.id,
+      entityLabel: `${career.job_title} at ${career.company}`,
+      summary: `Created employment record "${career.job_title} at ${career.company}"`,
+      details: { alumniId: career.alumni_id }
+    });
+
     res.status(201).json(career);
   } catch (error) {
     console.error('Error creating career entry:', error);
@@ -83,6 +94,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { company, job_title, start_date, end_date, description, is_current } = req.body;
+    const oldCareer = await prisma.career_entry.findUnique({ where: { id: Number(id) } });
+
+    if (!oldCareer) {
+      return res.status(404).json({ error: 'Career entry not found' });
+    }
 
     const updateData = {};
     if (company) updateData.company = company.trim();
@@ -99,6 +115,25 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     broadcastUpdate('career.updated', { careerId: career.id, alumniId: career.alumni_id });
 
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'career_entry',
+      entityId: career.id,
+      entityLabel: `${career.job_title} at ${career.company}`,
+      summary: `Updated employment record "${career.job_title} at ${career.company}"`,
+      details: {
+        changes: buildChangeSet(oldCareer, career, [
+          { key: 'company', label: 'Company' },
+          { key: 'job_title', label: 'Job Title' },
+          { key: 'start_date', label: 'Start Date' },
+          { key: 'end_date', label: 'End Date' },
+          { key: 'description', label: 'Description' },
+          { key: 'is_current', label: 'Current Job' }
+        ])
+      }
+    });
+
     res.json(career);
   } catch (error) {
     console.error('Error updating career entry:', error);
@@ -113,12 +148,30 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.career_entry.findUnique({ where: { id: Number(id) }, select: { alumni_id: true } });
+    const existing = await prisma.career_entry.findUnique({ where: { id: Number(id) } });
     await prisma.career_entry.delete({
       where: { id: Number(id) }
     });
 
     broadcastUpdate('career.deleted', { careerId: Number(id), alumniId: existing?.alumni_id || null });
+
+    await recordActivity({
+      req,
+      action: 'DELETE',
+      entityType: 'career_entry',
+      entityId: Number(id),
+      entityLabel: existing ? `${existing.job_title} at ${existing.company}` : `Career #${id}`,
+      summary: `Deleted employment record "${existing ? `${existing.job_title} at ${existing.company}` : `#${id}`}"`,
+      details: {
+        deletedRecord: existing ? {
+          jobTitle: existing.job_title,
+          company: existing.company,
+          startDate: existing.start_date,
+          endDate: existing.end_date,
+          alumniId: existing.alumni_id
+        } : null
+      }
+    });
 
     res.json({ message: 'Career entry deleted successfully' });
   } catch (error) {

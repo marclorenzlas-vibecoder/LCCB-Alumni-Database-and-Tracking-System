@@ -419,6 +419,12 @@ class AlumniService {
         };
       }
 
+      const token = localStorage.getItem("token");
+      requestConfig.headers = {
+        ...(requestConfig.headers || {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       const response = await fetch(`${API_URL}/${id}`, requestConfig);
 
       if (!response.ok) {
@@ -487,8 +493,10 @@ class AlumniService {
   // Delete alumni
   async deleteAlumni(id) {
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_URL}/${id}`, {
         method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (!response.ok) {

@@ -8,6 +8,7 @@ const fs = require('fs');
 const notificationService = require('../services/notificationService');
 const { authenticateToken } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
+const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
 // ensure uploads/events exists
 const eventsDir = path.join(__dirname, '../../uploads/events');
@@ -90,7 +91,7 @@ const runUpload = (req, res, next) => {
 };
 
 // Create new event
-router.post('/', runUpload, async (req, res) => {
+router.post('/', authenticateToken, runUpload, async (req, res) => {
   try {
     const { name, description, date, location, sendNotification, notifyBatch, targetBatch } = req.body;
 
@@ -138,6 +139,16 @@ router.post('/', runUpload, async (req, res) => {
 
     broadcastUpdate('event.created', { eventId: event.id });
 
+    await recordActivity({
+      req,
+      action: 'CREATE',
+      entityType: 'event',
+      entityId: event.id,
+      entityLabel: event.name,
+      summary: `Created event "${event.name}"`,
+      details: { date: event.date, location: event.location }
+    });
+
     res.status(201).json(event);
   } catch (error) {
     console.error('Error creating event:', error);
@@ -149,10 +160,15 @@ router.post('/', runUpload, async (req, res) => {
 });
 
 // Update event
-router.put('/:id', runUpload, async (req, res) => {
+router.put('/:id', authenticateToken, runUpload, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, date, location, targetBatch } = req.body;
+    const oldEvent = await prisma.event.findUnique({ where: { id: Number(id) } });
+
+    if (!oldEvent) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
 
     const updateData = {};
     if (name) updateData.name = name.trim();
@@ -168,7 +184,6 @@ router.put('/:id', runUpload, async (req, res) => {
       updateData.image = `/uploads/events/${req.file.filename}`;
       
       // Delete old image if exists
-      const oldEvent = await prisma.event.findUnique({ where: { id: Number(id) } });
       if (oldEvent?.image) {
         const oldImagePath = path.join(__dirname, '../../', oldEvent.image);
         if (fs.existsSync(oldImagePath)) {
@@ -184,6 +199,25 @@ router.put('/:id', runUpload, async (req, res) => {
 
     broadcastUpdate('event.updated', { eventId: event.id });
 
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'event',
+      entityId: event.id,
+      entityLabel: event.name,
+      summary: `Updated event "${event.name}"`,
+      details: {
+        changes: buildChangeSet(oldEvent, event, [
+          { key: 'name', label: 'Name' },
+          { key: 'description', label: 'Description' },
+          { key: 'date', label: 'Date' },
+          { key: 'location', label: 'Location' },
+          { key: 'target_batch', label: 'Target Batch' },
+          { key: 'image', label: 'Image' }
+        ])
+      }
+    });
+
     res.json(event);
   } catch (error) {
     console.error('Error updating event:', error);
@@ -195,7 +229,7 @@ router.put('/:id', runUpload, async (req, res) => {
 });
 
 // Delete event
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -214,6 +248,23 @@ router.delete('/:id', async (req, res) => {
     });
 
     broadcastUpdate('event.deleted', { eventId: Number(id) });
+
+    await recordActivity({
+      req,
+      action: 'DELETE',
+      entityType: 'event',
+      entityId: Number(id),
+      entityLabel: eventToDelete.name,
+      summary: `Deleted event "${eventToDelete.name}"`,
+      details: {
+        deletedRecord: {
+          name: eventToDelete.name,
+          date: eventToDelete.date,
+          location: eventToDelete.location,
+          image: eventToDelete.image
+        }
+      }
+    });
 
     // Delete the image file if it exists
     if (eventToDelete.image) {

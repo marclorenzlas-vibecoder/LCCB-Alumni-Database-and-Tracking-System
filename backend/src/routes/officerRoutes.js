@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authMiddleware, teacherAuthMiddleware } = require('../middleware/auth');
+const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -153,6 +154,16 @@ router.post('/', teacherAuthMiddleware, async (req, res) => {
         }
       }
     });
+
+    await recordActivity({
+      req,
+      action: 'CREATE',
+      entityType: 'batch_officer',
+      entityId: officer.id,
+      entityLabel: `${officer.position} - Batch ${officer.batch}`,
+      summary: `Assigned ${officer.alumni?.first_name || 'Alumni'} ${officer.alumni?.last_name || ''} as ${officer.position}`,
+      details: { alumniId: officer.alumni_id, batch: officer.batch }
+    });
     
     res.status(201).json(officer);
   } catch (error) {
@@ -171,6 +182,18 @@ router.put('/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { position, term_start, term_end } = req.body;
+    const oldOfficer = await prisma.batch_officer.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        alumni: {
+          select: { first_name: true, last_name: true, email: true }
+        }
+      }
+    });
+
+    if (!oldOfficer) {
+      return res.status(404).json({ message: 'Officer not found' });
+    }
     
     const data = {};
     if (position) data.position = position;
@@ -192,6 +215,22 @@ router.put('/:id', teacherAuthMiddleware, async (req, res) => {
         }
       }
     });
+
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'batch_officer',
+      entityId: officer.id,
+      entityLabel: `${officer.position} - Batch ${officer.batch}`,
+      summary: `Updated officer assignment for ${officer.alumni?.first_name || 'Alumni'} ${officer.alumni?.last_name || ''}`,
+      details: {
+        changes: buildChangeSet(oldOfficer, officer, [
+          { key: 'position', label: 'Position' },
+          { key: 'term_start', label: 'Term Start' },
+          { key: 'term_end', label: 'Term End' }
+        ])
+      }
+    });
     
     res.json(officer);
   } catch (error) {
@@ -209,9 +248,39 @@ router.put('/:id', teacherAuthMiddleware, async (req, res) => {
 router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
+    const officer = await prisma.batch_officer.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        alumni: {
+          select: { first_name: true, last_name: true, email: true }
+        }
+      }
+    });
+
+    if (!officer) {
+      return res.status(404).json({ message: 'Officer not found' });
+    }
     
     await prisma.batch_officer.delete({
       where: { id: parseInt(id) }
+    });
+
+    await recordActivity({
+      req,
+      action: 'DELETE',
+      entityType: 'batch_officer',
+      entityId: Number(id),
+      entityLabel: `${officer.position} - Batch ${officer.batch}`,
+      summary: `Removed officer assignment "${officer.position} - Batch ${officer.batch}"`,
+      details: {
+        deletedRecord: {
+          alumni: [officer.alumni?.first_name, officer.alumni?.last_name].filter(Boolean).join(' ') || officer.alumni?.email,
+          position: officer.position,
+          batch: officer.batch,
+          termStart: officer.term_start,
+          termEnd: officer.term_end
+        }
+      }
     });
     
     res.json({ message: 'Officer removed successfully' });

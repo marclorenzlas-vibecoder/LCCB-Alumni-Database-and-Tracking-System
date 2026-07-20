@@ -4,6 +4,7 @@ const upload = require("../middleware/upload");
 const authMiddleware = require("../middleware/auth").authMiddleware;
 const path = require("path");
 const { broadcastUpdate } = require("../services/realtimeService");
+const { buildChangeSet, recordActivity } = require("../services/activityLogService");
 const {
   normalizeLevel,
   parseEducationHistory,
@@ -557,7 +558,7 @@ router.get("/:id", softAuth, async (req, res) => {
 });
 
 // Update alumni
-router.put("/:id", runProfileUpload, async (req, res) => {
+router.put("/:id", authMiddleware, runProfileUpload, async (req, res) => {
   try {
     const { id } = req.params;
     const parsedEducationHistory = parseEducationHistory(
@@ -866,6 +867,33 @@ router.put("/:id", runProfileUpload, async (req, res) => {
       });
     }
 
+    await recordActivity({
+      req,
+      action: "UPDATE",
+      entityType: "alumni",
+      entityId: updatedAlumni.id,
+      entityLabel: [updatedAlumni.first_name, updatedAlumni.last_name].filter(Boolean).join(" ") || updatedAlumni.email,
+      summary: `Updated alumni record "${[updatedAlumni.first_name, updatedAlumni.last_name].filter(Boolean).join(" ") || updatedAlumni.email || updatedAlumni.id}"`,
+      details: {
+        changes: buildChangeSet(existingAlumni, updatedAlumni, [
+          { key: "first_name", label: "First Name" },
+          { key: "middle_name", label: "Middle Name" },
+          { key: "last_name", label: "Last Name" },
+          { key: "email", label: "Email" },
+          { key: "contact_number", label: "Contact Number" },
+          { key: "level", label: "Level" },
+          { key: "batch", label: "Batch" },
+          { key: "course", label: "Course" },
+          { key: "graduation_year", label: "Graduation Year" },
+          { key: "current_position", label: "Current Position" },
+          { key: "company", label: "Company" },
+          { key: "location", label: "Location" },
+          { key: "skills", label: "Skills" },
+          { key: "profile_image", label: "Profile Image" }
+        ])
+      }
+    });
+
     res.json({
       ...updatedAlumni,
       education_history: history,
@@ -887,7 +915,7 @@ router.put("/:id", runProfileUpload, async (req, res) => {
 });
 
 // Delete alumni
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -931,6 +959,26 @@ router.delete("/:id", async (req, res) => {
         alumniId: Number(id),
       });
     }
+
+    await recordActivity({
+      req,
+      action: "DELETE",
+      entityType: "alumni",
+      entityId: Number(id),
+      entityLabel: [existingAlumni.first_name, existingAlumni.last_name].filter(Boolean).join(" ") || existingAlumni.email,
+      summary: `Deleted alumni record "${[existingAlumni.first_name, existingAlumni.last_name].filter(Boolean).join(" ") || existingAlumni.email || id}"`,
+      details: {
+        deletedRecord: {
+          firstName: existingAlumni.first_name,
+          lastName: existingAlumni.last_name,
+          email: existingAlumni.email,
+          studentId: existingAlumni.student_id,
+          level: existingAlumni.level,
+          batch: existingAlumni.batch,
+          course: existingAlumni.course
+        }
+      }
+    });
 
     res.json({ message: "Alumni and associated user deleted successfully" });
   } catch (error) {

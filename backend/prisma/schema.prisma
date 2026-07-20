@@ -24,6 +24,24 @@ model GoogleAccount {
   @@map("google_accounts")
 }
 
+model activity_log {
+  id           Int      @id @default(autoincrement())
+  actor_id     Int?
+  actor_name   String?  @db.VarChar(255)
+  actor_role   String?  @db.VarChar(100)
+  action       String   @db.VarChar(100)
+  entity_type  String   @db.VarChar(100)
+  entity_id    Int?
+  entity_label String?  @db.VarChar(255)
+  summary      String   @db.Text
+  details      String?  @db.Text
+  created_at   DateTime @default(now()) @db.DateTime(0)
+
+  @@index([created_at], map: "idx_activity_log_created_at")
+  @@index([actor_id], map: "idx_activity_log_actor_id")
+  @@index([entity_type, action], map: "idx_activity_log_entity")
+}
+
 model achievement {
   id          Int       @id @default(autoincrement())
   alumni_id   Int?

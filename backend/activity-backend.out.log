@@ -1,0 +1,30 @@
+Environment variables loaded: {
+  dbConnected: true,
+  port: '5001',
+  frontendUrl: 'http://localhost:3002'
+}
+CORS Allowed Origins: [
+  'http://localhost:3002',
+  'http://localhost:5001',
+  'http://192.168.5.248:3002'
+]
+Initializing OAuth with: {
+  clientIdPrefix: '617492346913-4f...',
+  hasSecret: true,
+  callbackUrl: 'http://localhost:5001/api/auth/google/callback'
+}
+Initializing Google OAuth strategy with config: {
+  clientIdPrefix: '6174923469...',
+  callbackURL: 'http://localhost:5001/api/auth/google/callback',
+  scopes: undefined
+}
+Database connection successful
+Activity log table ready
+Event status checker started - checking every hour
+Birthday notification checker starting: scanning alumni date_of_birth values on boot
+Birthday notification checker started - checking every hour
+Server running on http://0.0.0.0:5001
+Network access: http://192.168.5.248:5001
+Realtime WebSocket available at ws://0.0.0.0:5001/realtime
+Birthday notification check complete: { totalBirthdays: 0, createdCount: 0 }
+Event status check complete: { upcomingToCurrent: 0, currentToPrevious: 0, totalProcessed: 26 }

@@ -26,12 +26,13 @@ const eventService = {
     if (eventData instanceof FormData) {
       const response = await axios.post(API_URL, eventData, {
         headers: {
+          ...getAuthHeaders(),
           'Content-Type': 'multipart/form-data'
         }
       });
       return response.data;
     }
-    const response = await axios.post(API_URL, eventData);
+    const response = await axios.post(API_URL, eventData, { headers: getAuthHeaders() });
     return response.data;
   },
 
@@ -40,18 +41,19 @@ const eventService = {
     if (eventData instanceof FormData) {
       const response = await axios.put(`${API_URL}/${id}`, eventData, {
         headers: {
+          ...getAuthHeaders(),
           'Content-Type': 'multipart/form-data'
         }
       });
       return response.data;
     }
-    const response = await axios.put(`${API_URL}/${id}`, eventData);
+    const response = await axios.put(`${API_URL}/${id}`, eventData, { headers: getAuthHeaders() });
     return response.data;
   },
 
   // Delete event
   deleteEvent: async (id) => {
-    const response = await axios.delete(`${API_URL}/${id}`);
+    const response = await axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });
     return response.data;
   },
 

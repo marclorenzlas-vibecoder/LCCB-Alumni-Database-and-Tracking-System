@@ -118,7 +118,10 @@ export const authService = {
   },
 
   logout: () => {
-    axiosInstance.post('/logout').catch(() => {});
+    const token = localStorage.getItem('token');
+    axiosInstance.post('/logout', {}, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    }).catch(() => {});
 
     // Check if user has rejected status before logging out
     const user = authService.getCurrentUser();

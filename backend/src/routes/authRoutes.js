@@ -7,8 +7,9 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { authMiddleware, invalidateUserBlockCache } = require('../middleware/auth');
+const { authMiddleware, invalidateUserBlockCache, teacherAuthMiddleware } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
+const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { tryEnter, leave, getLimiterStatus } = require('../services/activeUserLimiter');
 const {
   normalizeLevel,
@@ -191,6 +192,20 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    await recordActivity({
+      req: { user: result.user },
+      action: 'LOGIN',
+      entityType: 'session',
+      entityId: result.user?.id,
+      entityLabel: result.user?.email || result.user?.username,
+      summary: `${result.user?.username || result.user?.email || 'User'} logged in`,
+      details: {
+        role: result.user?.role || null,
+        email: result.user?.email || null,
+        approvalStatus: result.user?.approval_status || null
+      }
+    });
+
     res.json(result);
   } catch (error) {
     // Check if error message indicates blocked account
@@ -270,7 +285,7 @@ router.get('/teachers', async (req, res) => {
 });
 
 // Update teacher - Admin only
-router.put('/teachers/:id', async (req, res) => {
+router.put('/teachers/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
@@ -284,6 +299,14 @@ router.put('/teachers/:id', async (req, res) => {
 
     if (!email.endsWith('@lccbonline.com')) {
       return res.status(400).json({ error: 'Teacher email must use @lccbonline.com domain' });
+    }
+
+    const oldTeacher = await prisma.teacher.findUnique({
+      where: { id: parseInt(id, 10) }
+    });
+
+    if (!oldTeacher) {
+      return res.status(404).json({ error: 'Teacher not found' });
     }
 
     const updateData = {
@@ -301,6 +324,22 @@ router.put('/teachers/:id', async (req, res) => {
       data: updateData
     });
 
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'teacher',
+      entityId: teacher.id,
+      entityLabel: teacher.email,
+      summary: `Updated teacher account "${teacher.email}"`,
+      details: {
+        changes: buildChangeSet(oldTeacher, teacher, [
+          { key: 'username', label: 'Username' },
+          { key: 'email', label: 'Email' },
+          { key: 'department', label: 'Department' }
+        ]).concat(password && password.trim() ? [{ field: 'Password', from: 'Unchanged', to: 'Changed' }] : [])
+      }
+    });
+
     res.json({
       id: teacher.id,
       email: teacher.email,
@@ -316,11 +355,34 @@ router.put('/teachers/:id', async (req, res) => {
 });
 
 // Delete teacher - Admin only
-router.delete('/teachers/:id', async (req, res) => {
+router.delete('/teachers/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
     await prisma.teacher.delete({
       where: { id: parseInt(id) }
+    });
+    await recordActivity({
+      req,
+      action: 'DELETE',
+      entityType: 'teacher',
+      entityId: Number(id),
+      entityLabel: teacher.email,
+      summary: `Deleted teacher account "${teacher.email}"`,
+      details: {
+        deletedRecord: {
+          username: teacher.username,
+          email: teacher.email,
+          department: teacher.department
+        }
+      }
     });
     res.json({ message: 'Teacher deleted successfully' });
   } catch (error) {
@@ -383,10 +445,23 @@ router.get('/pending-registrations', async (req, res) => {
 });
 
 // Approve registration - Admin only
-router.post('/approve-registration/:id', async (req, res) => {
+router.post('/approve-registration/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { approveRegistration } = require('../services/authService');
     const result = await approveRegistration(parseInt(req.params.id));
+    await recordActivity({
+      req,
+      action: 'APPROVE',
+      entityType: 'registration',
+      entityId: result.user?.id,
+      entityLabel: result.user?.email || result.alumni?.email || `Registration #${req.params.id}`,
+      summary: `Approved registration for ${result.user?.email || result.alumni?.email || `request #${req.params.id}`}`,
+      details: {
+        pendingRegistrationId: Number(req.params.id),
+        alumniId: result.alumni?.id || null,
+        userId: result.user?.id || null
+      }
+    });
     res.json(result);
   } catch (error) {
     console.error('Error approving registration:', error);
@@ -395,7 +470,7 @@ router.post('/approve-registration/:id', async (req, res) => {
 });
 
 // Reject registration - Admin only
-router.post('/reject-registration/:id', async (req, res) => {
+router.post('/reject-registration/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     console.log('📥 Reject registration request received:', req.params.id);
     console.log('Rejection reason:', req.body.reason);
@@ -408,7 +483,24 @@ router.post('/reject-registration/:id', async (req, res) => {
       return res.status(400).json({ error: 'Rejection reason is required' });
     }
     
+    const pendingRegistration = await prisma.pending_registration.findUnique({
+      where: { id: parseInt(req.params.id) },
+      select: { id: true, email: true, username: true }
+    });
+
     const result = await rejectRegistration(parseInt(req.params.id), reason);
+    await recordActivity({
+      req,
+      action: 'REJECT',
+      entityType: 'registration',
+      entityId: pendingRegistration?.id || Number(req.params.id),
+      entityLabel: pendingRegistration?.email || pendingRegistration?.username || `Registration #${req.params.id}`,
+      summary: `Rejected registration for ${pendingRegistration?.email || pendingRegistration?.username || `request #${req.params.id}`}`,
+      details: {
+        reason,
+        pendingRegistrationId: Number(req.params.id)
+      }
+    });
     console.log('✅ Registration rejected successfully');
     res.json(result);
   } catch (error) {
@@ -645,8 +737,21 @@ router.get('/session-status', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/logout', authMiddleware, (req, res) => {
+router.post('/logout', authMiddleware, async (req, res) => {
   leave({ token: req.authToken, user: req.user });
+
+  await recordActivity({
+    req,
+    action: 'LOGOUT',
+    entityType: 'session',
+    entityId: req.user?.id,
+    entityLabel: req.user?.email || req.user?.username,
+    summary: `${req.user?.username || req.user?.email || 'User'} logged out`,
+    details: {
+      role: req.user?.role || null,
+      email: req.user?.email || null
+    }
+  });
 
   // JWT clients (web/mobile) may not have an express-session object.
   if (!req.session) {
@@ -766,7 +871,7 @@ router.get('/profile/:id', async (req, res) => {
   }
 });
 // Update user profile (username and profile image)
-router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
+router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const { username, email, department, firstName, middleName, lastName, studentId, level, course, batch, graduationYear, currentPosition, company, location, contactNumber, skills, dateOfBirth, date_of_birth } = req.body;
@@ -791,6 +896,10 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
 
     // Check if user is teacher or regular user
     const emailDomain = normalizedEmail ? normalizedEmail.split('@')[1] : null;
+    const isTeacherProfile = emailDomain === 'lccbonline.com';
+    const oldPrimaryRecord = isTeacherProfile
+      ? await prisma.teacher.findUnique({ where: { id: userId } })
+      : await prisma.user.findUnique({ where: { id: userId } });
     
     let updatedUser;
     let updatedAlumni = null;
@@ -1117,6 +1226,23 @@ router.put('/profile/:id', upload.single('profileImage'), async (req, res) => {
       });
     }
 
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: role === 'TEACHER' ? 'teacher_profile' : 'user_profile',
+      entityId: updatedUser.id,
+      entityLabel: updatedUser.email || updatedUser.username,
+      summary: `Updated ${role === 'TEACHER' ? 'teacher' : 'user'} profile "${updatedUser.email || updatedUser.username}"`,
+      details: {
+        changes: buildChangeSet(oldPrimaryRecord, updatedUser, [
+          { key: 'username', label: 'Username' },
+          { key: 'email', label: 'Email' },
+          { key: 'department', label: 'Department' },
+          { key: 'profile_image', label: 'Profile Image' }
+        ])
+      }
+    });
+
     res.json({
       message: 'Profile updated successfully',
       user: {
@@ -1215,7 +1341,7 @@ router.get('/pending-users', async (req, res) => {
 });
 
 // Approve or reject user account (Admin only)
-router.put('/approve-user/:id', async (req, res) => {
+router.put('/approve-user/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const pendingId = parseInt(req.params.id);
     const { action } = req.body; // 'approve' or 'reject'
@@ -1225,9 +1351,26 @@ router.put('/approve-user/:id', async (req, res) => {
     }
 
     const { approveRegistration, rejectRegistration } = require('../services/authService');
+    const pendingRegistration = await prisma.pending_registration.findUnique({
+      where: { id: pendingId },
+      select: { id: true, email: true, username: true }
+    });
 
     if (action === 'approve') {
       const result = await approveRegistration(pendingId);
+      await recordActivity({
+        req,
+        action: 'APPROVE',
+        entityType: 'registration',
+        entityId: result.user?.id,
+        entityLabel: result.user?.email || pendingRegistration?.email || `Registration #${pendingId}`,
+        summary: `Approved registration for ${result.user?.email || pendingRegistration?.email || `request #${pendingId}`}`,
+        details: {
+          pendingRegistrationId: pendingId,
+          alumniId: result.alumni?.id || null,
+          userId: result.user?.id || null
+        }
+      });
       res.json({ 
         message: 'User approved successfully',
         user: {
@@ -1238,6 +1381,18 @@ router.put('/approve-user/:id', async (req, res) => {
       });
     } else {
       const result = await rejectRegistration(pendingId, 'Registration rejected by admin');
+      await recordActivity({
+        req,
+        action: 'REJECT',
+        entityType: 'registration',
+        entityId: pendingRegistration?.id || pendingId,
+        entityLabel: pendingRegistration?.email || pendingRegistration?.username || `Registration #${pendingId}`,
+        summary: `Rejected registration for ${pendingRegistration?.email || pendingRegistration?.username || `request #${pendingId}`}`,
+        details: {
+          reason: 'Registration rejected by admin',
+          pendingRegistrationId: pendingId
+        }
+      });
       res.json({ 
         message: 'User rejected successfully'
       });
@@ -1318,7 +1473,7 @@ router.get('/all-users', async (req, res) => {
 });
 
 // Block/Unblock user (Admin only)
-router.put('/users/:userId/block', async (req, res) => {
+router.put('/users/:userId/block', teacherAuthMiddleware, async (req, res) => {
   try {
     const { userId } = req.params;
     const { is_blocked } = req.body;
@@ -1346,6 +1501,20 @@ router.put('/users/:userId/block', async (req, res) => {
       is_blocked: Boolean(updatedUser.is_blocked)
     });
     broadcastUpdate('profile.updated', { userId: updatedUser.id });
+
+    await recordActivity({
+      req,
+      action: is_blocked ? 'BLOCK' : 'UNBLOCK',
+      entityType: 'user',
+      entityId: updatedUser.id,
+      entityLabel: updatedUser.email || updatedUser.username,
+      summary: `${is_blocked ? 'Blocked' : 'Unblocked'} user "${updatedUser.email || updatedUser.username}"`,
+      details: {
+        changes: buildChangeSet(user, updatedUser, [
+          { key: 'is_blocked', label: 'Blocked Status' }
+        ])
+      }
+    });
 
     res.json({
       message: `User ${is_blocked ? 'blocked' : 'unblocked'} successfully`,
