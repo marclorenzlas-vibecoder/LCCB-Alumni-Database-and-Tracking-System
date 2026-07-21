@@ -156,6 +156,23 @@ const registerCourseSections = groupSectionDefinitions.map((section) => {
   };
 });
 
+const PROGRAM_ALIGNMENT_OPTIONS = [
+  { value: '', label: 'Auto-check' },
+  { value: 'ALIGNED', label: 'Aligned' },
+  { value: 'NOT_ALIGNED', label: 'Not aligned' },
+  { value: 'NEEDS_REVIEW', label: 'Needs review' }
+];
+
+const getProgramAlignmentLabel = (value) => (
+  PROGRAM_ALIGNMENT_OPTIONS.find((option) => option.value === value)?.label || 'Needs review'
+);
+
+const getProgramAlignmentClass = (value) => {
+  if (value === 'ALIGNED') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (value === 'NOT_ALIGNED') return 'bg-rose-50 text-rose-700 border-rose-200';
+  return 'bg-amber-50 text-amber-700 border-amber-200';
+};
+
 const AlumniDirectory = () => {
   // Role
   const isTeacher = authService.isTeacher();
@@ -214,7 +231,16 @@ const AlumniDirectory = () => {
 
   // New record states
   const [newAchievement, setNewAchievement] = useState({ title: '', description: '', date: '' });
-  const [newCareer, setNewCareer] = useState({ job_title: '', company: '', start_date: '', end_date: '', is_current: false, description: '' });
+  const [newCareer, setNewCareer] = useState({
+    job_title: '',
+    company: '',
+    start_date: '',
+    end_date: '',
+    is_current: false,
+    program_alignment: '',
+    alignment_notes: '',
+    description: ''
+  });
   const [newDonation, setNewDonation] = useState({ amount: '', purpose: '', date: '' });
 
   // Confirm modal
@@ -676,7 +702,16 @@ const AlumniDirectory = () => {
       const created = await careerService.createCareer(payload);
       setCareers(prev => [...prev, created]);
       setShowCareerModal(false);
-      setNewCareer({ job_title: '', company: '', start_date: '', end_date: '', is_current: false, description: '' });
+      setNewCareer({
+        job_title: '',
+        company: '',
+        start_date: '',
+        end_date: '',
+        is_current: false,
+        program_alignment: '',
+        alignment_notes: '',
+        description: ''
+      });
     } catch (err) { toast.error('Failed to add employment'); }
   };
   const handleAddDonation = async (e) => {
@@ -938,7 +973,33 @@ const AlumniDirectory = () => {
                   {/* Employment */}
                   <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
                     <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3>{isTeacher && <button onClick={() => setShowCareerModal(true)} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-700 rounded-lg hover:bg-blue-800">Add New</button>}</div>
-                    <div className="space-y-2">{careers.length === 0 ? <p className="text-gray-500 text-sm">No employment history recorded yet.</p> : careers.map(c => (<div key={c.id} className="rounded-2xl border border-transparent bg-transparent p-4"><div className="flex justify-between items-start gap-3"><div className="flex-1 min-w-0"><div className="flex items-start justify-between gap-2"><h4 className="font-semibold text-gray-900 text-sm">{c.job_title}</h4><p className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{c.start_date ? new Date(c.start_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'} - {c.is_current ? 'Present' : (c.end_date ? new Date(c.end_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A')}</p></div><p className="text-sm text-blue-600 font-medium">{c.company}</p>{c.description && <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{c.description}</p>}</div>{isTeacher && <button onClick={() => handleDeleteCareer(c.id)} className="text-red-600 hover:text-red-800 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
+                    <div className="space-y-2">
+                      {careers.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No employment history recorded yet.</p>
+                      ) : careers.map(c => (
+                        <div key={c.id} className="rounded-2xl border border-transparent bg-transparent p-4">
+                          <div className="flex justify-between items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className="font-semibold text-gray-900 text-sm">{c.job_title}</h4>
+                                <p className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
+                                  {c.start_date ? new Date(c.start_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'} - {c.is_current ? 'Present' : (c.end_date ? new Date(c.end_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A')}
+                                </p>
+                              </div>
+                              <p className="text-sm text-blue-600 font-medium">{c.company}</p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramAlignmentClass(c.program_alignment)}`}>
+                                  {getProgramAlignmentLabel(c.program_alignment)}
+                                </span>
+                                {c.alignment_notes && <span className="text-xs text-gray-500">{c.alignment_notes}</span>}
+                              </div>
+                              {c.description && <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{c.description}</p>}
+                            </div>
+                            {isTeacher && <button onClick={() => handleDeleteCareer(c.id)} className="text-red-600 hover:text-red-800 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   {/* Donations */}
                   <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
@@ -1282,6 +1343,28 @@ const AlumniDirectory = () => {
                       />
                       <label className="ml-3 block text-sm font-medium text-gray-700">I currently work here</label>
                     </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Program-job alignment</label>
+                    <select
+                      value={newCareer.program_alignment}
+                      onChange={e => setNewCareer(s => ({ ...s, program_alignment: e.target.value }))}
+                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    >
+                      {PROGRAM_ALIGNMENT_OPTIONS.map((option) => (
+                        <option key={option.value || 'auto'} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Alignment Notes</label>
+                    <input
+                      type="text"
+                      value={newCareer.alignment_notes}
+                      onChange={e => setNewCareer(s => ({ ...s, alignment_notes: e.target.value }))}
+                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      placeholder="Optional note about how the job relates to the program"
+                    />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>

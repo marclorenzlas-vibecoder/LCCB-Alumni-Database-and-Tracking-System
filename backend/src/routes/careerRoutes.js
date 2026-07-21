@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
+const { inferProgramAlignment, normalizeProgramAlignment } = require('../utils/programAlignment');
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -46,7 +47,17 @@ router.get('/alumni/:alumniId', async (req, res) => {
 // Create new career entry
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { alumni_id, company, job_title, start_date, end_date, description, is_current } = req.body;
+    const {
+      alumni_id,
+      company,
+      job_title,
+      start_date,
+      end_date,
+      description,
+      is_current,
+      program_alignment,
+      alignment_notes
+    } = req.body;
 
     if (!alumni_id || !company || !job_title) {
       return res.status(400).json({ 
@@ -54,6 +65,18 @@ router.post('/', authenticateToken, async (req, res) => {
         required: ['alumni_id', 'company', 'job_title']
       });
     }
+
+    const alumni = await prisma.alumni.findUnique({
+      where: { id: Number(alumni_id) },
+      select: { course: true }
+    });
+    const inferredAlignment = inferProgramAlignment({
+      course: alumni?.course,
+      jobTitle: job_title,
+      company,
+      description
+    });
+    const manualAlignment = normalizeProgramAlignment(program_alignment);
 
     const career = await prisma.career_entry.create({
       data: {
@@ -63,7 +86,9 @@ router.post('/', authenticateToken, async (req, res) => {
         start_date: start_date ? new Date(start_date) : null,
         end_date: end_date ? new Date(end_date) : null,
         description: description ? description.trim() : null,
-        is_current: is_current || false
+        is_current: is_current || false,
+        program_alignment: manualAlignment || inferredAlignment.status,
+        alignment_notes: alignment_notes ? alignment_notes.trim() : inferredAlignment.notes
       }
     });
 
@@ -76,7 +101,10 @@ router.post('/', authenticateToken, async (req, res) => {
       entityId: career.id,
       entityLabel: `${career.job_title} at ${career.company}`,
       summary: `Created employment record "${career.job_title} at ${career.company}"`,
-      details: { alumniId: career.alumni_id }
+      details: {
+        alumniId: career.alumni_id,
+        programAlignment: career.program_alignment
+      }
     });
 
     res.status(201).json(career);
@@ -93,8 +121,24 @@ router.post('/', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { company, job_title, start_date, end_date, description, is_current } = req.body;
-    const oldCareer = await prisma.career_entry.findUnique({ where: { id: Number(id) } });
+    const {
+      company,
+      job_title,
+      start_date,
+      end_date,
+      description,
+      is_current,
+      program_alignment,
+      alignment_notes
+    } = req.body;
+    const oldCareer = await prisma.career_entry.findUnique({
+      where: { id: Number(id) },
+      include: {
+        alumni: {
+          select: { course: true }
+        }
+      }
+    });
 
     if (!oldCareer) {
       return res.status(404).json({ error: 'Career entry not found' });
@@ -107,6 +151,24 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (end_date !== undefined) updateData.end_date = end_date ? new Date(end_date) : null;
     if (description !== undefined) updateData.description = description ? description.trim() : null;
     if (is_current !== undefined) updateData.is_current = is_current;
+    if (program_alignment !== undefined) {
+      const manualAlignment = normalizeProgramAlignment(program_alignment);
+      updateData.program_alignment = manualAlignment || oldCareer.program_alignment || 'NEEDS_REVIEW';
+    }
+    if (alignment_notes !== undefined) {
+      updateData.alignment_notes = alignment_notes ? alignment_notes.trim() : null;
+    }
+
+    if (program_alignment === undefined) {
+      const inferredAlignment = inferProgramAlignment({
+        course: oldCareer.alumni?.course,
+        jobTitle: updateData.job_title || oldCareer.job_title,
+        company: updateData.company || oldCareer.company,
+        description: updateData.description !== undefined ? updateData.description : oldCareer.description
+      });
+      updateData.program_alignment = inferredAlignment.status;
+      if (alignment_notes === undefined) updateData.alignment_notes = inferredAlignment.notes;
+    }
 
     const career = await prisma.career_entry.update({
       where: { id: Number(id) },
@@ -129,7 +191,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
           { key: 'start_date', label: 'Start Date' },
           { key: 'end_date', label: 'End Date' },
           { key: 'description', label: 'Description' },
-          { key: 'is_current', label: 'Current Job' }
+          { key: 'is_current', label: 'Current Job' },
+          { key: 'program_alignment', label: 'Program Alignment' },
+          { key: 'alignment_notes', label: 'Alignment Notes' }
         ])
       }
     });

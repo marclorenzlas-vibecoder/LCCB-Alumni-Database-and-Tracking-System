@@ -8,6 +8,7 @@ const fs = require('fs');
 const notificationService = require('../services/notificationService');
 const { authenticateToken } = require('../middleware/auth');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
+const { inferProgramAlignment } = require('../utils/programAlignment');
 
 const applicationsDir = path.join(__dirname, '../../uploads/applications');
 if (!fs.existsSync(applicationsDir)) {
@@ -534,7 +535,8 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
             id: true,
             job_title: true,
             company: true,
-            location: true
+            location: true,
+            description: true
           }
         }
       }
@@ -567,6 +569,12 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
         });
 
         if (!existingCareer) {
+          const inferredAlignment = inferProgramAlignment({
+            course: application.applicant.course,
+            jobTitle: application.job_posting.job_title,
+            company: application.job_posting.company,
+            description: application.job_posting.description
+          });
           const newCareerEntry = await prisma.career_entry.create({
             data: {
               alumni_id: application.applicant.id,
@@ -574,7 +582,9 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
               company: application.job_posting.company,
               start_date: new Date(), // Set to current date when accepted
               is_current: true, // Mark as current position
-              description: `Position obtained through LCCB Alumni job posting`
+              description: `Position obtained through LCCB Alumni job posting`,
+              program_alignment: inferredAlignment.status,
+              alignment_notes: inferredAlignment.notes
             }
           });
           console.log('✅ Employment history record created successfully:', newCareerEntry);

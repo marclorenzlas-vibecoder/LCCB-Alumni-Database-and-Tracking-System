@@ -4,11 +4,13 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +35,10 @@ import {
   unblockChatUser
 } from '../../services/firebaseChatService';
 import { imageUrl } from '../../utils/formatters';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const getConversationStatus = (summary) => summary?.status || 'accepted';
 const isBlockedConversationStatus = (status) => status === 'blocked' || status === 'rejected';
@@ -190,6 +196,20 @@ function SectionTitle({ children }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
+function RequestSectionToggle({ title, count, expanded, onPress }) {
+  return (
+    <Pressable style={styles.sectionToggle} onPress={onPress}>
+      <View style={styles.sectionToggleTitle}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={styles.sectionCountBadge}>
+          <Text style={styles.sectionCountText}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      </View>
+      <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+    </Pressable>
+  );
+}
+
 function ContactRow({ contact, status, subtitle, unreadCount = 0, badge, selected, onPress, rightAction }) {
   const hasUnread = unreadCount > 0;
 
@@ -230,6 +250,7 @@ export default function AlumniChatScreen({ navigation, user }) {
   const [error, setError] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [requestActionId, setRequestActionId] = useState('');
+  const [showSentRequests, setShowSentRequests] = useState(false);
   const listRef = useRef(null);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
@@ -584,6 +605,11 @@ export default function AlumniChatScreen({ navigation, user }) {
     setError('');
   };
 
+  const toggleSentRequests = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowSentRequests((previous) => !previous);
+  };
+
   const renderRequestActions = (contact) => (
     <View style={styles.requestActions}>
       <Pressable style={styles.acceptButton} onPress={() => handleAcceptRequest(contact)} disabled={requestActionId === contact.chatId}>
@@ -759,17 +785,26 @@ export default function AlumniChatScreen({ navigation, user }) {
 
       {sentRequests.length > 0 ? (
         <View style={styles.section}>
-          <SectionTitle>Requests Sent</SectionTitle>
-          {sentRequests.map((contact) => (
-            <ContactRow
-              key={`sent-${contact.userId}`}
-              contact={contact}
-              status={contact.status}
-              subtitle="Message request sent"
-              badge="Pending"
-              onPress={() => openContact(contact)}
-            />
-          ))}
+          <RequestSectionToggle
+            title="Requests Sent"
+            count={sentRequests.length}
+            expanded={showSentRequests}
+            onPress={toggleSentRequests}
+          />
+          {showSentRequests ? (
+            <View style={styles.collapsibleContent}>
+              {sentRequests.map((contact) => (
+                <ContactRow
+                  key={`sent-${contact.userId}`}
+                  contact={contact}
+                  status={contact.status}
+                  subtitle="Message request sent"
+                  badge="Pending"
+                  onPress={() => openContact(contact)}
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -928,6 +963,20 @@ const styles = StyleSheet.create({
   section: {
     gap: 8
   },
+  sectionToggle: {
+    minHeight: 34,
+    borderRadius: 12,
+    paddingHorizontal: 2,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  sectionToggleTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
   sectionTitle: {
     fontSize: 11,
     fontWeight: '800',
@@ -935,6 +984,24 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     paddingHorizontal: 2
+  },
+  sectionCountBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 7
+  },
+  sectionCountText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+    lineHeight: 13
+  },
+  collapsibleContent: {
+    gap: 8
   },
   contactRow: {
     minHeight: 72,

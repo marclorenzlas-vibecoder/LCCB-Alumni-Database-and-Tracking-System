@@ -177,6 +177,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [showMessageRequests, setShowMessageRequests] = useState(true);
+  const [showSentRequests, setShowSentRequests] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
   const [staffContacts, setStaffContacts] = useState([]);
@@ -747,31 +748,48 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
 
               {sentRequests.length > 0 && (
                 <div className="mb-3">
-                  <div className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    Requests Sent
+                  <button
+                    type="button"
+                    onClick={() => setShowSentRequests((previous) => !previous)}
+                    className="flex w-full items-center justify-between rounded-lg px-2 pb-2 pt-1 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 transition hover:bg-white"
+                    aria-expanded={showSentRequests}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      Requests Sent
+                      <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-blue-700 px-1.5 text-[10px] font-bold text-white">
+                        {sentRequests.length > 99 ? '99+' : sentRequests.length}
+                      </span>
+                    </span>
+                    <span className={`lccb-chat-chevron ${showSentRequests ? 'lccb-chat-chevron--open' : ''}`}>
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  </button>
+                  <div className={`lccb-chat-requests ${showSentRequests ? 'lccb-chat-requests--open' : 'lccb-chat-requests--closed'}`}>
+                    {sentRequests.map((contact) => {
+                      const isSelected = selectedContactId === contact.userId;
+                      return (
+                        <button
+                          type="button"
+                          key={`sent-${contact.userId}`}
+                          onClick={() => {
+                            setSelectedContactId(contact.userId);
+                            setError('');
+                          }}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
+                            isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
+                          }`}
+                        >
+                          <ContactAvatar contact={contact} status={contact.status} />
+                          <span className="min-w-0 flex-1">
+                            <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
+                            <span className="mt-0.5 block truncate text-xs text-amber-700">Message request sent</span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {sentRequests.map((contact) => {
-                    const isSelected = selectedContactId === contact.userId;
-                    return (
-                      <button
-                        type="button"
-                        key={`sent-${contact.userId}`}
-                        onClick={() => {
-                          setSelectedContactId(contact.userId);
-                          setError('');
-                        }}
-                        className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
-                          isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
-                        }`}
-                      >
-                        <ContactAvatar contact={contact} status={contact.status} />
-                        <span className="min-w-0 flex-1">
-                          <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
-                          <span className="mt-0.5 block truncate text-xs text-amber-700">Message request sent</span>
-                        </span>
-                      </button>
-                    );
-                  })}
                 </div>
               )}
 

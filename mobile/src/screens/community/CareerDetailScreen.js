@@ -4,6 +4,18 @@ import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../../components/ScreenContainer';
 import BackButton from '../../components/BackButton';
 
+const getAlignmentLabel = (value) => {
+  if (value === 'ALIGNED') return 'Aligned';
+  if (value === 'NOT_ALIGNED') return 'Not aligned';
+  return 'Needs review';
+};
+
+const getAlignmentStyle = (value) => {
+  if (value === 'ALIGNED') return styles.alignmentAligned;
+  if (value === 'NOT_ALIGNED') return styles.alignmentNotAligned;
+  return styles.alignmentReview;
+};
+
 export default function CareerDetailScreen({ route, navigation }) {
   const { item } = route.params || {};
 
@@ -38,6 +50,13 @@ export default function CareerDetailScreen({ route, navigation }) {
             <Text style={styles.metaText}>{dateRange}</Text>
           </View>
 
+          <View style={styles.alignmentSection}>
+            <Text style={[styles.alignmentBadge, getAlignmentStyle(item.program_alignment)]}>
+              {getAlignmentLabel(item.program_alignment)}
+            </Text>
+            {item.alignment_notes ? <Text style={styles.alignmentNotes}>{item.alignment_notes}</Text> : null}
+          </View>
+
           {item.description ? (
             <View style={styles.descSection}>
               <Text style={styles.descLabel}>Description</Text>
@@ -61,6 +80,12 @@ const styles = StyleSheet.create({
   company: { fontSize: 14, color: '#475569' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
   metaText: { fontSize: 13, color: '#64748b' },
+  alignmentSection: { marginBottom: 16, gap: 8, alignItems: 'flex-start' },
+  alignmentBadge: { borderRadius: 999, borderWidth: 1, fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 4, overflow: 'hidden' },
+  alignmentAligned: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', color: '#047857' },
+  alignmentNotAligned: { backgroundColor: '#fff1f2', borderColor: '#fecdd3', color: '#be123c' },
+  alignmentReview: { backgroundColor: '#fffbeb', borderColor: '#fde68a', color: '#b45309' },
+  alignmentNotes: { color: '#64748b', fontSize: 13, lineHeight: 18 },
   descSection: { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 16 },
   descLabel: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   descText: { fontSize: 14, color: '#334155', lineHeight: 20 },

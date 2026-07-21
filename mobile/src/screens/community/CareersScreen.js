@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
@@ -10,6 +10,18 @@ import { realtimeClient } from '../../services/realtimeClient';
 import { getAlumniId } from '../../utils/auth';
 import { formatDate } from '../../utils/formatters';
 import { theme } from '../../theme';
+
+const getAlignmentLabel = (value) => {
+  if (value === 'ALIGNED') return 'Aligned';
+  if (value === 'NOT_ALIGNED') return 'Not aligned';
+  return 'Needs review';
+};
+
+const getAlignmentStyle = (value) => {
+  if (value === 'ALIGNED') return styles.alignmentAligned;
+  if (value === 'NOT_ALIGNED') return styles.alignmentNotAligned;
+  return styles.alignmentReview;
+};
 
 export default function CareersScreen({ user }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
@@ -115,6 +127,9 @@ export default function CareersScreen({ user }) {
           <Text style={styles.title}>{entry.job_title}</Text>
           <Text style={styles.meta}>{entry.company}</Text>
           <Text style={styles.meta}>{formatDate(entry.start_date)} - {entry.end_date ? formatDate(entry.end_date) : 'Present'}</Text>
+          <Text style={[styles.alignmentBadge, getAlignmentStyle(entry.program_alignment)]}>
+            {getAlignmentLabel(entry.program_alignment)}
+          </Text>
           {entry.description ? <Text style={styles.body}>{entry.description}</Text> : null}
         </Pressable>
       ))}
@@ -164,5 +179,30 @@ const styles = StyleSheet.create({
   },
   body: {
     color: '#1f2937'
+  },
+  alignmentBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    overflow: 'hidden'
+  },
+  alignmentAligned: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+    color: '#047857'
+  },
+  alignmentNotAligned: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+    color: '#be123c'
+  },
+  alignmentReview: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+    color: '#b45309'
   }
 });

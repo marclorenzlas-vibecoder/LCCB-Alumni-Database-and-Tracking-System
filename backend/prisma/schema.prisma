@@ -137,6 +137,8 @@ model career_entry {
   end_date    DateTime? @db.Date
   description String?   @db.Text
   is_current  Boolean?  @default(false)
+  program_alignment String? @default("NEEDS_REVIEW") @db.VarChar(20)
+  alignment_notes String? @db.Text
   alumni      alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "career_entry_ibfk_1")
 
   @@index([alumni_id], map: "alumni_id")
