@@ -728,11 +728,12 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '800',
+    lineHeight: 20,
     color: '#0f172a'
   },
   checkboxRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -747,8 +748,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#94a3b8',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1
+    justifyContent: 'center'
   },
   checkboxBoxChecked: {
     borderColor: '#1d4ed8',

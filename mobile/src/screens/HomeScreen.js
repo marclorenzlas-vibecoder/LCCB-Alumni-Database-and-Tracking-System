@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Dimensions, Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
@@ -8,6 +9,8 @@ import { API_ORIGIN } from '../config/api';
 import { dashboardService } from '../services/dashboardService';
 import { getAlumniId } from '../utils/auth';
 import { formatDate, imageUrl } from '../utils/formatters';
+
+const isVideoMedia = (path) => /\.(mp4|mov|avi|mkv|webm)$/i.test(String(path || '').split('?')[0]);
 
 export default function HomeScreen({ navigation, user }) {
   const [loading, setLoading] = useState(true);
@@ -184,6 +187,8 @@ export default function HomeScreen({ navigation, user }) {
         renderItem={(item) => (
           <EntityCard
             image={imageUrl(item.image, API_ORIGIN)}
+            isVideo={isVideoMedia(item.image)}
+            mediaStyle={styles.achievementEntityImage}
             title={item.title}
             description={item.description || 'Achievement details available in the achievements module.'}
             meta={formatDate(item.date)}
@@ -454,7 +459,7 @@ function CarouselSection({ data, renderItem, keyPrefix, initialIndex }) {
   );
 }
 
-function EntityCard({ image, title, description, meta, onPress, showReadMore, onReadMore }) {
+function EntityCard({ image, isVideo, mediaStyle, title, description, meta, onPress, showReadMore, onReadMore }) {
   const [descLines, setDescLines] = useState(4);
 
   const handleTitleLayout = (e) => {
@@ -464,7 +469,19 @@ function EntityCard({ image, title, description, meta, onPress, showReadMore, on
 
   return (
     <Pressable style={styles.entityCard} onPress={onPress}>
-      {image ? <Image source={{ uri: image }} style={styles.entityImage} /> : null}
+      {image ? (
+        isVideo ? (
+          <Video
+            source={{ uri: image }}
+            style={[styles.entityImage, mediaStyle]}
+            useNativeControls
+            resizeMode="cover"
+            shouldPlay={false}
+          />
+        ) : (
+          <Image source={{ uri: image }} style={[styles.entityImage, mediaStyle]} />
+        )
+      ) : null}
       <View style={styles.entityBody}>
         <Text style={styles.entityTitle} onTextLayout={handleTitleLayout}>{title}</Text>
         <View style={{ height: 95, overflow: 'hidden' }}>
@@ -489,11 +506,9 @@ function JobCard({ job, onPress }) {
     <Pressable style={styles.jobCard} onPress={onPress}>
       <Text style={styles.jobTitle}>{job.job_title}</Text>
       <Text style={styles.jobCompany}>{job.company || 'Company not specified'}</Text>
-      <View style={styles.jobMetaRow}><Ionicons name="location-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.location || 'Not specified'}</Text></View>
-      {job.department ? (
-        <View style={styles.jobMetaRow}><Ionicons name="grid-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.department}</Text></View>
-      ) : null}
-      <View style={styles.jobMetaRow}><Ionicons name="time-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.job_type || 'Not specified'}</Text></View>
+      <View style={styles.jobMetaRow}><Ionicons name="location-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.location || 'Location not set'}</Text></View>
+      <View style={styles.jobMetaRow}><Ionicons name="grid-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.department || 'Department not set'}</Text></View>
+      <View style={styles.jobMetaRow}><Ionicons name="time-outline" size={13} color="#64748b" /><Text style={styles.jobMeta}> {job.job_type || 'Employment type not set'}</Text></View>
     </Pressable>
   );
 }
@@ -529,7 +544,8 @@ const styles = StyleSheet.create({
     marginHorizontal: -18,
     marginTop: 0,
     overflow: 'hidden',
-    minHeight: 400
+    minHeight: 400,
+    backgroundColor: '#1e3a8a'
   },
   heroOverlay: {
     backgroundColor: 'rgba(30, 58, 138, 0.55)',
@@ -791,6 +807,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 145,
     backgroundColor: '#dbeafe'
+  },
+  achievementEntityImage: {
+    height: 210
   },
   entityBody: {
     padding: 12,

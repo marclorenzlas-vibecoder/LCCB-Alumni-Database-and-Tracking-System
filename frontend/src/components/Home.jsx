@@ -330,7 +330,7 @@ const Home = () => {
       {/* Notification Permission Popup */}
       <NotificationPermissionPopup />
       
-      <div className="home-hero relative min-h-[28rem] overflow-hidden bg-white">
+      <div className="home-hero relative min-h-[28rem] overflow-hidden bg-blue-900">
         <img
           src={backgroundImage}
           alt=""
