@@ -501,14 +501,14 @@ const Register = () => {
                 </ul>
               </div>
 
-              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
+              <label className="mt-5 flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition hover:border-blue-200 hover:bg-blue-50/40">
                 <input
                   type="checkbox"
                   checked={isConsentChecked}
                   onChange={(event) => setIsConsentChecked(event.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
+                  className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
                 />
-                <span className="text-sm font-semibold text-slate-900">
+                <span className="text-sm font-semibold leading-5 text-slate-900">
                   I have read and agree to the Data Privacy Terms and Conditions.
                 </span>
               </label>

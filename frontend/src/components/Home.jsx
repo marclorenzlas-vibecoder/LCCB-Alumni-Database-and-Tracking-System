@@ -14,6 +14,10 @@ import { extractDonationMeta } from '../utils/donationMeta';
 function AchievementHomeCard({ achievement }) {
   const titleRef = useRef(null);
   const [descLines, setDescLines] = useState(4);
+  const achievementMediaSrc = achievement.image
+    ? achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image
+    : '';
+  const isAchievementVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image || '');
 
   const measureTitle = useCallback(() => {
     const el = titleRef.current;
@@ -33,13 +37,22 @@ function AchievementHomeCard({ achievement }) {
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
       {achievement.image ? (
-        <img
-          src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-          alt={achievement.title}
-          className="w-full h-40 object-cover"
-        />
+        isAchievementVideo ? (
+          <video
+            src={achievementMediaSrc}
+            className="w-full h-48 object-cover"
+            controls
+            muted
+          />
+        ) : (
+          <img
+            src={achievementMediaSrc}
+            alt={achievement.title}
+            className="w-full h-48 object-cover"
+          />
+        )
       ) : (
-        <div className="w-full h-40 bg-blue-100 flex items-center justify-center">
+        <div className="w-full h-48 bg-blue-100 flex items-center justify-center">
           <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         </div>
       )}
@@ -700,10 +713,9 @@ const Home = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {jobs.map((job) => {
-                const descParts = job.description?.split('\n') || [];
-                const location = descParts.find(p => p.startsWith('Location:'))?.replace('Location:', '').trim() || 'Not specified';
-                const type = descParts.find(p => p.startsWith('Type:'))?.replace('Type:', '').trim() || 'Not specified';
-                const salary = descParts.find(p => p.startsWith('Salary:'))?.replace('Salary:', '').trim() || 'Not specified';
+                const location = job.location || 'Location not set';
+                const department = job.department || 'Department not set';
+                const type = job.job_type || 'Employment type not set';
                 
                 return (
                   <div key={job.id} className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-lg transition-shadow duration-300">
@@ -718,15 +730,15 @@ const Home = () => {
                       </div>
                       <div className="flex items-center text-gray-500 text-sm">
                         <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
-                        {type}
+                        {department}
                       </div>
                       <div className="flex items-center text-gray-500 text-sm">
                         <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        {salary}
+                        {type}
                       </div>
                     </div>
                   </div>
