@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   Image,
@@ -114,8 +114,9 @@ function formatBirthday(dateStr) {
 }
 
 export default function AlumniDetailScreen({ route, navigation }) {
-  const { alumniId } = route.params;
-  const [alumni, setAlumni] = useState(null);
+  const { alumniId, alumni: routeAlumni = null } = route.params || {};
+  const resolvedAlumniId = alumniId || routeAlumni?.id;
+  const [alumni, setAlumni] = useState(routeAlumni);
   const [achievements, setAchievements] = useState([]);
   const [careers, setCareers] = useState([]);
   const [donations, setDonations] = useState([]);
@@ -144,26 +145,59 @@ export default function AlumniDetailScreen({ route, navigation }) {
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
-      setLoading(true);
-      Promise.all([
-        communityService.getAlumniById(alumniId),
-        communityService.getAchievements(alumniId),
-        communityService.getCareers(alumniId),
-        donationService.getByAlumni(alumniId),
+      if (!resolvedAlumniId) {
+        setLoading(false);
+        Alert.alert("Error", "Failed to load alumni details.");
+        return () => {
+          mounted = false;
+        };
+      }
+
+      if (routeAlumni) setAlumni(routeAlumni);
+      setImgErrored(false);
+      setLoading(!routeAlumni);
+      Promise.allSettled([
+        communityService.getAlumniById(resolvedAlumniId),
+        communityService.getAchievements(resolvedAlumniId),
+        communityService.getCareers(resolvedAlumniId),
+        donationService.getByAlumni(resolvedAlumniId),
       ])
-        .then(([detail, achievementsData, careersData, donationsData]) => {
+        .then(([detailResult, achievementsResult, careersResult, donationsResult]) => {
           if (!mounted) return;
-          setAlumni(detail);
-          setAchievements(achievementsData || []);
-          setCareers(careersData || []);
+
+          if (detailResult.status === "fulfilled") {
+            setAlumni(detailResult.value);
+          } else if (routeAlumni) {
+            console.error("Failed to load full alumni detail:", detailResult.reason?.message || detailResult.reason);
+            setAlumni(routeAlumni);
+          } else {
+            console.error("Failed to load alumni detail:", detailResult.reason?.message || detailResult.reason);
+            Alert.alert("Error", "Failed to load alumni details.");
+            setAlumni(null);
+          }
+
+          if (achievementsResult.status === "fulfilled") {
+            setAchievements(achievementsResult.value || []);
+          } else {
+            console.warn("Failed to load alumni achievements:", achievementsResult.reason?.message || achievementsResult.reason);
+            setAchievements([]);
+          }
+
+          if (careersResult.status === "fulfilled") {
+            setCareers(careersResult.value || []);
+          } else {
+            console.warn("Failed to load alumni careers:", careersResult.reason?.message || careersResult.reason);
+            setCareers([]);
+          }
+
+          const donationsData = donationsResult.status === "fulfilled" ? donationsResult.value : [];
+          if (donationsResult.status === "rejected") {
+            console.warn("Failed to load alumni donations:", donationsResult.reason?.message || donationsResult.reason);
+          }
           const sortedDonations = (donationsData || [])
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
             .slice(0, 3);
           setDonations(sortedDonations);
-        })
-        .catch((error) => {
-          console.error("Failed to load alumni detail:", error?.message || error);
-          if (mounted) Alert.alert("Error", "Failed to load alumni details.");
         })
         .finally(() => {
           if (mounted) setLoading(false);
@@ -172,7 +206,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
       return () => {
         mounted = false;
       };
-    }, [alumniId])
+    }, [resolvedAlumniId, routeAlumni])
   );
 
   if (loading) {

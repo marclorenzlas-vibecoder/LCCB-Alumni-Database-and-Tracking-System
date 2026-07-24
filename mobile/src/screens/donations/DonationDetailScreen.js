@@ -689,25 +689,25 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                 style={[styles.typeToggleBtn, donationType === 'money' && styles.typeToggleBtnActive]}
                 onPress={() => setDonationType('money')}
               >
-                <Ionicons name="cash-outline" size={18} color={donationType === 'money' ? '#fff' : '#475569'} />
                 <Text style={[styles.typeToggleText, donationType === 'money' && styles.typeToggleTextActive]}>Money</Text>
               </Pressable>
               <Pressable
                 style={[styles.typeToggleBtn, donationType === 'item' && styles.typeToggleBtnActive]}
                 onPress={() => setDonationType('item')}
               >
-                <Ionicons name="cube-outline" size={18} color={donationType === 'item' ? '#fff' : '#475569'} />
                 <Text style={[styles.typeToggleText, donationType === 'item' && styles.typeToggleTextActive]}>Item</Text>
               </Pressable>
             </View>
 
             {donationType === 'money' ? (
               <>
-                <Pressable style={styles.currencyBtn} onPress={() => setShowCurrencyPicker(true)}>
-                  <Text style={styles.currencyBtnLabel}>Currency</Text>
-                  <Text style={styles.currencyBtnValue}>{currency} — {CURRENCY_OPTIONS.find(c => c.value === currency)?.label}</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#64748b" />
-                </Pressable>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Currency</Text>
+                  <Pressable style={styles.selectBtn} onPress={() => setShowCurrencyPicker(true)}>
+                    <Text style={styles.countryValue} numberOfLines={1} ellipsizeMode="tail">{CURRENCY_OPTIONS.find(c => c.value === currency)?.label || currency}</Text>
+                    <Ionicons name="chevron-down" size={16} color="#64748b" />
+                  </Pressable>
+                </View>
 
                 <View style={styles.presetGrid}>
                   {PRESET_AMOUNTS.map(preset => (
@@ -725,29 +725,29 @@ export default function DonationDetailScreen({ route, navigation, user }) {
             ) : (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Item Name *</Text>
+                  <Text style={styles.fieldLabel}>Item Name</Text>
                   <TextInput style={styles.textInput} placeholder="e.g. Books, Laptop, Chair" placeholderTextColor="#94a3b8" value={itemName} onChangeText={setItemName} />
                 </View>
 
                 <View style={styles.row2}>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Quantity *</Text>
-                    <TextInput style={styles.textInput} placeholder="e.g. 1" placeholderTextColor="#94a3b8" keyboardType="number-pad" value={itemQuantity} onChangeText={setItemQuantity} />
+                  <View style={[styles.fieldGroup, styles.quantityField]}>
+                    <Text style={styles.fieldLabel}>Quantity</Text>
+                    <TextInput style={[styles.textInput, styles.quantityInput]} placeholder="e.g. 1" placeholderTextColor="#94a3b8" keyboardType="number-pad" value={itemQuantity} onChangeText={setItemQuantity} />
                   </View>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Category *</Text>
-                    <Pressable style={styles.currencyBtn} onPress={() => setShowItemCategoryPicker(true)}>
-                      <Text style={styles.countryValue}>{itemCategory || 'Select category'}</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#64748b" />
+                  <View style={[styles.fieldGroup, styles.categoryField]}>
+                    <Text style={styles.fieldLabel}>Category</Text>
+                    <Pressable style={styles.selectBtn} onPress={() => setShowItemCategoryPicker(true)}>
+                      <Text style={styles.countryValue} numberOfLines={1} ellipsizeMode="tail">{itemCategory || 'Select category'}</Text>
+                      <Ionicons name="chevron-down" size={16} color="#64748b" />
                     </Pressable>
                   </View>
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Condition *</Text>
-                  <Pressable style={styles.currencyBtn} onPress={() => setShowItemConditionPicker(true)}>
-                    <Text style={styles.countryValue}>{itemCondition}</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#64748b" />
+                  <Text style={styles.fieldLabel}>Condition</Text>
+                  <Pressable style={styles.selectBtn} onPress={() => setShowItemConditionPicker(true)}>
+                    <Text style={styles.countryValue} numberOfLines={1} ellipsizeMode="tail">{itemCondition}</Text>
+                    <Ionicons name="chevron-down" size={16} color="#64748b" />
                   </Pressable>
                 </View>
 
@@ -757,7 +757,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Item Photos * (up to {MAX_ITEM_IMAGES})</Text>
+                  <Text style={styles.fieldLabel}>Item Photos (up to {MAX_ITEM_IMAGES})</Text>
                   <Pressable style={styles.currencyBtn} onPress={pickItemImages}>
                     <Ionicons name="camera-outline" size={18} color="#475569" />
                     <Text style={styles.currencyBtnLabel}>Choose Photos</Text>
@@ -901,13 +901,13 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 
             {deliveryMethod === 'pickup' && (
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Pickup Address *</Text>
+                <Text style={styles.fieldLabel}>Pickup Address</Text>
                 <TextInput style={styles.textInput} placeholder="Enter pickup address" placeholderTextColor="#94a3b8" value={deliveryAddress} onChangeText={setDeliveryAddress} />
               </View>
             )}
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Preferred Schedule / Date & Time *</Text>
+              <Text style={styles.fieldLabel}>Preferred Schedule / Date & Time</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. Mondays 9:00 AM - 12:00 PM, or July 10, 2026"
@@ -942,12 +942,12 @@ export default function DonationDetailScreen({ route, navigation, user }) {
             {paymentMethod === 'card' && (
               <View style={styles.cardForm}>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Card Number *</Text>
+                  <Text style={styles.fieldLabel}>Card Number</Text>
                   <TextInput style={styles.textInput} placeholder="1234 5678 9012 3456" placeholderTextColor="#94a3b8" keyboardType="number-pad" maxLength={19} value={cardNumber} onChangeText={setCardNumber} />
                 </View>
                 <View style={styles.row2}>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Expiration date *</Text>
+                    <Text style={styles.fieldLabel}>Expiration date</Text>
                     <TextInput
                       style={styles.textInput}
                       placeholder="MM/YY"
@@ -963,7 +963,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                     />
                   </View>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Security code *</Text>
+                    <Text style={styles.fieldLabel}>Security code</Text>
                     <TextInput style={styles.textInput} placeholder="123" placeholderTextColor="#94a3b8" keyboardType="number-pad" maxLength={4} secureTextEntry value={cardCvv} onChangeText={setCardCvv} />
                   </View>
                 </View>
@@ -997,14 +997,15 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       </ScrollView>
 
       {/* Currency Picker Modal */}
-      <Modal visible={showCurrencyPicker} transparent animationType="slide" onRequestClose={() => setShowCurrencyPicker(false)}>
+      <Modal visible={showCurrencyPicker} transparent animationType="fade" onRequestClose={() => setShowCurrencyPicker(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowCurrencyPicker(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Select Currency</Text>
             <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
               {CURRENCY_OPTIONS.map(opt => (
                 <Pressable key={opt.value} style={[styles.modalOption, currency === opt.value && styles.modalOptionActive]} onPress={() => { setCurrency(opt.value); setShowCurrencyPicker(false); }}>
-                  <Text style={[styles.modalOptionText, currency === opt.value && styles.modalOptionTextActive]}>{opt.label}</Text>
+                  <Text style={[styles.modalOptionText, currency === opt.value && styles.modalOptionTextActive]} numberOfLines={1} ellipsizeMode="tail">{opt.label}</Text>
                   {currency === opt.value && <Ionicons name="checkmark" size={16} color="#1d4ed8" />}
                 </Pressable>
               ))}
@@ -1017,9 +1018,10 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       </Modal>
 
       {/* Country Picker Modal */}
-      <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
+      <Modal visible={showCountryPicker} transparent animationType="fade" onRequestClose={() => setShowCountryPicker(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowCountryPicker(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Where do you live?</Text>
             <View style={styles.modalSearchWrap}>
               <Ionicons name="search-outline" size={16} color="#94a3b8" />
@@ -1028,7 +1030,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
             <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
               {COUNTRY_OPTIONS.filter(c => !countrySearch || c.toLowerCase().includes(countrySearch.toLowerCase())).map(c => (
                 <Pressable key={c} style={[styles.modalOption, country === c && styles.modalOptionActive]} onPress={() => { setCountry(c); setShowCountryPicker(false); }}>
-                  <Text style={[styles.modalOptionText, country === c && styles.modalOptionTextActive]}>{c}</Text>
+                  <Text style={[styles.modalOptionText, country === c && styles.modalOptionTextActive]} numberOfLines={1} ellipsizeMode="tail">{c}</Text>
                   {country === c && <Ionicons name="checkmark" size={16} color="#1d4ed8" />}
                 </Pressable>
               ))}
@@ -1040,14 +1042,15 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         </Pressable>
       </Modal>
 
-      <Modal visible={showItemCategoryPicker} transparent animationType="slide" onRequestClose={() => setShowItemCategoryPicker(false)}>
+      <Modal visible={showItemCategoryPicker} transparent animationType="fade" onRequestClose={() => setShowItemCategoryPicker(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowItemCategoryPicker(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Select Category</Text>
             <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
               {ITEM_CATEGORIES.map((cat) => (
                 <Pressable key={cat} style={[styles.modalOption, itemCategory === cat && styles.modalOptionActive]} onPress={() => { setItemCategory(cat); setShowItemCategoryPicker(false); }}>
-                  <Text style={[styles.modalOptionText, itemCategory === cat && styles.modalOptionTextActive]}>{cat}</Text>
+                  <Text style={[styles.modalOptionText, itemCategory === cat && styles.modalOptionTextActive]} numberOfLines={1} ellipsizeMode="tail">{cat}</Text>
                   {itemCategory === cat && <Ionicons name="checkmark" size={16} color="#1d4ed8" />}
                 </Pressable>
               ))}
@@ -1059,14 +1062,15 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         </Pressable>
       </Modal>
 
-      <Modal visible={showItemConditionPicker} transparent animationType="slide" onRequestClose={() => setShowItemConditionPicker(false)}>
+      <Modal visible={showItemConditionPicker} transparent animationType="fade" onRequestClose={() => setShowItemConditionPicker(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowItemConditionPicker(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Select Condition</Text>
             <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
               {ITEM_CONDITIONS.map((cond) => (
                 <Pressable key={cond} style={[styles.modalOption, itemCondition === cond && styles.modalOptionActive]} onPress={() => { setItemCondition(cond); setShowItemConditionPicker(false); }}>
-                  <Text style={[styles.modalOptionText, itemCondition === cond && styles.modalOptionTextActive]}>{cond}</Text>
+                  <Text style={[styles.modalOptionText, itemCondition === cond && styles.modalOptionTextActive]} numberOfLines={1} ellipsizeMode="tail">{cond}</Text>
                   {itemCondition === cond && <Ionicons name="checkmark" size={16} color="#1d4ed8" />}
                 </Pressable>
               ))}
@@ -1098,6 +1102,7 @@ const styles = StyleSheet.create({
   stepCardTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   stepCardSub: { fontSize: 13, color: '#64748b', marginTop: -8 },
   currencyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12, backgroundColor: '#f8fafc' },
+  selectBtn: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderWidth: 1, borderColor: '#dbe4f0', borderRadius: 10, paddingHorizontal: 12, backgroundColor: '#fff' },
   currencyBtnLabel: { fontSize: 11, color: '#64748b', fontWeight: '600' },
   currencyBtnValue: { fontSize: 13, color: '#0f172a', fontWeight: '600', flex: 1, marginHorizontal: 8 },
   currencyPicker: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, overflow: 'hidden' },
@@ -1125,6 +1130,7 @@ const styles = StyleSheet.create({
   fieldGroup: { gap: 4 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#475569' },
   textInput: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, backgroundColor: '#fff', fontSize: 14, color: '#0f172a' },
+  quantityInput: { minHeight: 46, borderColor: '#dbe4f0', paddingVertical: 0 },
   contactSection: { gap: 8 },
   contactToggle: { borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden', gap: 0 },
   contactToggleBtn: { paddingVertical: 12, paddingHorizontal: 14, backgroundColor: '#f8fafc' },
@@ -1197,6 +1203,8 @@ const styles = StyleSheet.create({
   paymentMethodLabelActive: { color: '#0f172a' },
   cardForm: { gap: 12 },
   row2: { flexDirection: 'row', gap: 10 },
+  quantityField: { flex: 0.7 },
+  categoryField: { flex: 1.3, minWidth: 0 },
   redirectInfo: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12 },
   redirectText: { flex: 1, fontSize: 13, color: '#475569', lineHeight: 19 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
@@ -1240,18 +1248,19 @@ const styles = StyleSheet.create({
   errorTitle: { fontSize: 18, fontWeight: '700', color: '#dc2626' },
   errorBtn: { backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 24 },
   errorBtnText: { color: '#fff', fontWeight: '700' },
-  countryValue: { fontSize: 14, color: '#0f172a', fontWeight: '600', flex: 1 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%', paddingBottom: 20 },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a', textAlign: 'center', paddingTop: 18, paddingBottom: 10 },
-  modalSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f8fafc' },
+  countryValue: { minWidth: 0, fontSize: 14, color: '#0f172a', fontWeight: '600', flex: 1 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.48)', justifyContent: 'flex-end', paddingHorizontal: 12, paddingBottom: 12 },
+  modalCard: { backgroundColor: '#fff', borderRadius: 18, maxHeight: '78%', paddingTop: 10, paddingBottom: 14, shadowColor: '#0f172a', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: -6 }, elevation: 12 },
+  modalHandle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 999, backgroundColor: '#cbd5e1', marginBottom: 10 },
+  modalTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', textAlign: 'center', paddingBottom: 12 },
+  modalSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: '#dbe4f0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#f8fafc' },
   modalSearchInput: { flex: 1, fontSize: 14, color: '#0f172a', padding: 0 },
   modalList: { maxHeight: 400 },
-  modalListContent: { paddingHorizontal: 16 },
-  modalOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  modalOptionActive: { backgroundColor: '#eff6ff' },
-  modalOptionText: { fontSize: 14, color: '#475569' },
+  modalListContent: { paddingHorizontal: 16, paddingBottom: 4, gap: 7 },
+  modalOption: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff' },
+  modalOptionActive: { backgroundColor: '#eff6ff', borderColor: '#93c5fd' },
+  modalOptionText: { minWidth: 0, flex: 1, fontSize: 14, color: '#475569', lineHeight: 18 },
   modalOptionTextActive: { color: '#1d4ed8', fontWeight: '600' },
-  modalCancel: { marginTop: 8, marginHorizontal: 16, paddingVertical: 12, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0' },
+  modalCancel: { marginTop: 10, marginHorizontal: 16, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#dbe4f0', backgroundColor: '#f8fafc' },
   modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748b' }
 });

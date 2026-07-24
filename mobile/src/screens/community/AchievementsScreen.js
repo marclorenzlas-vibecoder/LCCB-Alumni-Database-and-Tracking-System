@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,9 +14,14 @@ import { getAlumniId, isTeacher } from '../../utils/auth';
 import { formatDate, imageUrl } from '../../utils/formatters';
 import { toMultipartFile } from '../../utils/upload';
 import { theme } from '../../theme';
+import AchievementVideoPreview from '../../components/AchievementVideoPreview';
 
 function AchievementCardItem({ item, teacher, navigation, onEdit, onDelete }) {
   const [descLines, setDescLines] = useState(4);
+  const isVideoAchievement = /\.(mp4|mov|avi|mkv|webm)$/i.test(item.image || '');
+  const openDetail = () => {
+    if (!teacher) navigation.navigate('AchievementDetail', { achievement: item });
+  };
 
   const handleTitleLayout = (e) => {
     const lines = e.nativeEvent.lines.length;
@@ -25,25 +29,26 @@ function AchievementCardItem({ item, teacher, navigation, onEdit, onDelete }) {
   };
 
   return (
-    <Pressable
+    <View
       key={item.id}
       style={styles.card}
-      onPress={() => !teacher && navigation.navigate('AchievementDetail', { achievement: item })}
     >
       {item.image ? (
-        /\.(mp4|mov|avi|mkv|webm)$/i.test(item.image) ? (
-          <Video
-            source={{ uri: imageUrl(item.image, API_ORIGIN) }}
+        isVideoAchievement ? (
+          <AchievementVideoPreview
+            uri={imageUrl(item.image, API_ORIGIN)}
             style={styles.preview}
-            useNativeControls
             resizeMode="cover"
-            isLooping={false}
           />
+        ) : !teacher ? (
+          <Pressable onPress={openDetail}>
+            <Image source={{ uri: imageUrl(item.image, API_ORIGIN) }} style={styles.preview} />
+          </Pressable>
         ) : (
           <Image source={{ uri: imageUrl(item.image, API_ORIGIN) }} style={styles.preview} />
         )
       ) : null}
-      <View style={styles.cardBody}>
+      <Pressable style={styles.cardBody} onPress={openDetail} disabled={teacher}>
         <View style={styles.metaRow}>
           <Text style={styles.categoryBadge}>{item.category || 'General'}</Text>
           <Text style={styles.yearText}>{item.date ? new Date(item.date).getFullYear() : 'N/A'}</Text>
@@ -58,13 +63,16 @@ function AchievementCardItem({ item, teacher, navigation, onEdit, onDelete }) {
         {!teacher && (
           <Pressable
             style={styles.readMoreBtn}
-            onPress={() => navigation.navigate('AchievementDetail', { achievement: item })}
+            onPress={(event) => {
+              event?.stopPropagation?.();
+              openDetail();
+            }}
           >
             <Text style={styles.readMoreText}>Read More</Text>
           </Pressable>
         )}
         <Text style={styles.meta}>Date: {formatDate(item.date)}</Text>
-      </View>
+      </Pressable>
       {teacher ? (
         <View style={styles.actions}>
           <Pressable style={styles.editBtn} onPress={() => onEdit(item)}>
@@ -75,7 +83,7 @@ function AchievementCardItem({ item, teacher, navigation, onEdit, onDelete }) {
           </Pressable>
         </View>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 

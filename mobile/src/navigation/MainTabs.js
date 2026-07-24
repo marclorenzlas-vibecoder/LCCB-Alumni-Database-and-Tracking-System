@@ -1,9 +1,8 @@
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   createDrawerNavigator,
   DrawerContentScrollView,
-  DrawerItem,
 } from "@react-navigation/drawer";
 import { DrawerActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,6 +23,7 @@ import AdminStack from "./AdminStack";
 import { isTeacher } from "../utils/auth";
 
 const Drawer = createDrawerNavigator();
+const AlumniLogo = require("../../assets/alumnilogo2.png");
 
 const iconForRoute = (routeName, focused) => {
   const map = {
@@ -90,21 +90,22 @@ function CustomDrawerContent(props) {
     const label = options.title || route.name;
 
     return (
-      <DrawerItem
+      <Pressable
         key={route.key}
-        label={label}
-        focused={focused}
         onPress={() => handleDrawerNavigate(route.name)}
         style={[styles.drawerItem, focused && styles.drawerItemActive]}
-        labelStyle={[styles.drawerLabel, { color }]}
-        icon={({ size }) => (
+      >
+        <View style={[styles.iconTrack, focused && styles.iconTrackActive]}>
           <Ionicons
             name={iconForRoute(route.name, focused)}
             size={20}
             color={color}
           />
-        )}
-      />
+        </View>
+        <Text style={[styles.drawerLabel, { color }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </Pressable>
     );
   };
 
@@ -117,26 +118,38 @@ function CustomDrawerContent(props) {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.profileSection}>
-        <View style={styles.avatarWrap}>
-          {profileImage ? (
-            <Image source={{ uri: profileImage }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-          )}
+      <View style={styles.brandSection}>
+        <Image source={AlumniLogo} style={styles.brandLogo} resizeMode="contain" />
+        <View style={styles.brandTextWrap}>
+          <Text style={styles.brandTitle}>LCCB ALUMNI</Text>
+          <Text style={styles.brandSub}>CONNECTING EXCELLENCE</Text>
         </View>
-        <Text style={styles.profileName}>{user?.username || "Alumni"}</Text>
-        <Text style={styles.profileRole}>
-          {isTeacher(user) ? "Teacher / Staff" : "Alumni Member"}
-        </Text>
       </View>
 
+      <View style={styles.profileSection}>
+        {profileImage ? (
+          <Image source={{ uri: profileImage }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarFallback]}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+        )}
+        <View style={styles.profileTextWrap}>
+          <Text style={styles.profileName} numberOfLines={1}>
+            {user?.username || "Alumni"}
+          </Text>
+          <Text style={styles.profileRole}>
+            {isTeacher(user) ? "Teacher / Staff" : "Alumni Member"}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.sectionLabel}>Main</Text>
       <View style={styles.menuSection}>{topGroup.map(renderItem)}</View>
 
       <View style={styles.divider} />
 
+      <Text style={styles.sectionLabel}>Account</Text>
       <View style={styles.menuSection}>
         {bottomGroupOrder
           .filter((name) => routeNames.includes(name))
@@ -155,15 +168,15 @@ export default function MainTabs({ user, setUser }) {
       screenOptions={({ route, navigation }) => ({
         headerShown: false,
         sceneContainerStyle: { backgroundColor: "#ffffff" },
-        drawerType: "slide",
+        drawerType: "front",
         drawerActiveTintColor: "#ffffff",
         drawerInactiveTintColor: "#bfdbfe",
-        drawerActiveBackgroundColor: "rgba(255, 255, 255, 0.14)",
         drawerStyle: {
-          width: 280,
+          width: 268,
           backgroundColor: "#1e40af",
         },
-        overlayColor: "rgba(0, 0, 0, 0.4)",
+        overlayColor: "rgba(15, 23, 42, 0.46)",
+        swipeEdgeWidth: 52,
         drawerIcon: ({ focused, color, size }) => (
           <Ionicons
             name={iconForRoute(route.name, focused)}
@@ -217,22 +230,56 @@ export default function MainTabs({ user, setUser }) {
 
 const styles = StyleSheet.create({
   drawerContent: {
-    paddingBottom: 20,
+    flexGrow: 1,
+    paddingBottom: 18,
+    backgroundColor: "#1e40af",
+  },
+  brandSection: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(191, 219, 254, 0.22)",
+  },
+  brandLogo: {
+    width: 44,
+    height: 44,
+  },
+  brandTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  brandTitle: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  brandSub: {
+    marginTop: 1,
+    color: "#bfdbfe",
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
   profileSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  avatarWrap: {
-    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(191, 219, 254, 0.18)",
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2.5,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.42)",
   },
   avatarFallback: {
     backgroundColor: "rgba(255, 255, 255, 0.2)",
@@ -241,41 +288,72 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: "#ffffff",
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "700",
+  },
+  profileTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   profileName: {
     color: "#ffffff",
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: "700",
-    marginBottom: 2,
   },
   profileRole: {
-    color: "rgba(191, 219, 254, 0.8)",
-    fontSize: 12,
-    fontWeight: "500",
+    marginTop: 2,
+    color: "#bfdbfe",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  sectionLabel: {
+    paddingHorizontal: 20,
+    marginTop: 14,
+    marginBottom: 6,
+    color: "rgba(191, 219, 254, 0.62)",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
   },
   menuSection: {
-    marginTop: 4,
     marginBottom: 2,
   },
   drawerItem: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     borderRadius: 10,
-    marginHorizontal: 10,
+    marginHorizontal: 8,
     marginVertical: 1,
+    paddingHorizontal: 10,
   },
   drawerItemActive: {
     backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(191, 219, 254, 0.2)",
+  },
+  iconTrack: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconTrackActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
   },
   drawerLabel: {
+    flex: 1,
     fontSize: 14,
-    fontWeight: "600",
-    marginLeft: -2,
+    fontWeight: "700",
   },
   divider: {
     height: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(191, 219, 254, 0.18)",
     marginHorizontal: 20,
-    marginVertical: 10,
+    marginTop: 14,
+    marginBottom: 0,
   },
 });

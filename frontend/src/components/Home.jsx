@@ -10,6 +10,7 @@ import NotificationPermissionPopup from './NotificationPermissionPopup';
 import UserLayout from './UserLayout';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { extractDonationMeta } from '../utils/donationMeta';
+import AchievementVideoPreview from './AchievementVideoPreview';
 
 function AchievementHomeCard({ achievement }) {
   const titleRef = useRef(null);
@@ -38,10 +39,10 @@ function AchievementHomeCard({ achievement }) {
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
       {achievement.image ? (
         isAchievementVideo ? (
-          <video
+          <AchievementVideoPreview
             src={achievementMediaSrc}
-            className="w-full h-48 object-cover"
-            controls
+            className="h-48 w-full"
+            videoClassName="h-48 w-full object-cover"
             muted
           />
         ) : (

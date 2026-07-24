@@ -7,6 +7,7 @@ import { authService } from '../services/authService';
 import UserLayout from './UserLayout';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { Link } from 'react-router-dom';
+import AchievementVideoPreview from './AchievementVideoPreview';
 
 function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
   const titleRef = useRef(null);
@@ -35,10 +36,10 @@ function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
       <div className="relative h-48 overflow-hidden">
         {achievement.image ? (
           /\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
-            <video
+            <AchievementVideoPreview
               src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-              className="h-full w-full object-cover"
-              controls
+              className="h-full w-full"
+              videoClassName="h-full w-full object-cover"
               muted
             />
           ) : (

@@ -13,27 +13,7 @@ import UserLayout from './UserLayout';
 import AlumniChatPanel from './AlumniChatPanel';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { groupSectionDefinitions, levelOptions as sharedLevelOptions } from '../config/groupSections';
-
-// Table header helper for sorting
-const TableHeader = ({ label, field, sortOrder, onSort }) => {
-  const isActive = sortOrder.field === field;
-  const direction = isActive ? sortOrder.direction : null;
-  return (
-    <th
-      scope="col"
-      onClick={() => onSort(field)}
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer select-none"
-    >
-      <div className="flex items-center gap-1">
-        {label}
-        <span className="text-gray-400">
-          {direction === 'asc' && ''}
-          {direction === 'desc' && ''}
-        </span>
-      </div>
-    </th>
-  );
-};
+import { getAlumniChatUserId, listenToUserStatuses } from '../services/firebaseChatService';
 
 // Helper function to get display label for level
 const getLevelLabel = (level) => {
@@ -186,6 +166,7 @@ const AlumniDirectory = () => {
 
   // Core data
   const [alumni, setAlumni] = useState([]);
+  const [userStatuses, setUserStatuses] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -194,7 +175,7 @@ const AlumniDirectory = () => {
   const [selectedLevel, setSelectedLevel] = useState('');
   const [selectedBatch, setSelectedBatch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(''); // Placeholder for future grouping logic
-  const [sortOrder, setSortOrder] = useState({ field: 'id', direction: 'desc' });
+  const [sortOrder] = useState({ field: 'id', direction: 'desc' });
   const [showLevelMenu, setShowLevelMenu] = useState(false);
   const [showBatchMenu, setShowBatchMenu] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
@@ -300,6 +281,20 @@ const AlumniDirectory = () => {
   useEffect(() => {
     fetchAlumni();
   }, []);
+
+  const statusUserIdKey = useMemo(() => {
+    const ids = new Set();
+    alumni.forEach((entry) => {
+      const userId = getAlumniChatUserId(entry);
+      if (userId) ids.add(userId);
+    });
+    return Array.from(ids).join('|');
+  }, [alumni]);
+
+  useEffect(() => {
+    const ids = statusUserIdKey ? statusUserIdKey.split('|') : [];
+    return listenToUserStatuses(ids, setUserStatuses);
+  }, [statusUserIdKey]);
 
   // Re-fetch when profile or alumni data changes via realtime events
   useEffect(() => {
@@ -508,17 +503,6 @@ const AlumniDirectory = () => {
         toast.error('Failed to remove officer. Please try again.');
       }
     }
-  };
-
-  // Handle sort
-  const handleSort = (field) => {
-    setSortOrder(prev => {
-      if (prev.field === field) {
-        const nextDir = prev.direction === 'asc' ? 'desc' : 'asc';
-        return { field, direction: nextDir };
-      }
-      return { field, direction: 'asc' };
-    });
   };
 
   // Input change for alumni form
@@ -764,7 +748,6 @@ const AlumniDirectory = () => {
   };
 
   // Rendering
-  const colCount = isTeacher ? 7 : 6;
   const addActionClass = 'inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-blue-100';
   return (
     <UserLayout>
@@ -1682,107 +1665,69 @@ const AlumniDirectory = () => {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="w-full overflow-x-auto scrollbar-hide">
-          <table className="min-w-full divide-y divide-gray-300">
-            <thead className="bg-gray-50">
-              <tr>
-                <TableHeader label="Profile" field="firstName" sortOrder={sortOrder} onSort={handleSort} />
-                <TableHeader label="School ID" field="student_id" sortOrder={sortOrder} onSort={handleSort} />
-                <TableHeader label="Course" field="course" sortOrder={sortOrder} onSort={handleSort} />
-                <TableHeader label="Email Address" field="email" sortOrder={sortOrder} onSort={handleSort} />
-                <TableHeader label="Level" field="level" sortOrder={sortOrder} onSort={handleSort} />
-                <TableHeader label="Batch" field="batch" sortOrder={sortOrder} onSort={handleSort} />
-                <TableHeader label="Date" field="graduationYear" sortOrder={sortOrder} onSort={handleSort} />
-                {isTeacher && (
-                  <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Actions
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {loading && (
-                <tr><td colSpan={colCount} className="px-4 py-6 text-center text-sm text-gray-500">Loading...</td></tr>
-              )}
-              {error && !loading && (
-                <tr><td colSpan={colCount} className="px-4 py-6 text-center text-sm text-red-600">{error}</td></tr>
-              )}
-              {!loading && !error && filteredAlumni.length === 0 && (
-                <tr><td colSpan={colCount} className="px-4 py-6 text-center text-sm text-gray-500">No alumni found.</td></tr>
-              )}
-              {filteredAlumni.map(a => (
-                <tr key={a.id} className="hover:bg-gray-50 hover:shadow-[inset_0_0_0_2000px_rgba(0,0,0,0.03)] cursor-pointer transition-all duration-150" onClick={() => openViewModal(a)}>
-                  <td className="px-4 py-4 pr-8 align-top">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <img
-                        src={a.profileImage || getInitialAvatarSrc(a.firstName, a.lastName, 80)}
-                        onError={(event) => handleProfileImageError(event, a.firstName, a.lastName, 80)}
-                        alt={a.firstName}
-                        className="h-10 w-10 shrink-0 rounded-full object-cover border"
-                      />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900">{a.firstName} {a.lastName}</div>
-                        <div className="text-xs text-gray-500 break-words line-clamp-2">
-                          {fieldIsPublic(a, 'isPositionPublic', 'is_position_public') && (a.currentPosition || a.company)
-                            ? `${a.currentPosition || ''}${fieldIsPublic(a, 'isCompanyPublic', 'is_company_public') && a.company ? ` ${a.company}` : ''}`
-                            : fieldIsPublic(a, 'isCoursePublic', 'is_course_public') ? a.course : ''}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 pl-8 text-sm text-gray-700 whitespace-nowrap">
-                    <span className="font-mono">{fieldIsPublic(a, 'isStudentIdPublic', 'is_student_id_public') ? (a.student_id || 'N/A') : ''}</span>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isCoursePublic', 'is_course_public') ? (a.course || '') : ''}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isEmailPublic', 'is_email_public') ? (a.email || '') : ''}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public') ? getLevelLabel(a.level) : ''}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public') ? (a.batch || '') : ''}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{fieldIsPublic(a, 'isGraduationYearPublic', 'is_graduation_year_public') ? (a.graduationYear || '') : ''}</td>
-                  {isTeacher && (
-                    <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
-                      <div className="inline-flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setEditingAlumni(a); setNewAlumni({ ...a, profileImageFile: null }); setShowEditModal(true); }}
-                          className="px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
-                          title="Edit"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmModal({
-                              isOpen: true,
-                              title: 'Delete Alumni',
-                              message: 'This will permanently delete this alumni record.',
-                              type: 'danger',
-                              onConfirm: async () => {
-                                try {
-                                  await alumniService.deleteAlumni(a.id);
-                                  setAlumni(prev => prev.filter(x => x.id !== a.id));
-                                } catch (err) {
-                                  toast.error(err.message || 'Failed to delete alumni');
-                                } finally {
-                                  setConfirmModal(m => ({ ...m, isOpen: false }));
-                                }
-                              }
-                            });
-                          }}
-                          className="px-3 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors font-medium"
-                          title="Delete"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Alumni list */}
+        <div className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+          {loading && (
+            <div className="col-span-full rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">Loading...</div>
+          )}
+          {error && !loading && (
+            <div className="col-span-full rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-600">{error}</div>
+          )}
+          {!loading && !error && filteredAlumni.length === 0 && (
+            <div className="col-span-full rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">No alumni found.</div>
+          )}
+          {!loading && !error && filteredAlumni.map(a => {
+            const fullName = `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'Unnamed Alumni';
+            const courseText = fieldIsPublic(a, 'isCoursePublic', 'is_course_public')
+              ? (a.course || 'Course not provided')
+              : 'Course hidden';
+            const levelText = fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public')
+              ? getLevelLabel(a.level)
+              : 'Level hidden';
+            const userStatus = userStatuses[getAlumniChatUserId(a)];
+            const isOnline = Boolean(userStatus?.online);
+
+            return (
+              <div
+                key={a.id}
+                role="button"
+                tabIndex={0}
+                className="group flex min-h-[96px] w-full cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-200"
+                onClick={() => openViewModal(a)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openViewModal(a);
+                  }
+                }}
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="relative h-12 w-12 shrink-0">
+                  <img
+                    src={a.profileImage || getInitialAvatarSrc(a.firstName, a.lastName, 96)}
+                    onError={(event) => handleProfileImageError(event, a.firstName, a.lastName, 96)}
+                    alt={fullName}
+                      className="h-12 w-12 rounded-full border-2 border-white object-cover shadow-sm ring-1 ring-slate-200"
+                  />
+                    <span
+                      className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-[2.5px] border-white shadow-sm ${
+                        isOnline ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                      aria-label={isOnline ? 'Online' : 'Offline'}
+                      title={isOnline ? 'Online' : 'Offline'}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-gray-950 sm:text-base">{fullName}</h3>
+                    <p className="mt-0.5 truncate text-xs font-medium text-slate-600 sm:text-sm">{courseText}</p>
+                    <p className="mt-1.5 inline-flex max-w-full items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-100">
+                      <span className="truncate">{levelText}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Assign Officer Modal */}

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Video } from 'expo-av';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { API_ORIGIN } from '../../config/api';
 import { communityService } from '../../services/communityService';
 import { imageUrl } from '../../utils/formatters';
 import ScreenContainer from '../../components/ScreenContainer';
 import BackButton from '../../components/BackButton';
+import AchievementVideoPreview from '../../components/AchievementVideoPreview';
 
 export default function AchievementDetailScreen({ user }) {
   const route = useRoute();
@@ -45,12 +45,10 @@ export default function AchievementDetailScreen({ user }) {
         <BackButton navigation={navigation} label="Back" />
         {item.image ? (
           /\.(mp4|mov|avi|mkv|webm)$/i.test(item.image) ? (
-            <Video
-              source={{ uri: imageUrl(item.image, API_ORIGIN) }}
+            <AchievementVideoPreview
+              uri={imageUrl(item.image, API_ORIGIN)}
               style={styles.heroImage}
-              useNativeControls
               resizeMode="cover"
-              shouldPlay={false}
             />
           ) : (
             <Image

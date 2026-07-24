@@ -210,6 +210,100 @@ const countryOptions = [
   'Zimbabwe'
 ];
 
+const StyledDropdown = ({
+  label,
+  value,
+  placeholder,
+  options,
+  isOpen,
+  setIsOpen,
+  onChange,
+  menuRef,
+  enableLetterJump = false
+}) => {
+  const optionRefs = useRef({});
+  const selectedOption = options.find((option) => option.value === value);
+
+  const chooseOption = (option) => {
+    onChange(option.value);
+    setIsOpen(false);
+  };
+
+  const jumpToLetter = (letter) => {
+    const normalizedLetter = letter.toLowerCase();
+    const matches = options.filter((option) => option.label.toLowerCase().startsWith(normalizedLetter));
+    if (matches.length === 0) return;
+
+    const nextOption = normalizedLetter === 'p'
+      ? matches.find((option) => option.label.toLowerCase().includes('peso')) || matches[0]
+      : matches[0];
+
+    onChange(nextOption.value);
+    setIsOpen(true);
+    window.requestAnimationFrame(() => {
+      optionRefs.current[nextOption.value]?.scrollIntoView({ block: 'nearest' });
+    });
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      setIsOpen(false);
+      return;
+    }
+    if (!enableLetterJump || event.key.length !== 1 || !/^[a-z]$/i.test(event.key)) return;
+    event.preventDefault();
+    jumpToLetter(event.key);
+  };
+
+  return (
+    <div ref={menuRef} className="relative" onKeyDown={handleKeyDown}>
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={`relative w-full text-left rounded-2xl border border-slate-300 bg-white py-3 pl-4 pr-11 text-sm text-slate-900 shadow-sm transition duration-200 ${isOpen ? 'ring-2 ring-blue-900 shadow-md' : 'hover:shadow-sm'}`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <span className={`block truncate ${selectedOption ? '' : 'text-slate-400'}`}>
+          {selectedOption?.label || placeholder}
+        </span>
+        <span className={`pointer-events-none absolute inset-y-0 right-3 flex w-5 items-center justify-center text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="max-h-[294px] overflow-y-auto">
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                ref={(node) => {
+                  optionRefs.current[option.value] = node;
+                }}
+                onClick={() => chooseOption(option)}
+                className={`w-full px-4 py-3 text-left text-sm transition ${
+                  value === option.value
+                    ? 'bg-blue-700 font-semibold text-white'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+                role="option"
+                aria-selected={value === option.value}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DonatePage = () => {
   const { campaignId } = useParams();
   const navigate = useNavigate();
@@ -223,8 +317,12 @@ const DonatePage = () => {
   const addressInputRef = useRef(null);
   const currencyMenuRef = useRef(null);
   const countryMenuRef = useRef(null);
+  const itemCategoryMenuRef = useRef(null);
+  const itemConditionMenuRef = useRef(null);
   const [currencyMenuOpen, setCurrencyMenuOpen] = useState(false);
   const [countryMenuOpen, setCountryMenuOpen] = useState(false);
+  const [itemCategoryMenuOpen, setItemCategoryMenuOpen] = useState(false);
+  const [itemConditionMenuOpen, setItemConditionMenuOpen] = useState(false);
   const [isReceiptFullscreen, setIsReceiptFullscreen] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -441,6 +539,23 @@ const DonatePage = () => {
     { value: 'ZAR', label: 'South African Rand (ZAR)' },
     { value: 'ZMW', label: 'Zambian Kwacha (ZMW)' },
     { value: 'ZWL', label: 'Zimbabwean Dollar (ZWL)' }
+  ].sort((a, b) => a.label.localeCompare(b.label));
+
+  const itemCategoryOptions = [
+    { value: 'Educational Supplies / Books', label: 'Educational Supplies / Books' },
+    { value: 'School Uniforms / Clothing', label: 'School Uniforms / Clothing' },
+    { value: 'IT Hardware / Electronic Equipment', label: 'IT Hardware / Electronic Equipment' },
+    { value: 'Sports Equipment', label: 'Sports Equipment' },
+    { value: 'Classroom Furniture / General Supplies', label: 'Classroom Furniture / General Supplies' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  const itemConditionOptions = [
+    { value: 'New', label: 'New' },
+    { value: 'Like New', label: 'Like New' },
+    { value: 'Good', label: 'Good' },
+    { value: 'Fair', label: 'Fair' },
+    { value: 'Poor', label: 'Poor' }
   ];
 
   const currencySymbols = {
@@ -587,12 +702,20 @@ const DonatePage = () => {
       if (countryMenuRef.current && !countryMenuRef.current.contains(event.target)) {
         setCountryMenuOpen(false);
       }
+      if (itemCategoryMenuRef.current && !itemCategoryMenuRef.current.contains(event.target)) {
+        setItemCategoryMenuOpen(false);
+      }
+      if (itemConditionMenuRef.current && !itemConditionMenuRef.current.contains(event.target)) {
+        setItemConditionMenuOpen(false);
+      }
     };
 
     const handleEsc = (event) => {
       if (event.key === 'Escape') {
         setCurrencyMenuOpen(false);
         setCountryMenuOpen(false);
+        setItemCategoryMenuOpen(false);
+        setItemConditionMenuOpen(false);
       }
     };
 
@@ -1251,51 +1374,16 @@ const DonatePage = () => {
                     {formData.donationType === 'money' ? (
                     <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="grid gap-4 gap-y-4 sm:grid-cols-[1.2fr_1.8fr] items-start mb-4">
-                        <div ref={currencyMenuRef} className="relative">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Donation currency *</label>
-                          <button
-                            type="button"
-                            onClick={() => setCurrencyMenuOpen((prev) => !prev)}
-                            className={`relative w-full text-left rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition duration-200 ${currencyMenuOpen ? 'ring-2 ring-blue-900 shadow-md' : 'hover:shadow-sm'}`}
-                            aria-haspopup="listbox"
-                            aria-expanded={currencyMenuOpen}
-                          >
-                            <span className="block truncate">
-                              {currencyOptions.find((option) => option.value === formData.currency)?.label || formData.currency}
-                            </span>
-                            <span className={`pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400 transition-transform duration-200 ${currencyMenuOpen ? 'rotate-180' : ''}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </span>
-                          </button>
-
-                          {currencyMenuOpen && (
-                            <div className="absolute left-0 right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                              <div className="max-h-[294px] overflow-y-auto">
-                                {currencyOptions.map((option) => (
-                                  <button
-                                    key={option.value}
-                                    type="button"
-                                    onClick={() => {
-                                      setFormData((prev) => ({ ...prev, currency: option.value }));
-                                      setCurrencyMenuOpen(false);
-                                    }}
-                                    className={`w-full px-4 py-3 text-left text-sm transition ${
-                                      formData.currency === option.value
-                                        ? 'bg-blue-700 font-semibold text-white'
-                                        : 'text-slate-700 hover:bg-slate-100'
-                                    }`}
-                                    role="option"
-                                    aria-selected={formData.currency === option.value}
-                                  >
-                                    {option.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <StyledDropdown
+                          label="Donation currency"
+                          value={formData.currency}
+                          options={currencyOptions}
+                          isOpen={currencyMenuOpen}
+                          setIsOpen={setCurrencyMenuOpen}
+                          onChange={(currency) => setFormData((prev) => ({ ...prev, currency }))}
+                          menuRef={currencyMenuRef}
+                          enableLetterJump
+                        />
 
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Donation Amount ({formData.currency}) *</label>
@@ -1347,7 +1435,7 @@ const DonatePage = () => {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Quantity *</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
                           <input
                             type="number"
                             min="1"
@@ -1357,36 +1445,25 @@ const DonatePage = () => {
                             placeholder="e.g. 1"
                           />
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                          <select
-                            value={itemCategory}
-                            onChange={(e) => setItemCategory(e.target.value)}
-                            className="w-full rounded-xl border border-gray-300 px-4 py-3 bg-white"
-                          >
-                            <option value="">Select category</option>
-                            <option value="Educational Supplies / Books">Educational Supplies / Books</option>
-                            <option value="School Uniforms / Clothing">School Uniforms / Clothing</option>
-                            <option value="IT Hardware / Electronic Equipment">IT Hardware / Electronic Equipment</option>
-                            <option value="Sports Equipment">Sports Equipment</option>
-                            <option value="Classroom Furniture / General Supplies">Classroom Furniture / General Supplies</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Condition *</label>
-                          <select
-                            value={itemCondition}
-                            onChange={(e) => setItemCondition(e.target.value)}
-                            className="w-full rounded-xl border border-gray-300 px-4 py-3 bg-white"
-                          >
-                            <option value="New">New</option>
-                            <option value="Like New">Like New</option>
-                            <option value="Good">Good</option>
-                            <option value="Fair">Fair</option>
-                            <option value="Poor">Poor</option>
-                          </select>
-                        </div>
+                        <StyledDropdown
+                          label="Category"
+                          value={itemCategory}
+                          placeholder="Select category"
+                          options={itemCategoryOptions}
+                          isOpen={itemCategoryMenuOpen}
+                          setIsOpen={setItemCategoryMenuOpen}
+                          onChange={setItemCategory}
+                          menuRef={itemCategoryMenuRef}
+                        />
+                        <StyledDropdown
+                          label="Condition"
+                          value={itemCondition}
+                          options={itemConditionOptions}
+                          isOpen={itemConditionMenuOpen}
+                          setIsOpen={setItemConditionMenuOpen}
+                          onChange={setItemCondition}
+                          menuRef={itemConditionMenuRef}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Description (optional)</label>

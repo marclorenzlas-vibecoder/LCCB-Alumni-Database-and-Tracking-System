@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Dimensions, Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
@@ -9,6 +8,7 @@ import { API_ORIGIN } from '../config/api';
 import { dashboardService } from '../services/dashboardService';
 import { getAlumniId } from '../utils/auth';
 import { formatDate, imageUrl } from '../utils/formatters';
+import AchievementVideoPreview from '../components/AchievementVideoPreview';
 
 const isVideoMedia = (path) => /\.(mp4|mov|avi|mkv|webm)$/i.test(String(path || '').split('?')[0]);
 
@@ -461,6 +461,8 @@ function CarouselSection({ data, renderItem, keyPrefix, initialIndex }) {
 
 function EntityCard({ image, isVideo, mediaStyle, title, description, meta, onPress, showReadMore, onReadMore }) {
   const [descLines, setDescLines] = useState(4);
+  const CardContainer = isVideo ? View : Pressable;
+  const cardPressProps = isVideo ? {} : { onPress };
 
   const handleTitleLayout = (e) => {
     const lines = Math.ceil(e.nativeEvent.lines.length);
@@ -468,27 +470,31 @@ function EntityCard({ image, isVideo, mediaStyle, title, description, meta, onPr
   };
 
   return (
-    <Pressable style={styles.entityCard} onPress={onPress}>
+    <CardContainer style={styles.entityCard} {...cardPressProps}>
       {image ? (
         isVideo ? (
-          <Video
-            source={{ uri: image }}
+          <AchievementVideoPreview
+            uri={image}
             style={[styles.entityImage, mediaStyle]}
-            useNativeControls
             resizeMode="cover"
-            shouldPlay={false}
           />
         ) : (
           <Image source={{ uri: image }} style={[styles.entityImage, mediaStyle]} />
         )
       ) : null}
-      <View style={styles.entityBody}>
+      <Pressable style={styles.entityBody} onPress={onPress}>
         <Text style={styles.entityTitle} onTextLayout={handleTitleLayout}>{title}</Text>
         <View style={{ height: 95, overflow: 'hidden' }}>
           <Text style={styles.entityDesc} numberOfLines={descLines}>{description}</Text>
         </View>
         {showReadMore && onReadMore && (
-          <Pressable style={styles.readMoreBtn} onPress={onReadMore}>
+          <Pressable
+            style={styles.readMoreBtn}
+            onPress={(event) => {
+              event?.stopPropagation?.();
+              onReadMore();
+            }}
+          >
             <Text style={styles.readMoreText}>Read More</Text>
           </Pressable>
         )}
@@ -496,8 +502,8 @@ function EntityCard({ image, isVideo, mediaStyle, title, description, meta, onPr
           <Ionicons name="calendar-outline" size={14} color="#64748b" />
           <Text style={styles.entityMeta}>{meta}</Text>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </CardContainer>
   );
 }
 

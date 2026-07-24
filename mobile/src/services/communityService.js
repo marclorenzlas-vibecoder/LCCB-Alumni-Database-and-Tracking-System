@@ -32,8 +32,12 @@ export const communityService = {
 
   async getCareers(alumniId) {
     if (alumniId) {
-      const response = await apiClient.get(`/careers/alumni/${alumniId}`);
-      return response.data;
+      try {
+        const response = await apiClient.get(`/careers/alumni/${alumniId}`);
+        return response.data;
+      } catch {
+        return [];
+      }
     }
     const response = await apiClient.get('/careers');
     return response.data;

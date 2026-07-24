@@ -4,6 +4,7 @@ import achievementService from '../services/achievementService';
 import { authService } from '../services/authService';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
+import AchievementVideoPreview from './AchievementVideoPreview';
 
 const AchievementDetail = () => {
   const { id } = useParams();
@@ -117,26 +118,9 @@ const AchievementDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-6">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-6">
-            <button
-              onClick={() => {
-                if (alumni?.id) {
-                  navigate(`/alumni/profile/${alumni.id}`);
-                } else {
-                  navigate('/achievements');
-                }
-              }}
-              className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back
-            </button>
-          </div>
-          <div className="mb-8">
+          <div className="mb-8 pt-2">
             <div className="flex flex-wrap items-baseline gap-3 mb-4">
               <h1 className="text-4xl font-bold text-blue-900">
                 {alumniName}
@@ -172,11 +156,10 @@ const AchievementDetail = () => {
               {achievement.image ? (
                 <div className="rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
                   {/\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
-                    <video
+                    <AchievementVideoPreview
                       src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-                      className="w-full h-auto object-cover"
-                      controls
-                      style={{ borderRadius: '8px', maxHeight: '400px', objectFit: 'cover' }}
+                      className="h-64 w-full rounded-lg sm:h-80"
+                      videoClassName="h-64 w-full rounded-lg object-cover sm:h-80"
                     />
                   ) : (
                     <img

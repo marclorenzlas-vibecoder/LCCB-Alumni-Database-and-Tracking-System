@@ -125,6 +125,19 @@ const normalizeLevel = (value) => {
   return map[String(value || '').trim().toLowerCase()] || key;
 };
 
+const getLevelDisplayLabel = (value) => {
+  const normalized = normalizeLevel(value);
+  const map = {
+    'integrated school': 'Integrated School',
+    'night high': 'Night High',
+    'senior high': 'Senior High',
+    college: 'College',
+    eteeap: 'ETEEAP',
+    'grad school': 'Grad School'
+  };
+  return map[normalized] || value || 'Level not provided';
+};
+
 const getEducationHistory = (item = {}) => {
   const explicit = item.education_history || item.educationHistory || [];
   if (Array.isArray(explicit) && explicit.length > 0) {
@@ -417,12 +430,13 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
         {!loading && filtered.map((item) => {
           const img = imageUrl(item.profile_image || item.profileImage, API_ORIGIN);
           const fullName = getDisplayName(item);
-          const role = item.current_position || item.course || 'Alumni Member';
-          const company = item.company || item.location || '';
+          const primaryEducation = getPrimaryEducation(item);
+          const course = item.course || 'Course not provided';
+          const level = getLevelDisplayLabel(primaryEducation.level || item.level);
           const hasErrored = erroredImages.has(item.id);
 
           return (
-            <Pressable key={item.id} style={styles.rowWrap} onPress={() => navigation.navigate('AlumniDetail', { alumniId: item.id })}>
+            <Pressable key={item.id} style={styles.rowWrap} onPress={() => navigation.navigate('AlumniDetail', { alumniId: item.id, alumni: item })}>
               <View style={styles.rowContent}>
                 {img && !hasErrored ? (
                   <Image
@@ -439,8 +453,10 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
 
                 <View style={styles.infoBlock}>
                   <Text style={styles.name}>{fullName}</Text>
-                  <Text style={styles.metaLine}>{role}</Text>
-                  {company ? <Text style={styles.metaLine}>{company}</Text> : null}
+                  <Text style={styles.metaLine} numberOfLines={1} ellipsizeMode="tail">{course}</Text>
+                  <View style={styles.levelBadge}>
+                    <Text style={styles.levelBadgeText} numberOfLines={1} ellipsizeMode="tail">{level}</Text>
+                  </View>
                 </View>
               </View>
             </Pressable>
@@ -862,7 +878,22 @@ const styles = StyleSheet.create({
   },
   metaLine: {
     fontSize: 11,
-    color: '#64748b'
+    color: '#64748b',
+    maxWidth: '100%'
+  },
+  levelBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 3,
+    maxWidth: '100%',
+    borderRadius: 999,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  levelBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1d4ed8'
   },
   schoolId: {
     width: 60,

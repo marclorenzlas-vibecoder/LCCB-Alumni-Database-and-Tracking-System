@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
@@ -133,7 +132,6 @@ export default function DonationsScreen({ navigation, user }) {
 
         <View style={styles.actionsRow}>
           <Pressable style={styles.shareBtn} onPress={() => onShare(item)}>
-            <Ionicons name="share-social-outline" size={15} color="#475569" />
             <Text style={styles.shareText}>Share</Text>
           </Pressable>
         </View>
@@ -277,18 +275,17 @@ const styles = StyleSheet.create({
     paddingBottom: 12
   },
   shareBtn: {
-    height: 34,
+    height: 40,
     borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 6,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6
+    flexDirection: 'row'
   },
   shareText: {
     color: '#475569',
-    fontSize: 12,
-    fontWeight: '600'
+    fontSize: 13,
+    fontWeight: '700'
   }
 });
