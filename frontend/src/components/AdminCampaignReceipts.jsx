@@ -413,19 +413,9 @@ function ItemGalleryModal({ entry, campaign, campaignImages = [], loadingImages,
       {/* Lightbox */}
       {hasLightbox && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black p-4"
           onClick={handleLightboxBackdropClick}
         >
-          <button
-            className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
-            onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
-            aria-label="Close image gallery"
-          >
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
           {campaignImages.length > 1 && (
             <>
               <button
@@ -614,20 +604,9 @@ function AdminCampaignReceipts() {
         <div className="mx-auto max-w-6xl space-y-5">
 
           {/* ── Page Header ── */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/donations')}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:text-blue-900"
-              aria-label="Back to Donations"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-950">Campaign Receipts</h1>
-              <p className="text-sm text-slate-500">Review donor transactions and item contributions.</p>
-            </div>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-950">Campaign Receipts</h1>
+            <p className="text-sm text-slate-500">Review donor transactions and item contributions.</p>
           </div>
 
           {/* ── Campaign Info Card ── */}
