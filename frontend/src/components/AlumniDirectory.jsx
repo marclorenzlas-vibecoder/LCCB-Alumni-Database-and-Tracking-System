@@ -1666,7 +1666,7 @@ const AlumniDirectory = () => {
         </div>
 
         {/* Alumni list */}
-        <div className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+        <div className="grid auto-rows-fr items-stretch gap-3 px-4 py-4 sm:px-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           {loading && (
             <div className="col-span-full rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">Loading...</div>
           )}
@@ -1692,7 +1692,7 @@ const AlumniDirectory = () => {
                 key={a.id}
                 role="button"
                 tabIndex={0}
-                className="group flex min-h-[96px] w-full cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="group flex h-full min-h-[120px] w-full cursor-pointer items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-3 text-left shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/80 hover:bg-slate-50 hover:shadow-[0_16px_34px_-22px_rgba(15,23,42,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
                 onClick={() => openViewModal(a)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1703,25 +1703,25 @@ const AlumniDirectory = () => {
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <div className="relative h-12 w-12 shrink-0">
-                  <img
-                    src={a.profileImage || getInitialAvatarSrc(a.firstName, a.lastName, 96)}
-                    onError={(event) => handleProfileImageError(event, a.firstName, a.lastName, 96)}
-                    alt={fullName}
+                    <img
+                      src={a.profileImage || getInitialAvatarSrc(a.firstName, a.lastName, 96)}
+                      onError={(event) => handleProfileImageError(event, a.firstName, a.lastName, 96)}
+                      alt={fullName}
                       className="h-12 w-12 rounded-full border-2 border-white object-cover shadow-sm ring-1 ring-slate-200"
-                  />
-                    <span
-                      className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-[2.5px] border-white shadow-sm ${
-                        isOnline ? 'bg-emerald-500' : 'bg-slate-300'
-                      }`}
-                      aria-label={isOnline ? 'Online' : 'Offline'}
-                      title={isOnline ? 'Online' : 'Offline'}
                     />
+                    {isOnline && (
+                      <span
+                        className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 shadow-sm"
+                        aria-label="Online"
+                        title="Online"
+                      />
+                    )}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-gray-950 sm:text-base">{fullName}</h3>
-                    <p className="mt-0.5 truncate text-xs font-medium text-slate-600 sm:text-sm">{courseText}</p>
-                    <p className="mt-1.5 inline-flex max-w-full items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-100">
-                      <span className="truncate">{levelText}</span>
+                    <h3 className="truncate text-sm font-semibold text-gray-950 sm:text-base" title={fullName}>{fullName}</h3>
+                    <p className="mt-0.5 line-clamp-2 text-xs font-medium leading-snug text-slate-600 sm:text-sm" title={courseText}>{courseText}</p>
+                    <p className="mt-1 text-[11px] font-medium leading-snug text-slate-500 sm:text-xs" title={levelText}>
+                      <span className="line-clamp-2">{levelText}</span>
                     </p>
                   </div>
                 </div>
