@@ -682,7 +682,7 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 text-white shadow-xl sticky top-0 z-50 backdrop-blur-sm bg-opacity-95">
+    <nav className="bg-blue-700 text-white shadow-xl sticky top-0 z-50 backdrop-blur-sm bg-opacity-95">
       {birthdayCelebrationPopup.isOpen &&
         createPortal(
           <div className="fixed inset-0 z-[122] overflow-hidden bg-slate-950/90 backdrop-blur-md">
@@ -969,14 +969,14 @@ const Navbar = () => {
                     <div className="dropdown-menu-panel absolute right-0 mt-3 bg-white rounded-2xl shadow-[0_2px_20px_rgba(0,0,0,0.15)] z-50 flex flex-col border border-gray-100/80 overflow-hidden" style={{ width: 380, maxHeight: '85vh' }}>
                       {/* Sticky header */}
                       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                        <div>
+                        <div className="flex min-w-0 items-center gap-2.5">
                           <h3 className="text-[17px] font-bold text-gray-900">
                             Notifications
                           </h3>
                           {unreadCount > 0 && (
-                            <p className="text-[11px] text-gray-500 mt-0.5">
+                            <span className="shrink-0 text-[11px] text-gray-500">
                               {unreadCount} unread
-                            </p>
+                            </span>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -1440,7 +1440,7 @@ const Navbar = () => {
 
         {/* Mobile menu */}
         <div className={`md:hidden ${isMobileMenuOpen ? "block" : "hidden"}`}>
-          <div className="px-3 pt-3 pb-4 space-y-2 bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-900 bg-opacity-95 backdrop-blur-sm rounded-b-xl shadow-xl border-t border-white border-opacity-20">
+          <div className="px-3 pt-3 pb-4 space-y-2 bg-blue-700 bg-opacity-95 backdrop-blur-sm rounded-b-xl shadow-xl border-t border-white border-opacity-20">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (

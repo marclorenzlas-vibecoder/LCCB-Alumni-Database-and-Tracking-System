@@ -274,23 +274,6 @@ export default function AchievementsScreen({ user, navigation }) {
         <Text style={styles.headerSubtitle}>Celebrating the outstanding accomplishments of our LCCB alumni across various fields</Text>
       </View>
 
-      <View style={styles.statusTabRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusTabScroll}>
-          {categories.map((category) => {
-            const active = selectedCategory === category;
-            return (
-              <Pressable
-                key={category}
-                style={[styles.statusTab, active && styles.statusTabActive]}
-                onPress={() => setSelectedCategory(selectedCategory === category ? 'All' : category)}
-              >
-                <Text style={[styles.statusTabText, active && styles.statusTabTextActive]}>{category}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
       <View style={styles.searchWrap}>
         <View style={styles.searchIcon}>
           <Ionicons name="search-outline" size={18} color="#64748b" />
@@ -308,6 +291,23 @@ export default function AchievementsScreen({ user, navigation }) {
             <Ionicons name="close" size={18} color="#94a3b8" />
           </Pressable>
         )}
+      </View>
+
+      <View style={styles.statusTabRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusTabScroll}>
+          {categories.map((category) => {
+            const active = selectedCategory === category;
+            return (
+              <Pressable
+                key={category}
+                style={[styles.statusTab, active && styles.statusTabActive]}
+                onPress={() => setSelectedCategory(selectedCategory === category ? 'All' : category)}
+              >
+                <Text style={[styles.statusTabText, active && styles.statusTabTextActive]}>{category}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {teacher ? (
@@ -351,8 +351,7 @@ const styles = StyleSheet.create({
   },
   headerWrap: {
     alignItems: 'flex-start',
-    paddingHorizontal: 14,
-    paddingBottom: 8
+    paddingBottom: 10
   },
   headerTitle: {
     fontSize: 22,
@@ -368,8 +367,7 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 14,
-    marginBottom: 30,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#cbd5e1',
     backgroundColor: '#fff',
@@ -391,8 +389,7 @@ const styles = StyleSheet.create({
     padding: 4
   },
   statusTabRow: {
-    paddingHorizontal: 14,
-    marginBottom: 15
+    marginBottom: 18
   },
   statusTabScroll: {
     gap: 8

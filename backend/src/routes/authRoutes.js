@@ -192,20 +192,6 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    await recordActivity({
-      req: { user: result.user },
-      action: 'LOGIN',
-      entityType: 'session',
-      entityId: result.user?.id,
-      entityLabel: result.user?.email || result.user?.username,
-      summary: `${result.user?.username || result.user?.email || 'User'} logged in`,
-      details: {
-        role: result.user?.role || null,
-        email: result.user?.email || null,
-        approvalStatus: result.user?.approval_status || null
-      }
-    });
-
     res.json(result);
   } catch (error) {
     // Check if error message indicates blocked account
@@ -739,19 +725,6 @@ router.get('/session-status', authMiddleware, async (req, res) => {
 
 router.post('/logout', authMiddleware, async (req, res) => {
   leave({ token: req.authToken, user: req.user });
-
-  await recordActivity({
-    req,
-    action: 'LOGOUT',
-    entityType: 'session',
-    entityId: req.user?.id,
-    entityLabel: req.user?.email || req.user?.username,
-    summary: `${req.user?.username || req.user?.email || 'User'} logged out`,
-    details: {
-      role: req.user?.role || null,
-      email: req.user?.email || null
-    }
-  });
 
   // JWT clients (web/mobile) may not have an express-session object.
   if (!req.session) {

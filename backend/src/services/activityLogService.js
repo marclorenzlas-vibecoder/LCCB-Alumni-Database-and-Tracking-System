@@ -129,9 +129,12 @@ const recordActivity = async ({
   }
 };
 
-const listActivityLogs = async ({ limit = 30 } = {}) => {
+const listActivityLogs = async ({ limit = 30, excludeSessionActivity = false } = {}) => {
   await ensureActivityLogTable();
   const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+  const whereClause = excludeSessionActivity
+    ? "WHERE action NOT IN ('LOGIN', 'LOGOUT')"
+    : '';
 
   return prisma.$queryRawUnsafe(`
     SELECT
@@ -147,13 +150,24 @@ const listActivityLogs = async ({ limit = 30 } = {}) => {
       details,
       created_at AS createdAt
     FROM activity_log
+    ${whereClause}
     ORDER BY created_at DESC, id DESC
     LIMIT ${safeLimit}
   `);
 };
 
+const deleteSessionActivityLogs = async () => {
+  await ensureActivityLogTable();
+  const result = await prisma.$executeRaw`
+    DELETE FROM activity_log
+    WHERE action IN ('LOGIN', 'LOGOUT')
+  `;
+  return Number(result) || 0;
+};
+
 module.exports = {
   buildChangeSet,
+  deleteSessionActivityLogs,
   ensureActivityLogTable,
   listActivityLogs,
   recordActivity

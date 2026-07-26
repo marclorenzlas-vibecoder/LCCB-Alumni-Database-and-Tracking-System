@@ -30,9 +30,8 @@ const iconForRoute = (routeName, focused) => {
     Home: focused ? "home" : "home-outline",
     Events: focused ? "calendar" : "calendar-outline",
     Employment: focused ? "briefcase" : "briefcase-outline",
-    Alumni: focused ? "people-circle" : "people-circle-outline",
-    Achievements: focused ? "trophy" : "trophy-outline",
-    Donations: focused ? "heart" : "heart-outline",
+    Alumni: focused ? "people" : "people-outline",
+    Achievements: focused ? "sparkles" : "sparkles-outline",
     Notifications: focused ? "notifications" : "notifications-outline",
     Settings: focused ? "settings" : "settings-outline",
     MyProfile: focused ? "person" : "person-outline",
@@ -40,6 +39,45 @@ const iconForRoute = (routeName, focused) => {
     Admin: focused ? "settings" : "settings-outline",
   };
   return map[routeName] || "ellipse-outline";
+};
+
+const RouteIcon = ({ routeName, focused, color, size = 20 }) => {
+  if (routeName === "Donations") {
+    return (
+      <View
+        style={[
+          styles.donationIconCircle,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderColor: color,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.donationIconText,
+            {
+              color,
+              fontSize: size * 0.58,
+              lineHeight: size * 0.68,
+            },
+          ]}
+        >
+          $
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <Ionicons
+      name={iconForRoute(routeName, focused)}
+      size={size}
+      color={color}
+    />
+  );
 };
 
 function CustomDrawerContent(props) {
@@ -96,11 +134,7 @@ function CustomDrawerContent(props) {
         style={[styles.drawerItem, focused && styles.drawerItemActive]}
       >
         <View style={[styles.iconTrack, focused && styles.iconTrackActive]}>
-          <Ionicons
-            name={iconForRoute(route.name, focused)}
-            size={20}
-            color={color}
-          />
+          <RouteIcon routeName={route.name} focused={focused} size={20} color={color} />
         </View>
         <Text style={[styles.drawerLabel, { color }]} numberOfLines={1}>
           {label}
@@ -177,12 +211,8 @@ export default function MainTabs({ user, setUser }) {
         },
         overlayColor: "rgba(15, 23, 42, 0.46)",
         swipeEdgeWidth: 52,
-        drawerIcon: ({ focused, color, size }) => (
-          <Ionicons
-            name={iconForRoute(route.name, focused)}
-            size={20}
-            color={color}
-          />
+        drawerIcon: ({ focused, color }) => (
+          <RouteIcon routeName={route.name} focused={focused} size={20} color={color} />
         ),
       })}
     >
@@ -343,6 +373,16 @@ const styles = StyleSheet.create({
   },
   iconTrackActive: {
     backgroundColor: "rgba(255, 255, 255, 0.12)",
+  },
+  donationIconCircle: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.8,
+  },
+  donationIconText: {
+    fontWeight: "800",
+    textAlign: "center",
+    includeFontPadding: false,
   },
   drawerLabel: {
     flex: 1,

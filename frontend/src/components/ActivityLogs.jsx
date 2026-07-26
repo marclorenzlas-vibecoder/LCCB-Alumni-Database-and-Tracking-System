@@ -12,7 +12,7 @@ const ActivityLogs = () => {
       setLoading(true);
       setError('');
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/activity-logs?limit=60`, {
+      const response = await fetch(`${API_BASE_URL}/activity-logs?limit=60&excludeSessionActivity=true`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -129,7 +129,7 @@ const ActivityLogs = () => {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900">Activity Logs</h1>
-              <p className="mt-2 text-sm text-slate-500">Use this trail to diagnose site issues by checking who changed, deleted, approved, or signed in around the time a problem happened.</p>
+              <p className="mt-2 text-sm text-slate-500">Use this trail to diagnose site issues by checking who changed, deleted, approved, or updated records around the time a problem happened. Login and logout entries are hidden here to keep the feed focused.</p>
             </div>
             <button
               type="button"

@@ -6,7 +6,10 @@ const router = express.Router();
 
 router.get('/', teacherAuthMiddleware, async (req, res) => {
   try {
-    const logs = await listActivityLogs({ limit: req.query.limit });
+    const logs = await listActivityLogs({
+      limit: req.query.limit,
+      excludeSessionActivity: req.query.excludeSessionActivity === 'true'
+    });
     res.json(logs);
   } catch (error) {
     console.error('Error fetching activity logs:', error);
