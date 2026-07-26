@@ -119,6 +119,43 @@ body::-webkit-scrollbar,
     animation: fadeOut 0.3s ease-in forwards;
 }
 
+@keyframes loginSuccessPop {
+    0% {
+        opacity: 0;
+        transform: scale(0.72);
+    }
+
+    65% {
+        opacity: 1;
+        transform: scale(1.08);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes loginSuccessCheckDraw {
+    from {
+        stroke-dashoffset: 1;
+    }
+
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.login-success-icon {
+    animation: loginSuccessPop 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.login-success-check {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: loginSuccessCheckDraw 0.46s ease-out 0.16s forwards;
+}
+
 /* Toast slide-in animation */
 @keyframes slideIn {
     from {

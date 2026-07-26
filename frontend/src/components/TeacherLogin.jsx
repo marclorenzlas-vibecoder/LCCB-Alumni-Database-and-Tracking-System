@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import { authService } from '../services/authService';
+
+const MIN_SIGNING_DISPLAY_MS = 1800;
 
 const TeacherLogin = () => {
   const navigate = useNavigate();
@@ -9,13 +10,22 @@ const TeacherLogin = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginStatus, setLoginStatus] = useState('signing');
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const waitForMinimumSigningDisplay = async (startedAt) => {
+    const remainingTime = MIN_SIGNING_DISPLAY_MS - (Date.now() - startedAt);
+    if (remainingTime > 0) {
+      await delay(remainingTime);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setLoginStatus('signing');
     setIsSubmitting(true);
+    const signingStartedAt = Date.now();
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
@@ -27,8 +37,8 @@ const TeacherLogin = () => {
       }
 
       await authService.loginTeacher(normalizedEmail, password);
-      console.log('TOAST: teacher login success - ready to show toast');
-      toast.success('Login successful! Redirecting...');
+      await waitForMinimumSigningDisplay(signingStartedAt);
+      setLoginStatus('success');
       await delay(3800);
       window.history.replaceState(null, '', '/dashboard');
       navigate('/dashboard', { replace: true });
@@ -50,10 +60,22 @@ const TeacherLogin = () => {
     <div className="relative min-h-screen flex items-center justify-center bg-gray-50">
       {isSubmitting && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-900" />
-            <div className="text-lg font-semibold text-slate-900">Signing in...</div>
-            <div className="text-sm text-slate-500">Please wait while we finish signing you in.</div>
+          <div className="flex min-w-[23rem] flex-col items-center gap-3 rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-xl" role="status" aria-live="polite">
+            {loginStatus === 'success' ? (
+              <div className="login-success-icon flex h-12 w-12 items-center justify-center rounded-full bg-blue-900 text-white shadow-lg shadow-blue-900/25">
+                <svg className="block h-7 w-7" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path className="login-success-check" pathLength="1" d="M7 12.4l3.3 3.3L17.2 8.8" stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            ) : (
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-900" />
+            )}
+            <div className="text-lg font-semibold text-slate-900">
+              {loginStatus === 'success' ? 'Login successful!' : 'Signing in...'}
+            </div>
+            <div className="text-sm text-slate-500">
+              {loginStatus === 'success' ? 'Logging in...' : 'Please wait while we finish signing you in.'}
+            </div>
           </div>
         </div>
       )}

@@ -80,6 +80,33 @@ const Events = () => {
     }
   ];
 
+  const setOnlyTypeMenuOpen = (valueOrUpdater) => {
+    const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showTypeMenu) : valueOrUpdater;
+    setShowTypeMenu(nextIsOpen);
+    if (nextIsOpen) {
+      setShowStatusMenu(false);
+      setShowSortMenu(false);
+    }
+  };
+
+  const setOnlyStatusMenuOpen = (valueOrUpdater) => {
+    const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showStatusMenu) : valueOrUpdater;
+    setShowStatusMenu(nextIsOpen);
+    if (nextIsOpen) {
+      setShowTypeMenu(false);
+      setShowSortMenu(false);
+    }
+  };
+
+  const setOnlySortMenuOpen = (valueOrUpdater) => {
+    const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showSortMenu) : valueOrUpdater;
+    setShowSortMenu(nextIsOpen);
+    if (nextIsOpen) {
+      setShowTypeMenu(false);
+      setShowStatusMenu(false);
+    }
+  };
+
   useEffect(() => {
     if (!showTypeMenu && !showStatusMenu && !showSortMenu) return undefined;
 
@@ -421,7 +448,7 @@ const Events = () => {
           <div className="mb-4">
             <div className="relative group">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-100 bg-blue-50">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-transparent">
                   <svg className="h-4.5 w-4.5 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
@@ -456,7 +483,7 @@ const Events = () => {
             <FilterMenu
               menuRef={typeMenuRef}
               isOpen={showTypeMenu}
-              setIsOpen={setShowTypeMenu}
+              setIsOpen={setOnlyTypeMenuOpen}
               buttonLabel="Event Type"
               selectedLabel={selectedType || 'All Types'}
               selectedValue={selectedType}
@@ -474,7 +501,7 @@ const Events = () => {
             <FilterMenu
               menuRef={statusMenuRef}
               isOpen={showStatusMenu}
-              setIsOpen={setShowStatusMenu}
+              setIsOpen={setOnlyStatusMenuOpen}
               buttonLabel="Status"
               selectedLabel={selectedStatus === 'upcoming' ? 'Upcoming' : selectedStatus === 'current' ? 'Happening Today' : selectedStatus === 'past' ? 'Past Events' : 'All Statuses'}
               selectedValue={selectedStatus}
@@ -492,7 +519,7 @@ const Events = () => {
             <FilterMenu
               menuRef={sortMenuRef}
               isOpen={showSortMenu}
-              setIsOpen={setShowSortMenu}
+              setIsOpen={setOnlySortMenuOpen}
               buttonLabel="Sort By"
               selectedLabel={sortBy === 'date' ? 'Date' : sortBy === 'name' ? 'Name' : 'Attendees'}
               selectedValue={sortBy}

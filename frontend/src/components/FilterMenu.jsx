@@ -28,6 +28,17 @@ const FilterMenu = ({
       : buttonLabel)
     : selectedLabel;
 
+  const renderedIcon = React.isValidElement(icon)
+    ? React.cloneElement(icon, {
+      className: `${icon.props.className || ''} h-[18px] w-[18px]`,
+      style: {
+        ...icon.props.style,
+        width: '1.125rem',
+        height: '1.125rem'
+      }
+    })
+    : icon;
+
   return (
     <div ref={menuRef} className={`relative ${panelWidthClass}`}>
       <button
@@ -38,8 +49,8 @@ const FilterMenu = ({
         aria-expanded={isOpen}
       >
         <span className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-600">
-            {icon}
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent bg-transparent text-blue-600">
+            {renderedIcon}
           </span>
           <span className="truncate text-left">{displayLabel}</span>
         </span>

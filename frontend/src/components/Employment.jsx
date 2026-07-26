@@ -309,7 +309,7 @@ const Employment = () => {
             <div className="mb-4">
               <div className="relative group">
                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-100 bg-blue-50">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-transparent">
                     <svg className="h-4.5 w-4.5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
