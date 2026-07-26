@@ -77,6 +77,9 @@ const parseBooleanFlag = (value) => {
   return undefined;
 };
 
+const parseRequiredConsent = (value) =>
+  value === true || value === 1 || value === '1' || (typeof value === 'string' && value.toLowerCase() === 'true');
+
 const appendPrivacyUpdates = (body, target) => {
   PRIVACY_FIELD_MAP.forEach(({ bodyKeys, dbKey }) => {
     const foundKey = bodyKeys.find((key) => body[key] !== undefined);
@@ -96,33 +99,54 @@ const appendPrivacyUpdates = (body, target) => {
 const hasPrivacyInput = (body) =>
   PRIVACY_FIELD_MAP.some(({ bodyKeys }) => bodyKeys.some((key) => body[key] !== undefined));
 
+const PRIVACY_DEFAULTS = {
+  is_student_id_public: false,
+  is_date_of_birth_public: false,
+  is_course_public: true,
+  is_graduation_year_public: true,
+  is_education_history_public: true,
+  is_email_public: false,
+  is_phone_public: false,
+  is_position_public: false,
+  is_company_public: false,
+  is_employment_public: false,
+  is_location_public: false,
+  is_social_links_public: false,
+  is_skills_public: false
+};
+
+const readPrivacyFlag = (alumni = {}, key) => {
+  if (alumni[key] === undefined || alumni[key] === null) return PRIVACY_DEFAULTS[key] === true;
+  return alumni[key] !== false;
+};
+
 const alumniPrivacyPayload = (alumni = {}) => ({
-  isStudentIdPublic: alumni.is_student_id_public !== false,
-  is_student_id_public: alumni.is_student_id_public !== false,
-  isDateOfBirthPublic: alumni.is_date_of_birth_public !== false,
-  is_date_of_birth_public: alumni.is_date_of_birth_public !== false,
-  isCoursePublic: alumni.is_course_public !== false,
-  is_course_public: alumni.is_course_public !== false,
-  isGraduationYearPublic: alumni.is_graduation_year_public !== false,
-  is_graduation_year_public: alumni.is_graduation_year_public !== false,
-  isEducationHistoryPublic: alumni.is_education_history_public !== false,
-  is_education_history_public: alumni.is_education_history_public !== false,
-  isEmailPublic: alumni.is_email_public !== false,
-  is_email_public: alumni.is_email_public !== false,
-  isPhonePublic: alumni.is_phone_public !== false,
-  is_phone_public: alumni.is_phone_public !== false,
-  isPositionPublic: alumni.is_position_public !== false && alumni.is_employment_public !== false,
-  is_position_public: alumni.is_position_public !== false && alumni.is_employment_public !== false,
-  isEmploymentPublic: alumni.is_position_public !== false && alumni.is_employment_public !== false,
-  is_employment_public: alumni.is_position_public !== false && alumni.is_employment_public !== false,
-  isCompanyPublic: alumni.is_company_public !== false,
-  is_company_public: alumni.is_company_public !== false,
-  isLocationPublic: alumni.is_location_public !== false,
-  is_location_public: alumni.is_location_public !== false,
-  isSocialLinksPublic: alumni.is_social_links_public !== false,
-  is_social_links_public: alumni.is_social_links_public !== false,
-  isSkillsPublic: alumni.is_skills_public !== false,
-  is_skills_public: alumni.is_skills_public !== false
+  isStudentIdPublic: readPrivacyFlag(alumni, 'is_student_id_public'),
+  is_student_id_public: readPrivacyFlag(alumni, 'is_student_id_public'),
+  isDateOfBirthPublic: readPrivacyFlag(alumni, 'is_date_of_birth_public'),
+  is_date_of_birth_public: readPrivacyFlag(alumni, 'is_date_of_birth_public'),
+  isCoursePublic: readPrivacyFlag(alumni, 'is_course_public'),
+  is_course_public: readPrivacyFlag(alumni, 'is_course_public'),
+  isGraduationYearPublic: readPrivacyFlag(alumni, 'is_graduation_year_public'),
+  is_graduation_year_public: readPrivacyFlag(alumni, 'is_graduation_year_public'),
+  isEducationHistoryPublic: readPrivacyFlag(alumni, 'is_education_history_public'),
+  is_education_history_public: readPrivacyFlag(alumni, 'is_education_history_public'),
+  isEmailPublic: readPrivacyFlag(alumni, 'is_email_public'),
+  is_email_public: readPrivacyFlag(alumni, 'is_email_public'),
+  isPhonePublic: readPrivacyFlag(alumni, 'is_phone_public'),
+  is_phone_public: readPrivacyFlag(alumni, 'is_phone_public'),
+  isPositionPublic: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
+  is_position_public: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
+  isEmploymentPublic: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
+  is_employment_public: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
+  isCompanyPublic: readPrivacyFlag(alumni, 'is_company_public'),
+  is_company_public: readPrivacyFlag(alumni, 'is_company_public'),
+  isLocationPublic: readPrivacyFlag(alumni, 'is_location_public'),
+  is_location_public: readPrivacyFlag(alumni, 'is_location_public'),
+  isSocialLinksPublic: readPrivacyFlag(alumni, 'is_social_links_public'),
+  is_social_links_public: readPrivacyFlag(alumni, 'is_social_links_public'),
+  isSkillsPublic: readPrivacyFlag(alumni, 'is_skills_public'),
+  is_skills_public: readPrivacyFlag(alumni, 'is_skills_public')
 });
 
 // Register route (Alumni/Students only - Gmail)
@@ -130,7 +154,9 @@ router.post('/register', async (req, res) => {
   try {
     const { 
       username, email, password, level, course, batch, graduationYear,
-      firstName, lastName, studentId, contactNumber
+      firstName, lastName, studentId, contactNumber,
+      consent_core, consentCore, consent_timestamp, consentTimestamp,
+      privacy_notice_version, privacyNoticeVersion, profile_visibility
     } = req.body;
     
     console.log('📥 Registration request received:', {
@@ -139,6 +165,10 @@ router.post('/register', async (req, res) => {
     
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Please provide username, email, and password' });
+    }
+
+    if (!parseRequiredConsent(consent_core ?? consentCore)) {
+      return res.status(400).json({ error: 'Data privacy consent is required to create an account' });
     }
     
     // Validate email domain - only allow gmail.com for self-registration
@@ -149,7 +179,11 @@ router.post('/register', async (req, res) => {
     
     const result = await registerUser({ 
       username, email, password, level, course, batch, graduationYear,
-      firstName, lastName, studentId, contactNumber
+      firstName, lastName, studentId, contactNumber,
+      consent_core: consent_core ?? consentCore,
+      consent_timestamp: consent_timestamp ?? consentTimestamp,
+      privacy_notice_version: privacy_notice_version ?? privacyNoticeVersion,
+      profile_visibility
     });
     
     console.log('✅ Registration successful, pending approval');
@@ -990,6 +1024,7 @@ router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async 
               company: alumniUpdateData.company,
               location: alumniUpdateData.location,
               contact_number: alumniUpdateData.contact_number,
+              ...PRIVACY_DEFAULTS,
               ...PRIVACY_FIELD_MAP.reduce((acc, { dbKey }) => {
                 if (alumniUpdateData[dbKey] !== undefined) acc[dbKey] = alumniUpdateData[dbKey];
                 return acc;
@@ -1116,6 +1151,7 @@ router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async 
             data: {
               user_id: userId,
               email: normalizedEmail || updatedUser.email,
+              ...PRIVACY_DEFAULTS,
               ...alumniUpdateData
             }
           });

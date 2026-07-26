@@ -124,7 +124,19 @@ export default function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ cardStyle: { backgroundColor: '#ffffff' } }}>
+    <Stack.Navigator
+      screenOptions={{
+        cardStyle: { backgroundColor: '#ffffff' },
+        headerTitleAlign: 'left',
+        headerTitleStyle: {
+          color: '#111827',
+          fontSize: 28,
+          fontWeight: '500'
+        },
+        headerShadowVisible: false,
+        headerStyle: { backgroundColor: '#ffffff' }
+      }}
+    >
       {user ? (
         <Stack.Screen name="Main" options={{ headerShown: false }}>
           {(props) => <MainTabs {...props} user={user} setUser={setUser} />}
@@ -134,7 +146,15 @@ export default function AppNavigator() {
           <Stack.Screen name="Login" options={{ title: 'Sign In' }}>
             {(props) => <LoginScreen {...props} setUser={setUser} />}
           </Stack.Screen>
-          <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Create Alumni Account' }} />
+          <Stack.Screen
+            name="Register"
+            component={RegisterScreen}
+            options={{
+              title: 'Create Alumni Account',
+              headerBackVisible: false,
+              headerLeft: () => null
+            }}
+          />
         </>
       )}
     </Stack.Navigator>

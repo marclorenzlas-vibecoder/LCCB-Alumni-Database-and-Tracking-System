@@ -3,6 +3,8 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
+const PRIVACY_NOTICE_VERSION = '2026-07-26';
+
 const levelOptions = [
   { value: 'INTEGRATED_SCHOOL', label: 'Integrated School' },
   { value: 'NIGHT_HIGH', label: 'Night High' },
@@ -98,7 +100,16 @@ const AuthForm = ({ isLogin, toggleForm }) => {
         level: formData.level,
         course: formData.course,
         batch: formData.batch,
-        graduationYear: formData.graduation
+        graduationYear: formData.graduation,
+        consent_core: true,
+        consent_timestamp: new Date().toISOString(),
+        privacy_notice_version: PRIVACY_NOTICE_VERSION,
+        profile_visibility: {
+          email: false,
+          phone: false,
+          address: false,
+          employer: false
+        }
       };
 
       const response = await authService.register(registrationData);
@@ -366,16 +377,19 @@ const AuthForm = ({ isLogin, toggleForm }) => {
             </div>
             <div className="max-h-[62vh] overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700">
               <p>
-                As a graduate/alumnus of La Consolacion College Bacolod (LCCB), your privacy is important to us.
-                By creating an account in the LCCB Alumni Tracking System, you explicitly consent to the collection,
-                processing, and secure storage of your personal, academic, and employment information.
+                Creating an account means LCCB will collect and process your personal, academic, and employment information
+                as described in our{' '}
+                <a href="/privacy-notice" className="font-bold text-blue-700 underline underline-offset-2">
+                  full Privacy Notice
+                </a>
+                , per the Data Privacy Act of 2012 (RA 10173).
               </p>
               <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
-                <h3 className="text-sm font-bold text-slate-950">Our Commitment to You:</h3>
+                <h3 className="text-sm font-bold text-slate-950">Key points</h3>
                 <ul className="mt-3 space-y-3">
-                  <li><span className="font-bold text-slate-900">Secure Storage:</span> Your information will be securely stored inside our institutional database.</li>
-                  <li><span className="font-bold text-slate-900">Privacy First:</span> Your sensitive details, such as contact information and location, can be completely hidden from the directory using your personal profile privacy toggles.</li>
-                  <li><span className="font-bold text-slate-900">No Third-Party Sharing:</span> Your data will never be shared, sold, or distributed to outside organizations and is strictly used for school community tracking, events, employment opportunities, and donation tracking.</li>
+                  <li><span className="font-bold text-slate-900">Secure & limited access</span> — encrypted storage, visible only to authorized staff.</li>
+                  <li><span className="font-bold text-slate-900">Directory-safe by default</span> — directory listing shows only name, batch, and program; contact info, address, and other sensitive fields stay hidden unless the user opts to reveal them individually.</li>
+                  <li><span className="font-bold text-slate-900">No selling your data</span> — used only for alumni tracking, events, jobs, and donations; never shared with outside organizations.</li>
                 </ul>
               </div>
               <label className="mt-5 flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition hover:border-blue-200 hover:bg-blue-50/40">
@@ -385,12 +399,22 @@ const AuthForm = ({ isLogin, toggleForm }) => {
                   onChange={(event) => setIsConsentChecked(event.target.checked)}
                   className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
                 />
-                <span className="text-sm font-semibold leading-5 text-slate-900">
-                  I have read and agree to the Data Privacy Terms and Conditions.
+                <span className="text-sm leading-5 text-slate-700">
+                  <span className="font-semibold text-slate-900">
+                    I have read and agree to the Data Privacy Terms and Conditions.
+                  </span>
+                  <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                    Required
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">
+                    Needed to create your account and enable core alumni tracking (records, events, employment history).
+                  </span>
                 </span>
               </label>
             </div>
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end">
+            <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-5 text-slate-500">Declining required consent means an account cannot be created.</p>
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -415,6 +439,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
                 {isSubmitting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
                 {isSubmitting ? 'Processing...' : 'I Agree & Register'}
               </button>
+              </div>
             </div>
           </div>
         </div>

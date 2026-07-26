@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Image, ImageBackground, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/ScreenContainer';
-import ScreenHeader from '../components/ScreenHeader';
+import { API_ORIGIN } from '../config/api';
 import { authService } from '../services/authService';
 
 import { getGroups, getCachedGroups } from '../services/configService';
@@ -18,46 +18,97 @@ const DEFAULT_LEVEL_OPTIONS = [
 
 const DEFAULT_COURSE_GROUPS = [
   {
-    label: 'College Programs',
+    key: 'INTEGRATED_SCHOOL',
+    label: 'Integrated School',
+    title: 'Integrated School',
     options: [
-      { value: 'BSIT', label: 'BS Information Technology' },
-      { value: 'BSCS', label: 'BS Computer Science' },
-      { value: 'BSBA', label: 'BS Business Administration' },
-      { value: 'BSA', label: 'BS Accountancy' },
-      { value: 'BSED', label: 'BS Education' },
-      { value: 'BEED', label: 'Bachelor of Elementary Education' },
-      { value: 'BSN', label: 'BS Nursing' },
-      { value: 'BSHM', label: 'BS Hospitality Management' },
-      { value: 'BSTM', label: 'BS Tourism Management' },
-      { value: 'BSPSYCH', label: 'BS Psychology' },
-      { value: 'AB-COMM', label: 'AB Communication' },
-      { value: 'AB-POLSCI', label: 'AB Political Science' }
+      { value: 'Integrated School - Elementary', label: 'Elementary' },
+      { value: 'Integrated School - Junior High', label: 'Junior High' },
+      { value: 'Night High', label: 'Night High' }
     ]
   },
   {
-    label: 'Senior High School Tracks',
+    key: 'SENIOR_HIGH',
+    label: 'Senior High School',
+    title: 'Senior High School',
     options: [
-      { value: 'ABM', label: 'Accountancy, Business and Management (ABM)' },
-      { value: 'STEM', label: 'Science, Technology, Engineering and Mathematics (STEM)' },
-      { value: 'HUMSS', label: 'Humanities and Social Sciences (HUMSS)' },
-      { value: 'GAS', label: 'General Academic Strand (GAS)' },
-      { value: 'TVL-HE', label: 'TVL - Home Economics' },
-      { value: 'TVL-ICT', label: 'TVL - Information and Communications Technology' }
+      { value: 'Senior High School', label: 'Senior High School' }
     ]
   },
   {
-    label: 'High School',
-    options: [{ value: 'HS', label: 'High School' }]
+    key: 'COLLEGE',
+    label: 'College',
+    title: 'College',
+    options: [
+      { value: 'SARFAID', label: 'SARFAID' },
+      { value: 'SHTM', label: 'SHTM' },
+      { value: 'BSIT', label: 'BSIT' },
+      { value: 'SSLATE', label: 'SSLATE' }
+    ]
+  },
+  {
+    key: 'ETEEAP',
+    label: 'ETEEAP',
+    title: 'ETEEAP',
+    options: [
+      { value: 'B.A. in English Language Studies', label: 'Bachelor of Arts - English Language Studies' },
+      { value: 'B.S. in Business Administration', label: 'Bachelor of Science - Business Administration' },
+      { value: 'B.S. in Hospitality Management', label: 'Bachelor of Science - Hospitality Management' }
+    ]
+  },
+  {
+    key: 'GRAD_SCHOOL',
+    label: 'Graduate School',
+    title: 'Graduate School',
+    options: [
+      { value: 'Doctor in Business Administration', label: 'Doctor in Business Administration' },
+      { value: 'Master of Science in Architecture', label: 'Master of Science - Architecture' },
+      { value: 'Master of Science in Hospitality Management', label: 'Master of Science - Hospitality Management' },
+      { value: 'Master in Business Administration', label: 'Master in Business Administration (MBA)' },
+      { value: 'Master in Business Administration - Human Resource Management', label: 'MBA - Human Resource Management' },
+      { value: 'Master of Arts in Counseling', label: 'Master of Arts - Counseling' },
+      { value: 'Master of Arts in Educational Management', label: 'Master of Arts - Educational Management' },
+      { value: 'Master of Arts in Education - English/Literature', label: 'M.A. in Education - English / Literature' },
+      { value: 'Master of Arts in Education - Filipino', label: 'M.A. in Education - Filipino' },
+      { value: 'Master of Arts in Education - General Science', label: 'M.A. in Education - General Science' },
+      { value: 'Master of Arts in Education - Instructional Technology', label: 'M.A. in Education - Instructional Technology' },
+      { value: 'Master of Arts in Education - Mathematics', label: 'M.A. in Education - Mathematics' },
+      { value: 'Master of Arts in Education - Religious Studies', label: 'M.A. in Education - Religious Studies' }
+    ]
   }
 ];
+
+const PRIVACY_NOTICE_VERSION = '2026-07-26';
+const PRIVACY_NOTICE_URL = `${API_ORIGIN}/privacy-notice`;
+const homeImage = require('../../assets/homeimage.jpg');
+const alumniLogo = require('../../assets/alumnilogo2.png');
 
 const mapBackendToCourseGroups = (backend) => {
   if (!backend || !backend.groupSectionDefinitions) return DEFAULT_COURSE_GROUPS;
   return backend.groupSectionDefinitions.map((sec) => ({
+    key: sec.key,
     label: sec.title || sec.key,
+    title: sec.title || sec.key,
     options: (sec.items || []).map((it) => ({ value: it.value, label: it.label }))
   }));
 };
+
+const getProgramGroupsForLevel = (groups = [], selectedLevel = '') => groups
+  .map((group) => {
+    let options = group.options || [];
+    if (selectedLevel === 'INTEGRATED_SCHOOL' && group.key === 'INTEGRATED_SCHOOL') {
+      options = options.filter((option) => option.value !== 'Night High');
+    } else if (selectedLevel === 'NIGHT_HIGH' && group.key === 'INTEGRATED_SCHOOL') {
+      options = options.filter((option) => option.value === 'Night High');
+    } else if (selectedLevel && group.key !== selectedLevel) {
+      options = [];
+    }
+
+    return { ...group, options };
+  })
+  .filter((group) => group.options.length > 0);
+
+const isBlankLevelOption = (option) => !option?.value || String(option.label || '').toLowerCase() === 'all levels';
 
 
 export default function RegisterScreen({ navigation }) {
@@ -85,11 +136,29 @@ export default function RegisterScreen({ navigation }) {
   const consentFade = useRef(new Animated.Value(0)).current;
 
   const setField = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      if (key !== 'level') {
+        return { ...prev, [key]: value };
+      }
+
+      const nextGroups = getProgramGroupsForLevel(courseGroups, value);
+      const courseStillAvailable = nextGroups.some((group) =>
+        group.options.some((option) => option.value === prev.course)
+      );
+
+      return {
+        ...prev,
+        level: value,
+        course: courseStillAvailable ? prev.course : ''
+      };
+    });
   };
 
+  const filteredCourseGroups = getProgramGroupsForLevel(courseGroups, form.level);
+  const registerLevelOptions = levelOptions.filter((option) => !isBlankLevelOption(option));
   const COURSE_OPTIONS = courseGroups.flatMap((group) => group.options);
-  const selectedLevelLabel = levelOptions.find((option) => option.value === form.level)?.label || '';
+  const hasProgramOptions = filteredCourseGroups.some((group) => group.options.length > 0);
+  const selectedLevelLabel = registerLevelOptions.find((option) => option.value === form.level)?.label || '';
   const selectedCourseLabel = COURSE_OPTIONS.find((option) => option.value === form.course)?.label || '';
 
   useEffect(() => {
@@ -102,7 +171,7 @@ export default function RegisterScreen({ navigation }) {
           if (cached.levelOptions) setLevelOptions(cached.levelOptions);
           if (cached.groupSectionDefinitions) setCourseGroups(mapBackendToCourseGroups(cached));
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
 
@@ -163,7 +232,18 @@ export default function RegisterScreen({ navigation }) {
 
     setSubmitting(true);
     try {
-      const response = await authService.register(form);
+      const response = await authService.register({
+        ...form,
+        consent_core: true,
+        consent_timestamp: new Date().toISOString(),
+        privacy_notice_version: PRIVACY_NOTICE_VERSION,
+        profile_visibility: {
+          email: false,
+          phone: false,
+          address: false,
+          employer: false
+        }
+      });
       setShowConsentModal(false);
       setIsConsentChecked(false);
 
@@ -182,9 +262,29 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <ScreenContainer>
-      <ScreenHeader title="Register" subtitle="Create your alumni account" />
-      <ScrollView contentContainerStyle={styles.container}>
+    <ScreenContainer noTopPadding>
+      <View style={styles.container}>
+        <ImageBackground source={homeImage} style={styles.hero} imageStyle={styles.heroImage}>
+          <View style={styles.heroOverlay} />
+          <View style={styles.brandRow}>
+            <Image source={alumniLogo} style={styles.logo} />
+            <View>
+              <Text style={styles.brandTitle}>LCCB ALUMNI</Text>
+              <Text style={styles.brandSubtitle}>CONNECTING EXCELLENCE</Text>
+            </View>
+          </View>
+
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroTitle}>Join the LCCB{'\n'}Alumni Network</Text>
+            <Text style={styles.heroText}>Create your account to connect with fellow alumni, share achievements, and access exclusive opportunities.</Text>
+          </View>
+
+          <View style={styles.featureStack}>
+            <FeatureRow icon="calendar" title="Events & Reunions" subtitle="Stay updated with alumni events" />
+            <FeatureRow icon="briefcase" title="Career Opportunities" subtitle="Explore jobs and opportunities" />
+          </View>
+        </ImageBackground>
+
         <View style={styles.card}>
           <Text style={styles.title}>Welcome to</Text>
           <Text style={styles.titleBold}>LCCB Alumni</Text>
@@ -266,10 +366,10 @@ export default function RegisterScreen({ navigation }) {
             <Text style={styles.selectChevron}>▼</Text>
           </Pressable>
 
-          <Text style={styles.sectionLabel}>Course <Text style={styles.required}>*</Text></Text>
+          <Text style={styles.sectionLabel}>Program <Text style={styles.required}>*</Text></Text>
           <Pressable style={styles.selectInput} onPress={() => setCourseMenuOpen(true)}>
             <Text style={selectedCourseLabel ? styles.selectText : styles.selectPlaceholder}>
-              {selectedCourseLabel || 'Select Course'}
+              {selectedCourseLabel || 'Select Program'}
             </Text>
             <Text style={styles.selectChevron}>▼</Text>
           </Pressable>
@@ -324,18 +424,22 @@ export default function RegisterScreen({ navigation }) {
         <Modal visible={levelMenuOpen} transparent animationType="fade" onRequestClose={() => setLevelMenuOpen(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setLevelMenuOpen(false)}>
             <Pressable style={styles.menuCard} onPress={() => {}}>
+              <View style={styles.menuHandle} />
               <Text style={styles.menuTitle}>Select Level</Text>
               <ScrollView style={styles.menuScroll}>
-                {levelOptions.map((option) => (
+                {registerLevelOptions.map((option) => (
                   <Pressable
                     key={option.value}
-                    style={styles.menuOption}
+                    style={[styles.menuOption, form.level === option.value && styles.menuOptionActive]}
                     onPress={() => {
-                      setField('level', option.value);
+                      setField('level', form.level === option.value ? '' : option.value);
                       setLevelMenuOpen(false);
                     }}
                   >
-                    <Text style={styles.menuOptionText}>{option.label}</Text>
+                    <View style={styles.menuOptionContent}>
+                      <Text style={[styles.menuOptionText, form.level === option.value && styles.menuOptionTextActive]}>{option.label}</Text>
+                      {form.level === option.value ? <Ionicons name="checkmark" size={17} color="#1d4ed8" /> : null}
+                    </View>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -346,21 +450,28 @@ export default function RegisterScreen({ navigation }) {
         <Modal visible={courseMenuOpen} transparent animationType="fade" onRequestClose={() => setCourseMenuOpen(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setCourseMenuOpen(false)}>
             <Pressable style={styles.menuCard} onPress={() => {}}>
-              <Text style={styles.menuTitle}>Select Course</Text>
+              <View style={styles.menuHandle} />
+              <Text style={styles.menuTitle}>{selectedLevelLabel ? `${selectedLevelLabel} Programs` : 'All Programs'}</Text>
               <ScrollView style={styles.menuScroll}>
-                {courseGroups.map((group) => (
+                {!hasProgramOptions ? (
+                  <Text style={styles.menuEmptyText}>No programs available for this level.</Text>
+                ) : null}
+                {filteredCourseGroups.map((group) => (
                   <View key={group.label} style={styles.menuGroup}>
                     <Text style={styles.menuGroupLabel}>{group.label}</Text>
                     {group.options.map((option) => (
                       <Pressable
                         key={option.value}
-                        style={styles.menuOption}
+                        style={[styles.menuOption, form.course === option.value && styles.menuOptionActive]}
                         onPress={() => {
-                          setField('course', option.value);
+                          setField('course', form.course === option.value ? '' : option.value);
                           setCourseMenuOpen(false);
                         }}
                       >
-                        <Text style={styles.menuOptionText}>{option.label}</Text>
+                        <View style={styles.menuOptionContent}>
+                          <Text style={[styles.menuOptionText, form.course === option.value && styles.menuOptionTextActive]}>{option.label}</Text>
+                          {form.course === option.value ? <Ionicons name="checkmark" size={17} color="#1d4ed8" /> : null}
+                        </View>
                       </Pressable>
                     ))}
                   </View>
@@ -393,21 +504,23 @@ export default function RegisterScreen({ navigation }) {
 
               <ScrollView style={styles.consentScroll} contentContainerStyle={styles.consentContent} showsVerticalScrollIndicator>
                 <Text style={styles.consentParagraph}>
-                  As a graduate/alumnus of La Consolacion College Bacolod (LCCB), your privacy is important to us.
-                  By creating an account in the LCCB Alumni Tracking System, you explicitly consent to the collection,
-                  processing, and secure storage of your personal, academic, and employment information.
+                  Creating an account means LCCB will collect and process your personal, academic, and employment information as described in our{' '}
+                  <Text style={styles.inlineLink} onPress={() => Linking.openURL(PRIVACY_NOTICE_URL)}>
+                    full Privacy Notice
+                  </Text>
+                  , per the Data Privacy Act of 2012 (RA 10173).
                 </Text>
 
                 <View style={styles.commitmentBox}>
-                  <Text style={styles.commitmentTitle}>Our Commitment to You:</Text>
+                  <Text style={styles.commitmentTitle}>Key points</Text>
                   <Text style={styles.commitmentItem}>
-                    <Text style={styles.commitmentStrong}>Secure Storage:</Text> Your information will be securely stored inside our institutional database.
+                    <Text style={styles.commitmentStrong}>Secure & limited access</Text> — encrypted storage, visible only to authorized staff.
                   </Text>
                   <Text style={styles.commitmentItem}>
-                    <Text style={styles.commitmentStrong}>Privacy First:</Text> Your sensitive details, such as contact information and location, can be completely hidden from the directory using your personal profile privacy toggles.
+                    <Text style={styles.commitmentStrong}>Directory-safe by default</Text> — directory listing shows only name, batch, and program; contact info, address, and other sensitive fields stay hidden unless the user opts to reveal them individually.
                   </Text>
                   <Text style={styles.commitmentItem}>
-                    <Text style={styles.commitmentStrong}>No Third-Party Sharing:</Text> Your data will never be shared, sold, or distributed to outside organizations and is strictly used for school community tracking, events, employment opportunities, and donation tracking.
+                    <Text style={styles.commitmentStrong}>No selling your data</Text> — used only for alumni tracking, events, jobs, and donations; never shared with outside organizations.
                   </Text>
                 </View>
 
@@ -419,11 +532,21 @@ export default function RegisterScreen({ navigation }) {
                   <View style={[styles.checkboxBox, isConsentChecked && styles.checkboxBoxChecked]}>
                     {isConsentChecked ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
                   </View>
-                  <Text style={styles.consentQuestion}>I have read and agree to the Data Privacy Terms and Conditions.</Text>
+                  <View style={styles.consentTextWrap}>
+                    <Text style={styles.consentQuestion}>
+                      I have read and agree to the Data Privacy Terms and Conditions.
+                      <Text style={styles.requiredTag}> Required</Text>
+                    </Text>
+                    <Text style={styles.consentSubtext}>
+                      Needed to create your account and enable core alumni tracking (records, events, employment history).
+                    </Text>
+                  </View>
                 </Pressable>
               </ScrollView>
 
               <View style={styles.consentActions}>
+                <Text style={styles.footerNote}>Declining required consent means an account cannot be created.</Text>
+                <View style={styles.consentButtonRow}>
                 <Pressable
                   style={[styles.consentButton, styles.declineButton, submitting && styles.buttonDisabled]}
                   onPress={() => {
@@ -444,36 +567,141 @@ export default function RegisterScreen({ navigation }) {
                 >
                   <Text style={styles.agreeText}>{submitting ? 'Processing...' : 'I Agree & Register'}</Text>
                 </Pressable>
+                </View>
               </View>
             </Animated.View>
           </View>
         </Modal>
-      </ScrollView>
+      </View>
     </ScreenContainer>
+  );
+}
+
+function FeatureRow({ icon, title, subtitle }) {
+  return (
+    <View style={styles.featureRow}>
+      <View style={styles.featureIcon}>
+        <Ionicons name={icon} size={18} color="#fff" />
+      </View>
+      <View style={styles.featureTextWrap}>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureSubtitle}>{subtitle}</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: 24
+    paddingBottom: 26
+  },
+  hero: {
+    minHeight: 360,
+    marginHorizontal: -18,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 34,
+    justifyContent: 'space-between',
+    overflow: 'hidden'
+  },
+  heroImage: {
+    resizeMode: 'cover'
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(30, 58, 138, 0.82)'
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  logo: {
+    width: 48,
+    height: 48,
+    resizeMode: 'contain'
+  },
+  brandTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 0.6
+  },
+  brandSubtitle: {
+    color: '#e0f2fe',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 2
+  },
+  heroCopy: {
+    marginTop: 26
+  },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 36
+  },
+  heroText: {
+    color: '#e0f2fe',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 10
+  },
+  featureStack: {
+    gap: 10,
+    marginTop: 24
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+    padding: 12
+  },
+  featureIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)'
+  },
+  featureTextWrap: {
+    flex: 1
+  },
+  featureTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  featureSubtitle: {
+    color: '#dbeafe',
+    fontSize: 12,
+    marginTop: 2
   },
   card: {
-    borderRadius: 16,
     backgroundColor: '#fff',
+    borderRadius: 22,
+    marginTop: -24,
+    marginBottom: 24,
     padding: 20,
-    marginTop: 24,
-    marginBottom: 24
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#0f172a',
     marginBottom: 0
   },
   titleBold: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1e293b',
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#1e3a8a',
     marginBottom: 12
   },
   subtitle: {
@@ -483,12 +711,12 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   warningBanner: {
-    backgroundColor: '#dbeafe',
-    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
     padding: 12,
     marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6'
+    borderWidth: 1,
+    borderColor: '#bfdbfe'
   },
   warningTitle: {
     fontSize: 13,
@@ -533,47 +761,67 @@ const styles = StyleSheet.create({
     flex: 1
   },
   input: {
+    minHeight: 54,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 0,
     marginBottom: 12,
     backgroundColor: '#f8fafc',
     fontSize: 14,
-    color: '#1e293b'
+    color: '#0f172a',
+    includeFontPadding: false,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 54,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
     marginBottom: 12,
-    backgroundColor: '#f8fafc'
+    backgroundColor: '#f8fafc',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1
   },
   passwordInput: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 0,
     fontSize: 14,
-    color: '#1e293b'
+    color: '#1e293b',
+    includeFontPadding: false
   },
   eyeButton: {
     paddingHorizontal: 12,
     paddingVertical: 12
   },
   selectInput: {
+    minHeight: 54,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 0,
     marginBottom: 12,
     backgroundColor: '#f8fafc',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1
   },
   selectText: {
     color: '#1e293b',
@@ -599,43 +847,93 @@ const styles = StyleSheet.create({
   },
   menuCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#dbe3ef',
     maxHeight: '70%',
-    paddingVertical: 10
+    paddingTop: 10,
+    paddingBottom: 12,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8
+  },
+  menuHandle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#e2e8f0',
+    marginBottom: 12
   },
   menuTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-    paddingHorizontal: 14,
-    marginBottom: 8
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+    paddingHorizontal: 16,
+    marginBottom: 10
   },
   menuScroll: {
-    paddingHorizontal: 6
+    paddingHorizontal: 10
   },
   menuGroup: {
-    marginBottom: 8
+    marginBottom: 12
   },
   menuGroupLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#64748b',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    paddingHorizontal: 6,
+    paddingTop: 4,
+    paddingBottom: 8
+  },
+  menuEmptyText: {
+    color: '#64748b',
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-    paddingHorizontal: 8,
-    paddingVertical: 6
+    lineHeight: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 12
   },
   menuOption: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8
+    minHeight: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+    marginBottom: 8,
+    justifyContent: 'center'
+  },
+  menuOptionActive: {
+    borderColor: '#93c5fd',
+    backgroundColor: '#eff6ff'
+  },
+  menuOptionContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10
   },
   menuOptionText: {
     fontSize: 14,
-    color: '#0f172a'
+    color: '#64748b',
+    flex: 1,
+    includeFontPadding: false,
+    textAlignVertical: 'center'
+  },
+  menuOptionTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '800'
   },
   button: {
-    backgroundColor: '#1d4ed8',
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: '#1e3a8a',
+    paddingVertical: 14,
+    borderRadius: 14,
     marginTop: 16,
     marginBottom: 16,
     alignItems: 'center'
@@ -645,7 +943,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '800',
     fontSize: 16
   },
   link: {
@@ -655,8 +953,9 @@ const styles = StyleSheet.create({
     marginBottom: 30
   },
   linkBold: {
-    color: '#1d4ed8',
-    fontWeight: '600'
+    color: '#0891b2',
+    fontWeight: '800',
+    textDecorationLine: 'underline'
   },
   consentBackdrop: {
     flex: 1,
@@ -702,6 +1001,11 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: '#334155'
   },
+  inlineLink: {
+    color: '#1d4ed8',
+    fontWeight: '800',
+    textDecorationLine: 'underline'
+  },
   commitmentBox: {
     borderWidth: 1,
     borderColor: '#bfdbfe',
@@ -724,12 +1028,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a'
   },
+  consentTextWrap: {
+    flex: 1
+  },
   consentQuestion: {
-    flex: 1,
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 20,
     color: '#0f172a'
+  },
+  requiredTag: {
+    color: '#1d4ed8',
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  consentSubtext: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -755,11 +1072,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#1d4ed8'
   },
   consentActions: {
-    flexDirection: 'row',
-    gap: 10,
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0'
+    borderTopColor: '#e2e8f0',
+    gap: 10
+  },
+  footerNote: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 17
+  },
+  consentButtonRow: {
+    flexDirection: 'row',
+    gap: 10
   },
   consentButton: {
     flex: 1,

@@ -79,13 +79,13 @@ class AlumniService {
       status,
       isPublic: alumnus.is_public !== undefined ? alumnus.is_public : true,
       isStudentIdPublic:
-        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? true,
+        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? false,
       is_student_id_public:
-        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? true,
+        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? false,
       isDateOfBirthPublic:
-        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? true,
+        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? false,
       is_date_of_birth_public:
-        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? true,
+        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? false,
       isCoursePublic: alumnus.isCoursePublic ?? alumnus.is_course_public ?? true,
       is_course_public: alumnus.isCoursePublic ?? alumnus.is_course_public ?? true,
       isGraduationYearPublic:
@@ -104,45 +104,45 @@ class AlumniService {
         alumnus.isEducationHistoryPublic ??
         alumnus.is_education_history_public ??
         true,
-      isEmailPublic: alumnus.isEmailPublic ?? alumnus.is_email_public ?? true,
-      is_email_public: alumnus.isEmailPublic ?? alumnus.is_email_public ?? true,
-      isPhonePublic: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? true,
-      is_phone_public: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? true,
+      isEmailPublic: alumnus.isEmailPublic ?? alumnus.is_email_public ?? false,
+      is_email_public: alumnus.isEmailPublic ?? alumnus.is_email_public ?? false,
+      isPhonePublic: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? false,
+      is_phone_public: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? false,
       isPositionPublic:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
           false &&
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       is_position_public:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
           false &&
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       isEmploymentPublic:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
           false &&
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       is_employment_public:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? true) !==
+        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
           false &&
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? true) !==
+        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       isCompanyPublic:
-        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? true,
+        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? false,
       is_company_public:
-        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? true,
+        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? false,
       isLocationPublic:
-        alumnus.isLocationPublic ?? alumnus.is_location_public ?? true,
+        alumnus.isLocationPublic ?? alumnus.is_location_public ?? false,
       is_location_public:
-        alumnus.isLocationPublic ?? alumnus.is_location_public ?? true,
+        alumnus.isLocationPublic ?? alumnus.is_location_public ?? false,
       isSocialLinksPublic:
-        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? true,
+        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? false,
       is_social_links_public:
-        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? true,
-      isSkillsPublic: alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? true,
+        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? false,
+      isSkillsPublic: alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? false,
       is_skills_public:
-        alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? true,
+        alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? false,
       isVerified:
         alumnus.is_verified !== undefined ? alumnus.is_verified : false,
     };

@@ -53,7 +53,9 @@ export const withDonationMeta = (cleanDescription = '', meta = {}) => {
     qrCodeUrl: typeof meta.qrCodeUrl === 'string' ? meta.qrCodeUrl.trim() : '',
     qrImagePath: typeof meta.qrImagePath === 'string' ? meta.qrImagePath.trim() : '',
     paymentCurrency: typeof meta.paymentCurrency === 'string' ? meta.paymentCurrency.trim() : '',
+    paymentMethod: typeof meta.paymentMethod === 'string' ? meta.paymentMethod.trim() : '',
     paymentNumber: typeof meta.paymentNumber === 'string' ? meta.paymentNumber.trim() : '',
+    paymentScreenshotPath: typeof meta.paymentScreenshotPath === 'string' ? meta.paymentScreenshotPath.trim() : '',
     gcashNumber: typeof meta.gcashNumber === 'string' ? meta.gcashNumber.trim() : '',
     paymayaNumber: typeof meta.paymayaNumber === 'string' ? meta.paymayaNumber.trim() : '',
     paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : '',
@@ -73,7 +75,9 @@ export const withDonationMeta = (cleanDescription = '', meta = {}) => {
     sanitizedMeta.qrCodeUrl ||
     sanitizedMeta.qrImagePath ||
     sanitizedMeta.paymentCurrency ||
+    sanitizedMeta.paymentMethod ||
     sanitizedMeta.paymentNumber ||
+    sanitizedMeta.paymentScreenshotPath ||
     sanitizedMeta.gcashNumber ||
     sanitizedMeta.paymayaNumber ||
     sanitizedMeta.paymentMethods ||

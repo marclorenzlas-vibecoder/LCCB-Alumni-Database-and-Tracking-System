@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -204,25 +204,9 @@ const CURRENCY_SYMBOLS = { PHP: '\u20B1', USD: '$', EUR: '\u20AC', GBP: '\u00A3'
 const PRESET_AMOUNTS = [100, 250, 500, 1000];
 
 const PAYMENT_METHODS = [
-  { key: 'card', label: 'Debit / credit card', icon: 'card-outline' },
   { key: 'gcash', label: 'GCash', icon: 'wallet-outline' },
   { key: 'paymaya', label: 'PayMaya', icon: 'phone-portrait-outline' }
 ];
-
-const WALLET_HANDOFF_TARGETS = {
-  gcash: {
-    label: 'GCash',
-    appUrls: ['gcash://'],
-    androidPackage: 'com.globe.gcash.android',
-    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.globe.gcash.android'
-  },
-  paymaya: {
-    label: 'PayMaya',
-    appUrls: ['paymaya://', 'maya://'],
-    androidPackage: 'com.paymaya',
-    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.paymaya'
-  }
-};
 
 const ITEM_CATEGORIES = [
   'Educational Supplies / Books',
@@ -265,13 +249,8 @@ export default function DonationDetailScreen({ route, navigation, user }) {
   const [contactByPhone, setContactByPhone] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(true);
 
-  const [paymentMethod, setPaymentMethod] = useState('card');
-  const [cardholderName, setCardholderName] = useState('');
-  const [cardId, setCardId] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiryMonth, setExpiryMonth] = useState('');
-  const [expiryYear, setExpiryYear] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('gcash');
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
 
@@ -477,6 +456,24 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     setItemImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const pickPaymentScreenshot = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow photo access to upload your payment screenshot.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets?.[0]) {
+      setPaymentScreenshot(result.assets[0]);
+    }
+  };
+
   const validateStep = (step) => {
     if (step === 1) {
       if (donationType === 'item') {
@@ -507,12 +504,6 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           return false;
         }
         return true;
-      }
-      if (paymentMethod === 'card') {
-        if (!String(cardNumber || '').trim() || !String(expiryMonth || '').trim() || !String(cardCvv || '').trim()) {
-          Alert.alert('Card Details Required', 'Please complete your debit card details before continuing.');
-          return false;
-        }
       }
       if (paymentMethod === 'gcash' && !gcashNumber.trim()) {
         Alert.alert('GCash Number Required', 'This campaign does not have a GCash number yet.');
@@ -556,81 +547,32 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     amountLabel: donationType === 'item' ? 'Item' : formatAmount(amount, currency)
   });
 
-  const openWalletHandoff = async () => {
-    if (!isMoneyPath || !isWalletPaymentMethod) return;
-
-    const target = WALLET_HANDOFF_TARGETS[paymentMethod];
-    if (!target) return;
-
-    for (const appUrl of target.appUrls) {
-      try {
-        await Linking.openURL(appUrl);
-        return;
-      } catch (_) {
-        // Try the next supported handoff target.
-      }
-    }
-
-    const androidStoreUrl = `market://details?id=${target.androidPackage}`;
-    const fallbackStoreUrl = target.playStoreUrl;
-
-    try {
-      await Linking.openURL(Platform.OS === 'android' ? androidStoreUrl : fallbackStoreUrl);
-    } catch (_) {
-      try {
-        await Linking.openURL(fallbackStoreUrl);
-        return;
-      } catch (_) {
-        // Show the number if neither app nor store can be opened.
-      }
-      Alert.alert(
-        `${target.label} is not installed`,
-        `Please install ${target.label}, then send your donation to:\n${selectedWalletNumber}`
-      );
-    }
-  };
-
   const handleSubmit = async () => {
     if (!campaign) return;
     if (!validateStep(currentStep)) return;
 
     const receipt = buildReceipt();
-    await openWalletHandoff();
     setSuccessState(receipt);
     setReceiptSubmitted(false);
     setCurrentStep(4);
-
-    if (donationType === 'money' && amount && parseFloat(amount) > 0) {
-      donationService.broadcastDonationToast(campaign.id, {
-        amount,
-        currency,
-        note: ''
-      }).catch((err) => {
-        console.error('Failed to broadcast donation toast:', err?.response?.data || err?.message || err);
-      });
-    }
 
   };
 
   const handleReceiptSubmission = async () => {
     if (!campaign || !successState) return;
+    if (donationType === 'money' && isWalletPaymentMethod && !paymentScreenshot) {
+      Alert.alert('Payment Screenshot Required', 'Please upload a screenshot of your GCash or PayMaya payment first.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const paymentLabel = PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Card';
-      const paymentSummary = paymentMethod === 'card'
-        ? [
-            'Payment method: Debit Card',
-            `Card holder: ${cardholderName}`,
-            `Card ID: ${cardId}`,
-            `Card number: **** **** **** ${String(cardNumber).replace(/\D/g, '').slice(-4)}`,
-            `Expiry: ${expiryMonth}/${expiryYear}`,
-            `Currency: ${currency}`
-          ].join('\n')
-        : [
-            `Payment method: ${paymentLabel}`,
-            `Payment number: ${selectedWalletNumber}`,
-            `Currency: ${currency}`
-          ].join('\n');
+      const paymentLabel = PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'GCash';
+      const paymentSummary = [
+        `Payment method: ${paymentLabel}`,
+        `Payment number: ${selectedWalletNumber}`,
+        `Currency: ${currency}`
+      ].join('\n');
 
       const contactPreference = allowContact
         ? [contactByEmail ? 'Email' : null, contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
@@ -638,6 +580,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       const donationMeta = {
         donationMode: donationType === 'item' ? 'item' : 'money',
         paymentCurrency: donationType === 'money' ? currency : null,
+        paymentMethod: donationType === 'money' ? paymentLabel : null,
         paymentNumber: donationType === 'money' ? selectedWalletNumber : null,
         paymentMethods: donationType === 'money' ? paymentMethods : null,
         deliveryMethod: donationType === 'item' ? deliveryMethod : null,
@@ -685,6 +628,18 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           fd.append('images', file);
         });
         payload = fd;
+      } else if (isWalletPaymentMethod) {
+        const fd = new FormData();
+        fd.append('donation_type', 'money');
+        fd.append('amount', String(parseFloat(amount)));
+        fd.append('description', withDonationMeta(donorSummary, donationMeta));
+        fd.append('date', new Date().toISOString().split('T')[0]);
+        fd.append('payment_screenshot', {
+          uri: paymentScreenshot.uri,
+          type: paymentScreenshot.mimeType || 'image/jpeg',
+          name: paymentScreenshot.fileName || `payment-${Date.now()}.jpg`
+        });
+        payload = fd;
       } else {
         payload = {
           amount: parseFloat(amount),
@@ -696,6 +651,15 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       const result = await donationService.contributeToDonation(campaign.id, payload);
       setCampaign(result || { ...campaign, amount: (campaign.amount || 0) + parseFloat(amount) });
       setReceiptSubmitted(true);
+      if (donationType === 'money' && amount && parseFloat(amount) > 0) {
+        donationService.broadcastDonationToast(campaign.id, {
+          amount,
+          currency,
+          note: ''
+        }).catch((err) => {
+          console.error('Failed to broadcast donation toast:', err?.response?.data || err?.message || err);
+        });
+      }
       Alert.alert('Receipt submitted', 'Your donation has been recorded and is visible to the admin.', [
         { text: 'OK', onPress: () => navigation.navigate('DonationsList') }
       ]);
@@ -730,7 +694,11 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               </View>
             </View>
             <Text style={styles.successTitle}>Review Receipt</Text>
-            <Text style={styles.successSub}>Submit this receipt to record your donation for admin review.</Text>
+            <Text style={styles.successSub}>
+              {donationType === 'money' && isWalletPaymentMethod
+                ? 'Upload your wallet payment screenshot so the admin can compare it with this receipt.'
+                : 'Submit this receipt to record your donation for admin review.'}
+            </Text>
 
             <View style={styles.receiptCard}>
               <View style={styles.receiptHeaderRow}>
@@ -785,12 +753,41 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               <Text style={styles.receiptBarcodeText}>{successState.receiptNumber}</Text>
             </View>
 
+            {donationType === 'money' && isWalletPaymentMethod && (
+              <View style={styles.paymentProofCard}>
+                <Text style={styles.paymentProofTitle}>GCash / PayMaya payment screenshot *</Text>
+                <Text style={styles.paymentProofText}>
+                  Upload the screenshot from your wallet app. The admin will compare it with the receipt amount.
+                </Text>
+                <Pressable style={styles.paymentProofButton} onPress={pickPaymentScreenshot} disabled={submitting}>
+                  <Ionicons name="image-outline" size={18} color="#1d4ed8" />
+                  <Text style={styles.paymentProofButtonText}>
+                    {paymentScreenshot ? 'Change Screenshot' : 'Upload Screenshot'}
+                  </Text>
+                </Pressable>
+                {paymentScreenshot && (
+                  <View style={styles.paymentProofPreview}>
+                    <Image source={{ uri: paymentScreenshot.uri }} style={styles.paymentProofImage} />
+                    <Text style={styles.paymentProofFileName} numberOfLines={1}>
+                      {paymentScreenshot.fileName || 'Payment screenshot selected'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
             <View style={styles.successActions}>
               <Pressable style={styles.successBtnOutline} onPress={goBack} disabled={submitting}>
                 <Text style={styles.successBtnOutlineText}>Back</Text>
               </Pressable>
               <Pressable style={[styles.successBtnSolid, submitting && styles.btnDisabled]} onPress={handleReceiptSubmission} disabled={submitting}>
-                <Text style={styles.successBtnSolidText}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
+                <Text style={styles.successBtnSolidText}>
+                  {submitting
+                    ? 'Submitting...'
+                    : donationType === 'money' && isWalletPaymentMethod
+                      ? 'Submit Receipt & Screenshot'
+                      : 'Submit Receipt'}
+                </Text>
               </Pressable>
             </View>
           </Animated.View>
@@ -1076,37 +1073,6 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               ))}
             </View>
 
-            {paymentMethod === 'card' && (
-              <View style={styles.cardForm}>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Card Number</Text>
-                  <TextInput style={styles.textInput} placeholder="1234 5678 9012 3456" placeholderTextColor="#94a3b8" keyboardType="number-pad" maxLength={19} value={cardNumber} onChangeText={setCardNumber} />
-                </View>
-                <View style={styles.row2}>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Expiration date</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="MM/YY"
-                      placeholderTextColor="#94a3b8"
-                      keyboardType="number-pad"
-                      maxLength={5}
-                      value={expiryMonth}
-                      onChangeText={(text) => {
-                        setExpiryMonth(text);
-                        const yr = text.split('/')[1];
-                        if (yr) setExpiryYear(yr);
-                      }}
-                    />
-                  </View>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Security code</Text>
-                    <TextInput style={styles.textInput} placeholder="123" placeholderTextColor="#94a3b8" keyboardType="number-pad" maxLength={4} secureTextEntry value={cardCvv} onChangeText={setCardCvv} />
-                  </View>
-                </View>
-              </View>
-            )}
-
             {(paymentMethod === 'gcash' || paymentMethod === 'paymaya') && (
               <View style={styles.redirectInfo}>
                 <View style={{ flex: 1 }}>
@@ -1114,7 +1080,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                     Send your donation to this {PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label} number.
                   </Text>
                   <Text style={styles.walletNumberText}>{selectedWalletNumber || 'Not set'}</Text>
-                  <Text style={styles.redirectText}>Tap Pay to open the wallet app. If it is not installed, the Play Store page will open.</Text>
+                  <Text style={styles.redirectText}>Open your wallet app, use this number to donate, take a screenshot of the payment, then tap Proceed.</Text>
                 </View>
               </View>
             )}
@@ -1136,7 +1102,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               <Text style={styles.nextBtnText}>
                 {submitting
                   ? 'Processing...'
-                  : isMoneyPath ? 'Pay' : 'Submit Donation Request'}
+                  : isMoneyPath ? 'Proceed' : 'Submit Donation Request'}
               </Text>
             </Pressable>
           )}
@@ -1347,7 +1313,6 @@ const styles = StyleSheet.create({
   paymentMethodActive: { borderColor: '#1d4ed8', backgroundColor: '#eff6ff' },
   paymentMethodLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#475569' },
   paymentMethodLabelActive: { color: '#0f172a' },
-  cardForm: { gap: 12 },
   row2: { flexDirection: 'row', gap: 10 },
   quantityField: { flex: 0.7 },
   categoryField: { flex: 1.3, minWidth: 0 },
@@ -1387,11 +1352,19 @@ const styles = StyleSheet.create({
   receiptFooterSub: { fontSize: 10, color: '#94a3b8', textAlign: 'center', marginTop: 2 },
   receiptBarcode: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, opacity: 0.4, paddingTop: 10 },
   receiptBarcodeText: { fontSize: 9, color: '#94a3b8', textAlign: 'center', fontFamily: 'monospace', letterSpacing: 1 },
+  paymentProofCard: { width: '100%', borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff', borderRadius: 14, padding: 14, gap: 8 },
+  paymentProofTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
+  paymentProofText: { fontSize: 12, lineHeight: 18, color: '#475569' },
+  paymentProofButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#fff', borderRadius: 10, paddingVertical: 12 },
+  paymentProofButtonText: { fontSize: 13, fontWeight: '800', color: '#1d4ed8' },
+  paymentProofPreview: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, backgroundColor: '#fff', padding: 8 },
+  paymentProofImage: { width: 52, height: 52, borderRadius: 8, borderWidth: 1, borderColor: '#dbeafe' },
+  paymentProofFileName: { flex: 1, fontSize: 12, fontWeight: '700', color: '#1e3a8a' },
   successActions: { flexDirection: 'row', gap: 10, width: '100%' },
-  successBtnOutline: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
+  successBtnOutline: { flex: 0.95, minHeight: 58, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingVertical: 13, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
   successBtnOutlineText: { fontSize: 14, fontWeight: '700', color: '#475569' },
-  successBtnSolid: { flex: 1, backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
-  successBtnSolidText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  successBtnSolid: { flex: 1.35, minHeight: 58, backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 13, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  successBtnSolidText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: '#fff', textAlign: 'center' },
   errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 24 },
   errorTitle: { fontSize: 18, fontWeight: '700', color: '#dc2626' },
   errorBtn: { backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 24 },

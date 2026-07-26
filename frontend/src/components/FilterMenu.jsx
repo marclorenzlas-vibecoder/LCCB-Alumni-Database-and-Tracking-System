@@ -66,7 +66,7 @@ const FilterMenu = ({
       </button>
 
       {isOpen && (
-        <div className={`dropdown-menu-panel absolute ${alignClass} top-full z-50 mt-2 ${panelWidthClass} overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl`}>
+        <div className={`dropdown-menu-panel absolute ${alignClass} top-full z-30 mt-2 ${panelWidthClass} overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl`}>
           {panelTitle && (
           <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
             <div>

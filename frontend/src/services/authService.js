@@ -41,7 +41,23 @@ export const authService = {
   register: async (userData) => {
     try {
       console.log('Registering user:', userData);
-      const { username, email, password, level, course, batch, graduationYear, firstName, lastName, studentId, contactNumber } = userData;
+      const {
+        username,
+        email,
+        password,
+        level,
+        course,
+        batch,
+        graduationYear,
+        firstName,
+        lastName,
+        studentId,
+        contactNumber,
+        consent_core,
+        consent_timestamp,
+        privacy_notice_version,
+        profile_visibility
+      } = userData;
       const normalizedEmail = normalizeEmail(email);
       const response = await axiosInstance.post('/register', { 
         username, 
@@ -54,7 +70,11 @@ export const authService = {
         firstName,
         lastName,
         studentId,
-        contactNumber
+        contactNumber,
+        consent_core,
+        consent_timestamp,
+        privacy_notice_version,
+        profile_visibility
       });
       console.log('Registration response:', response.data);
       return response.data;

@@ -5,7 +5,99 @@ const { broadcastUpdate } = require('./realtimeService');
 
 const prisma = new PrismaClient();
 
+const PRIVACY_NOTICE_VERSION = '2026-07-26';
+const DIRECTORY_SAFE_PRIVACY_FLAGS = {
+  is_student_id_public: false,
+  is_date_of_birth_public: false,
+  is_course_public: true,
+  is_graduation_year_public: true,
+  is_education_history_public: true,
+  is_email_public: false,
+  is_phone_public: false,
+  is_position_public: false,
+  is_company_public: false,
+  is_employment_public: false,
+  is_location_public: false,
+  is_social_links_public: false,
+  is_skills_public: false
+};
+
 const normalizeEmail = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+
+const parseConsentCore = (value) =>
+  value === true || value === 1 || value === '1' || (typeof value === 'string' && value.toLowerCase() === 'true');
+
+const normalizeConsentPayload = (userData = {}) => {
+  const consentCore = parseConsentCore(userData.consent_core ?? userData.consentCore);
+  const consentDate = userData.consent_timestamp || userData.consentTimestamp;
+  const parsedDate = consentDate ? new Date(consentDate) : new Date();
+
+  return {
+    consentCore,
+    consentTimestamp: Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate,
+    privacyNoticeVersion: userData.privacy_notice_version || userData.privacyNoticeVersion || PRIVACY_NOTICE_VERSION
+  };
+};
+
+let consentColumnsReady = false;
+
+const ensureConsentColumns = async () => {
+  if (consentColumnsReady) return;
+
+  await prisma.$executeRawUnsafe('ALTER TABLE `pending_registration` ADD COLUMN IF NOT EXISTS `consent_core` BOOLEAN NOT NULL DEFAULT FALSE');
+  await prisma.$executeRawUnsafe('ALTER TABLE `pending_registration` ADD COLUMN IF NOT EXISTS `consent_timestamp` DATETIME NULL');
+  await prisma.$executeRawUnsafe('ALTER TABLE `pending_registration` ADD COLUMN IF NOT EXISTS `privacy_notice_version` VARCHAR(50) NULL');
+  await prisma.$executeRawUnsafe('ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `consent_core` BOOLEAN DEFAULT FALSE');
+  await prisma.$executeRawUnsafe('ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `consent_timestamp` DATETIME NULL');
+  await prisma.$executeRawUnsafe('ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `privacy_notice_version` VARCHAR(50) NULL');
+
+  consentColumnsReady = true;
+};
+
+const savePendingConsent = async (pendingId, consent) => {
+  await ensureConsentColumns();
+  await prisma.$executeRawUnsafe(
+    'UPDATE `pending_registration` SET `consent_core` = ?, `consent_timestamp` = ?, `privacy_notice_version` = ? WHERE `id` = ?',
+    consent.consentCore ? 1 : 0,
+    consent.consentTimestamp,
+    consent.privacyNoticeVersion,
+    pendingId
+  );
+};
+
+const saveUserConsent = async (userId, consent) => {
+  await ensureConsentColumns();
+  await prisma.$executeRawUnsafe(
+    'UPDATE `user` SET `consent_core` = ?, `consent_timestamp` = ?, `privacy_notice_version` = ? WHERE `id` = ?',
+    consent.consentCore ? 1 : 0,
+    consent.consentTimestamp,
+    consent.privacyNoticeVersion,
+    userId
+  );
+};
+
+const getPendingConsent = async (pendingId) => {
+  try {
+    await ensureConsentColumns();
+    const rows = await prisma.$queryRawUnsafe(
+      'SELECT `consent_core`, `consent_timestamp`, `privacy_notice_version` FROM `pending_registration` WHERE `id` = ? LIMIT 1',
+      pendingId
+    );
+    const row = Array.isArray(rows) ? rows[0] : null;
+    return {
+      consentCore: parseConsentCore(row?.consent_core),
+      consentTimestamp: row?.consent_timestamp ? new Date(row.consent_timestamp) : new Date(),
+      privacyNoticeVersion: row?.privacy_notice_version || PRIVACY_NOTICE_VERSION
+    };
+  } catch (error) {
+    console.error('Unable to read pending registration consent fields:', error.message);
+    return {
+      consentCore: false,
+      consentTimestamp: new Date(),
+      privacyNoticeVersion: PRIVACY_NOTICE_VERSION
+    };
+  }
+};
 
 async function registerUser(userData) {
   const { 
@@ -13,9 +105,14 @@ async function registerUser(userData) {
     firstName, lastName, studentId, contactNumber
   } = userData;
   const normalizedEmail = normalizeEmail(email);
+  const consent = normalizeConsentPayload(userData);
   
   if (!username || !normalizedEmail || !password) {
     throw new Error('Missing required fields');
+  }
+
+  if (!consent.consentCore) {
+    throw new Error('Data privacy consent is required to create an account');
   }
 
   try {
@@ -67,6 +164,7 @@ async function registerUser(userData) {
         status: 'PENDING'
       }
     });
+    await savePendingConsent(pendingRegistration.id, consent);
     
     console.log('✅ Pending registration created with ID:', pendingRegistration.id);
 
@@ -480,6 +578,8 @@ module.exports = {
         throw new Error('Registration already processed');
       }
 
+      const consent = await getPendingConsent(pendingId);
+
       // Use provided first and last name, or split username as fallback
       let firstName = pending.first_name;
       let lastName = pending.last_name;
@@ -502,6 +602,7 @@ module.exports = {
           is_active: true
         }
       });
+      await saveUserConsent(user.id, consent);
 
       // Create alumni record with verification data
       const alumni = await prisma.alumni.create({
@@ -517,6 +618,7 @@ module.exports = {
           batch: pending.batch,
           graduation_year: pending.graduation_year || pending.batch,
           is_public: true,
+          ...DIRECTORY_SAFE_PRIVACY_FLAGS,
           is_verified: true // Mark as verified since admin approved it
         }
       });

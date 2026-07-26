@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   createDrawerNavigator,
   DrawerContentScrollView,
@@ -20,6 +20,7 @@ import AchievementsStack from "./AchievementsStack";
 import NotificationsStack from "./NotificationsStack";
 import SettingsStack from "./SettingsStack";
 import { showPendingReceiptAlert, subscribePendingDonationReceipt } from "../utils/donationReceiptGuard";
+import { authService } from "../services/authService";
 
 const Drawer = createDrawerNavigator();
 const AlumniLogo = require("../../assets/alumnilogo2.png");
@@ -79,7 +80,7 @@ const RouteIcon = ({ routeName, focused, color, size = 20 }) => {
 };
 
 function CustomDrawerContent(props) {
-  const { state, navigation, descriptors, user, receiptNavigationBlocked } = props;
+  const { state, navigation, descriptors, user, setUser, receiptNavigationBlocked } = props;
   const insets = useSafeAreaInsets();
 
   const topGroup = ["Home", "Alumni", "Events", "Achievements", "Employment", "Donations"];
@@ -114,6 +115,27 @@ function CustomDrawerContent(props) {
     setTimeout(() => {
       navigateToDrawerRoute(navigation, routeName, rootScreen);
     }, 50);
+  };
+
+  const handleLogout = () => {
+    if (receiptNavigationBlocked) {
+      navigation.dispatch(DrawerActions.closeDrawer());
+      showPendingReceiptAlert();
+      return;
+    }
+
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          navigation.dispatch(DrawerActions.closeDrawer());
+          await authService.logout();
+          setUser(null);
+        },
+      },
+    ]);
   };
 
   const profileImage = imageUrl(user?.profile_image, API_ORIGIN);
@@ -190,6 +212,14 @@ function CustomDrawerContent(props) {
         {bottomGroupOrder
           .filter((name) => routeNames.includes(name))
           .map(renderItem)}
+        <Pressable onPress={handleLogout} style={[styles.drawerItem, styles.logoutItem]}>
+          <View style={[styles.iconTrack, styles.logoutIconTrack]}>
+            <Ionicons name="log-out-outline" size={20} color="#fecaca" />
+          </View>
+          <Text style={[styles.drawerLabel, styles.logoutLabel]} numberOfLines={1}>
+            Logout
+          </Text>
+        </Pressable>
       </View>
     </DrawerContentScrollView>
   );
@@ -209,6 +239,7 @@ export default function MainTabs({ user, setUser }) {
         <CustomDrawerContent
           {...props}
           user={user}
+          setUser={setUser}
           receiptNavigationBlocked={receiptNavigationBlocked}
         />
       )}
@@ -383,6 +414,15 @@ const styles = StyleSheet.create({
   },
   iconTrackActive: {
     backgroundColor: "rgba(255, 255, 255, 0.12)",
+  },
+  logoutItem: {
+    marginTop: 2,
+  },
+  logoutIconTrack: {
+    backgroundColor: "rgba(239, 68, 68, 0.14)",
+  },
+  logoutLabel: {
+    color: "#fecaca",
   },
   donationIconCircle: {
     alignItems: "center",

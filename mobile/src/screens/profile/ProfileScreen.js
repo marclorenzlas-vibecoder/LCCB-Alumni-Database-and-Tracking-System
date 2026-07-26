@@ -68,21 +68,36 @@ const getPrimaryEducation = (history = []) => {
 
 const formatLevelLabel = (value) => LEVEL_LABELS[value] || value || 'Not set';
 
+const DEFAULT_PRIVACY_SETTINGS = {
+  isStudentIdPublic: false,
+  isDateOfBirthPublic: false,
+  isCoursePublic: true,
+  isGraduationYearPublic: true,
+  isEducationHistoryPublic: true,
+  isEmailPublic: false,
+  isPhonePublic: false,
+  isPositionPublic: false,
+  isCompanyPublic: false,
+  isLocationPublic: false,
+  isSocialLinksPublic: false,
+  isSkillsPublic: false
+};
+
 const normalizePrivacySettings = (alumni = {}) => ({
-  isStudentIdPublic: (alumni.isStudentIdPublic ?? alumni.is_student_id_public ?? true) !== false,
-  isDateOfBirthPublic: (alumni.isDateOfBirthPublic ?? alumni.is_date_of_birth_public ?? true) !== false,
-  isCoursePublic: (alumni.isCoursePublic ?? alumni.is_course_public ?? true) !== false,
-  isGraduationYearPublic: (alumni.isGraduationYearPublic ?? alumni.is_graduation_year_public ?? true) !== false,
-  isEducationHistoryPublic: (alumni.isEducationHistoryPublic ?? alumni.is_education_history_public ?? true) !== false,
-  isEmailPublic: (alumni.isEmailPublic ?? alumni.is_email_public ?? true) !== false,
-  isPhonePublic: (alumni.isPhonePublic ?? alumni.is_phone_public ?? true) !== false,
+  isStudentIdPublic: (alumni.isStudentIdPublic ?? alumni.is_student_id_public ?? DEFAULT_PRIVACY_SETTINGS.isStudentIdPublic) !== false,
+  isDateOfBirthPublic: (alumni.isDateOfBirthPublic ?? alumni.is_date_of_birth_public ?? DEFAULT_PRIVACY_SETTINGS.isDateOfBirthPublic) !== false,
+  isCoursePublic: (alumni.isCoursePublic ?? alumni.is_course_public ?? DEFAULT_PRIVACY_SETTINGS.isCoursePublic) !== false,
+  isGraduationYearPublic: (alumni.isGraduationYearPublic ?? alumni.is_graduation_year_public ?? DEFAULT_PRIVACY_SETTINGS.isGraduationYearPublic) !== false,
+  isEducationHistoryPublic: (alumni.isEducationHistoryPublic ?? alumni.is_education_history_public ?? DEFAULT_PRIVACY_SETTINGS.isEducationHistoryPublic) !== false,
+  isEmailPublic: (alumni.isEmailPublic ?? alumni.is_email_public ?? DEFAULT_PRIVACY_SETTINGS.isEmailPublic) !== false,
+  isPhonePublic: (alumni.isPhonePublic ?? alumni.is_phone_public ?? DEFAULT_PRIVACY_SETTINGS.isPhonePublic) !== false,
   isPositionPublic:
-    (alumni.isPositionPublic ?? alumni.is_position_public ?? true) !== false &&
-    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? true) !== false,
-  isCompanyPublic: (alumni.isCompanyPublic ?? alumni.is_company_public ?? true) !== false,
-  isLocationPublic: (alumni.isLocationPublic ?? alumni.is_location_public ?? true) !== false,
-  isSocialLinksPublic: (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? true) !== false,
-  isSkillsPublic: (alumni.isSkillsPublic ?? alumni.is_skills_public ?? true) !== false
+    (alumni.isPositionPublic ?? alumni.is_position_public ?? DEFAULT_PRIVACY_SETTINGS.isPositionPublic) !== false &&
+    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? DEFAULT_PRIVACY_SETTINGS.isPositionPublic) !== false,
+  isCompanyPublic: (alumni.isCompanyPublic ?? alumni.is_company_public ?? DEFAULT_PRIVACY_SETTINGS.isCompanyPublic) !== false,
+  isLocationPublic: (alumni.isLocationPublic ?? alumni.is_location_public ?? DEFAULT_PRIVACY_SETTINGS.isLocationPublic) !== false,
+  isSocialLinksPublic: (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? DEFAULT_PRIVACY_SETTINGS.isSocialLinksPublic) !== false,
+  isSkillsPublic: (alumni.isSkillsPublic ?? alumni.is_skills_public ?? DEFAULT_PRIVACY_SETTINGS.isSkillsPublic) !== false
 });
 
 export default function ProfileScreen({ navigation, user, setUser }) {
@@ -414,11 +429,6 @@ export default function ProfileScreen({ navigation, user, setUser }) {
     }
   };
 
-  const onLogout = async () => {
-    await authService.logout();
-    setUser(null);
-  };
-
   return (
     <ScreenContainer>
       <BackButton navigation={navigation} label="Back" />
@@ -557,8 +567,6 @@ export default function ProfileScreen({ navigation, user, setUser }) {
 
         {editMode ? <PrimaryButton label={saving ? 'Saving...' : 'Save Profile'} onPress={onSave} disabled={saving} /> : null}
       </View>
-
-      <PrimaryButton label="Logout" tone="danger" onPress={onLogout} />
 
       <Modal visible={pickerState.visible} transparent animationType="fade" onRequestClose={closePicker}>
         <Pressable style={styles.modalBackdrop} onPress={closePicker}>

@@ -37,19 +37,40 @@ const upload = multer({
   }
 });
 
-const uploadItemImages = (req, res, next) => {
-  upload.array('images', MAX_ITEM_IMAGES)(req, res, (error) => {
+const uploadContributionFiles = (req, res, next) => {
+  upload.fields([
+    { name: 'images', maxCount: MAX_ITEM_IMAGES },
+    { name: 'payment_screenshot', maxCount: 1 }
+  ])(req, res, (error) => {
     if (!error) {
       next();
       return;
     }
 
     if (error instanceof multer.MulterError && error.code === 'LIMIT_UNEXPECTED_FILE') {
-      res.status(400).json({ error: `You can upload up to ${MAX_ITEM_IMAGES} item photos.` });
+      const donationType = String(req.body?.donation_type || '').toLowerCase();
+      const isMoneyDonation = donationType === 'money' || donationType === '';
+
+      if (error.field === 'payment_screenshot') {
+        res.status(400).json({ error: 'You can only upload 1 payment screenshot.' });
+        return;
+      }
+
+      if (isMoneyDonation) {
+        res.status(400).json({ error: 'You can only upload 1 payment screenshot.' });
+        return;
+      }
+
+      if (error.field === 'images') {
+        res.status(400).json({ error: `You can upload up to ${MAX_ITEM_IMAGES} item photos.` });
+        return;
+      }
+
+      res.status(400).json({ error: 'Unexpected donation proof upload field.' });
       return;
     }
 
-    res.status(400).json({ error: error.message || 'Unable to upload item photos.' });
+    res.status(400).json({ error: error.message || 'Unable to upload donation proof.' });
   });
 };
 
@@ -97,7 +118,9 @@ const buildDescriptionWithMeta = (cleanDescription = '', meta = {}) => {
     qrCodeUrl: typeof meta.qrCodeUrl === 'string' ? meta.qrCodeUrl.trim() : '',
     qrImagePath: typeof meta.qrImagePath === 'string' ? meta.qrImagePath.trim() : '',
     paymentCurrency: typeof meta.paymentCurrency === 'string' ? meta.paymentCurrency.trim() : '',
+    paymentMethod: typeof meta.paymentMethod === 'string' ? meta.paymentMethod.trim() : '',
     paymentNumber: typeof meta.paymentNumber === 'string' ? meta.paymentNumber.trim() : '',
+    paymentScreenshotPath: typeof meta.paymentScreenshotPath === 'string' ? meta.paymentScreenshotPath.trim() : '',
     gcashNumber: typeof meta.gcashNumber === 'string' ? meta.gcashNumber.trim() : '',
     paymayaNumber: typeof meta.paymayaNumber === 'string' ? meta.paymayaNumber.trim() : '',
     paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : '',
@@ -117,7 +140,9 @@ const buildDescriptionWithMeta = (cleanDescription = '', meta = {}) => {
     normalizedMeta.qrCodeUrl ||
     normalizedMeta.qrImagePath ||
     normalizedMeta.paymentCurrency ||
+    normalizedMeta.paymentMethod ||
     normalizedMeta.paymentNumber ||
+    normalizedMeta.paymentScreenshotPath ||
     normalizedMeta.gcashNumber ||
     normalizedMeta.paymayaNumber ||
     normalizedMeta.paymentMethods ||
@@ -740,7 +765,7 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
   }
 });
 
-// Broadcast live toast notification for money donation immediately upon payment selection
+// Broadcast live toast notification after donation proof is submitted
 router.post('/:id/broadcast-toast', flexibleAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -809,7 +834,7 @@ router.post('/:id/broadcast-toast', flexibleAuthMiddleware, async (req, res) => 
 });
 
 // Contribute to an existing donation campaign
-router.post('/:id/contribute', flexibleAuthMiddleware, uploadItemImages, async (req, res) => {
+router.post('/:id/contribute', flexibleAuthMiddleware, uploadContributionFiles, async (req, res) => {
   try {
     const { id } = req.params;
     const { amount, description, donation_type, item_name, item_description } = req.body;
@@ -850,6 +875,18 @@ router.post('/:id/contribute', flexibleAuthMiddleware, uploadItemImages, async (
         : 'an item donation';
     const existingData = parseDescriptionMeta(existingCampaign.description || '');
     const mergedMeta = { ...existingData.meta, ...meta };
+    const itemImageFiles = Array.isArray(req.files) ? req.files : (req.files?.images || []);
+    const paymentScreenshotFile = Array.isArray(req.files) ? null : (req.files?.payment_screenshot?.[0] || null);
+    const paymentScreenshotPath = paymentScreenshotFile ? `/uploads/donations/${paymentScreenshotFile.filename}` : '';
+    const paymentMethodLabel = String(meta.paymentMethod || extractLineValue(cleanDescription, 'Payment method') || '').toLowerCase();
+    const requiresPaymentScreenshot = donationType === 'money'
+      && (paymentMethodLabel.includes('gcash') || paymentMethodLabel.includes('maya'));
+
+    if (requiresPaymentScreenshot && !paymentScreenshotPath) {
+      return res.status(400).json({
+        error: 'Payment screenshot is required for GCash and PayMaya donations.'
+      });
+    }
 
     // Store item donation metadata
     if (donationType === 'item') {
@@ -860,14 +897,18 @@ router.post('/:id/contribute', flexibleAuthMiddleware, uploadItemImages, async (
 
     // Store uploaded images
     const uploadedImagePaths = [];
-    if (req.files && req.files.length > 0) {
-      const paths = req.files.map((f) => `/uploads/donations/${f.filename}`);
+    if (itemImageFiles.length > 0) {
+      const paths = itemImageFiles.map((f) => `/uploads/donations/${f.filename}`);
       if (donationType === 'item') {
         mergedMeta.itemImagePaths = paths;
       } else {
         mergedMeta.itemImagePaths = paths;
       }
       uploadedImagePaths.push(...paths);
+    }
+
+    if (paymentScreenshotPath) {
+      mergedMeta.paymentScreenshotPath = paymentScreenshotPath;
     }
 
     const donorNameFromForm = extractLineValue(cleanDescription, 'Donor');
@@ -887,13 +928,21 @@ router.post('/:id/contribute', flexibleAuthMiddleware, uploadItemImages, async (
       }
     }
 
+    let paymentProofText = '';
+    if (donationType === 'money' && paymentScreenshotPath) {
+      paymentProofText = [
+        `Payment screenshot: ${paymentScreenshotPath}`,
+        `Expected amount: ${contributionAmountLabel}`
+      ].join('\n');
+    }
+
     const contributionBlock = buildContributionBlock({
       campaignPurpose: existingCampaign.purpose || 'a donation campaign',
       donorName,
       alumniId: contributorAlumniId,
       amountLabel: contributionAmountLabel,
       recordedAt: new Date(),
-      donorDetailsText: cleanDescription + (itemDetailsText ? `\n${itemDetailsText}` : '')
+      donorDetailsText: [cleanDescription, itemDetailsText, paymentProofText].filter(Boolean).join('\n')
     });
     const combinedCleanDescription = appendContributionRecord(
       existingData.cleanDescription,
@@ -1228,6 +1277,8 @@ router.get('/:id/contributions', flexibleAuthMiddleware, async (req, res) => {
           amountLabel,
           recordedAt,
           profileImage,
+          expectedAmount: extractLineValue(block, 'Expected amount') || amountLabel,
+          paymentScreenshot: extractLineValue(block, 'Payment screenshot'),
           rawBlock: block
         };
 

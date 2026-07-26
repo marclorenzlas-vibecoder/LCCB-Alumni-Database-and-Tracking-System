@@ -91,6 +91,8 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
   const paymentMethodMatch = rawBlock.match(/Payment method:\s*(.+)/i);
   const paymentMethod = paymentMethodMatch ? paymentMethodMatch[1].trim() : 'N/A';
   const donationType = /item/i.test(rawBlock) ? 'Item' : 'Money';
+  const paymentScreenshotSrc = resolveImage(entry.paymentScreenshot);
+  const expectedAmount = entry.expectedAmount || entry.amountLabel || 'N/A';
 
   // Generate a receipt number from the entry data
   const receiptNumber = `RCPT-${entry.alumniId ? String(entry.alumniId).padStart(4, '0') : '0000'}${Date.parse(entry.recordedAt || new Date()).toString().slice(-4)}`;
@@ -103,13 +105,14 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm"
+        className="grid w-full max-w-4xl items-start gap-5 md:grid-cols-2"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Torn edge top */}
-        <div className="receipt-tear-top" />
+        <div className="w-full max-w-sm justify-self-center md:justify-self-end">
+          {/* Torn edge top */}
+          <div className="receipt-tear-top" />
 
-        <div className="receipt-paper border-x border-slate-200 px-6 py-6 shadow-lg bg-white text-left">
+          <div className="receipt-paper border-x border-slate-200 px-6 py-6 shadow-lg bg-white text-left">
           {/* Receipt header */}
           <div className="text-center border-b-2 border-dashed border-slate-300 pb-4">
             <div className="flex items-center justify-center gap-2 mb-1">
@@ -201,11 +204,43 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
           <p className="text-center text-[9px] text-slate-400 mt-1 font-mono tracking-wider font-semibold">
             {receiptNumber}
           </p>
+          </div>
+
+          {/* Torn edge bottom */}
+          <div className="receipt-tear-bottom" />
         </div>
 
-        {/* Torn edge bottom */}
-        <div className="receipt-tear-bottom" />
-
+        <div className="flex h-full w-full max-w-sm flex-col self-stretch justify-self-center rounded-2xl border border-slate-200 bg-white p-4 shadow-lg md:justify-self-start">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h4 className="text-sm font-black text-slate-950">Payment Screenshot</h4>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Compare the screenshot amount with the receipt amount before accepting the proof.
+              </p>
+            </div>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-900">
+              Receipt: {expectedAmount}
+            </span>
+          </div>
+          {paymentScreenshotSrc ? (
+            <a
+              href={paymentScreenshotSrc}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex min-h-[30rem] flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2"
+            >
+              <img
+                src={paymentScreenshotSrc}
+                alt="Uploaded payment screenshot"
+                className="h-full max-h-[calc(100vh-13rem)] w-full object-contain"
+              />
+            </a>
+          ) : (
+            <div className="mt-3 flex min-h-[30rem] flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-400">
+              No payment screenshot uploaded.
+            </div>
+          )}
+        </div>
 
       </div>
     </div>

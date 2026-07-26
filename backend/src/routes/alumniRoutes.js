@@ -130,7 +130,26 @@ const hasPrivacyInput = (body) =>
     bodyKeys.some((key) => body[key] !== undefined),
   );
 
-const isPublicFlag = (entry, key) => entry?.[key] !== false;
+const PRIVACY_DEFAULTS = {
+  is_student_id_public: false,
+  is_date_of_birth_public: false,
+  is_course_public: true,
+  is_graduation_year_public: true,
+  is_education_history_public: true,
+  is_email_public: false,
+  is_phone_public: false,
+  is_position_public: false,
+  is_company_public: false,
+  is_employment_public: false,
+  is_location_public: false,
+  is_social_links_public: false,
+  is_skills_public: false,
+};
+
+const isPublicFlag = (entry, key) => {
+  if (entry?.[key] === undefined || entry?.[key] === null) return PRIVACY_DEFAULTS[key] === true;
+  return entry[key] !== false;
+};
 
 const isStaffViewer = (viewer) => {
   const roleUpper = String(viewer?.role || "").toUpperCase();
@@ -377,6 +396,7 @@ router.post("/", runProfileUpload, async (req, res) => {
       profile_image: req.file
         ? `/uploads/profiles/${req.file.filename}`
         : profileImage || null,
+      ...PRIVACY_DEFAULTS,
     };
     appendPrivacyUpdates(req.body, alumniData);
 

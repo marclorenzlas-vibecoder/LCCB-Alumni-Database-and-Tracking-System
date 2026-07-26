@@ -94,38 +94,38 @@ const readResponseBody = async (response) => {
 const PROFILE_UPDATED_EVENT = 'auth-user-updated';
 
 const DEFAULT_PRIVACY_SETTINGS = {
-  isStudentIdPublic: true,
-  isDateOfBirthPublic: true,
+  isStudentIdPublic: false,
+  isDateOfBirthPublic: false,
   isCoursePublic: true,
   isGraduationYearPublic: true,
   isEducationHistoryPublic: true,
-  isEmailPublic: true,
-  isPhonePublic: true,
-  isPositionPublic: true,
-  isCompanyPublic: true,
-  isLocationPublic: true,
-  isSocialLinksPublic: true,
-  isSkillsPublic: true
+  isEmailPublic: false,
+  isPhonePublic: false,
+  isPositionPublic: false,
+  isCompanyPublic: false,
+  isLocationPublic: false,
+  isSocialLinksPublic: false,
+  isSkillsPublic: false
 };
 
-const pickPrivacyFlag = (source = {}, camelKey, snakeKey) => {
+const pickPrivacyFlag = (source = {}, camelKey, snakeKey, fallback = true) => {
   const value = source[camelKey] ?? source[snakeKey];
-  return value === undefined ? true : value !== false;
+  return value === undefined ? fallback : value !== false;
 };
 
 const normalizePrivacySettings = (alumni = {}) => ({
-  isStudentIdPublic: pickPrivacyFlag(alumni, 'isStudentIdPublic', 'is_student_id_public'),
-  isDateOfBirthPublic: pickPrivacyFlag(alumni, 'isDateOfBirthPublic', 'is_date_of_birth_public'),
+  isStudentIdPublic: pickPrivacyFlag(alumni, 'isStudentIdPublic', 'is_student_id_public', DEFAULT_PRIVACY_SETTINGS.isStudentIdPublic),
+  isDateOfBirthPublic: pickPrivacyFlag(alumni, 'isDateOfBirthPublic', 'is_date_of_birth_public', DEFAULT_PRIVACY_SETTINGS.isDateOfBirthPublic),
   isCoursePublic: pickPrivacyFlag(alumni, 'isCoursePublic', 'is_course_public'),
   isGraduationYearPublic: pickPrivacyFlag(alumni, 'isGraduationYearPublic', 'is_graduation_year_public'),
   isEducationHistoryPublic: pickPrivacyFlag(alumni, 'isEducationHistoryPublic', 'is_education_history_public'),
-  isEmailPublic: pickPrivacyFlag(alumni, 'isEmailPublic', 'is_email_public'),
-  isPhonePublic: pickPrivacyFlag(alumni, 'isPhonePublic', 'is_phone_public'),
-  isPositionPublic: pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public') && pickPrivacyFlag(alumni, 'isEmploymentPublic', 'is_employment_public'),
-  isCompanyPublic: pickPrivacyFlag(alumni, 'isCompanyPublic', 'is_company_public'),
-  isLocationPublic: pickPrivacyFlag(alumni, 'isLocationPublic', 'is_location_public'),
-  isSocialLinksPublic: pickPrivacyFlag(alumni, 'isSocialLinksPublic', 'is_social_links_public'),
-  isSkillsPublic: pickPrivacyFlag(alumni, 'isSkillsPublic', 'is_skills_public')
+  isEmailPublic: pickPrivacyFlag(alumni, 'isEmailPublic', 'is_email_public', DEFAULT_PRIVACY_SETTINGS.isEmailPublic),
+  isPhonePublic: pickPrivacyFlag(alumni, 'isPhonePublic', 'is_phone_public', DEFAULT_PRIVACY_SETTINGS.isPhonePublic),
+  isPositionPublic: pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public', DEFAULT_PRIVACY_SETTINGS.isPositionPublic) && pickPrivacyFlag(alumni, 'isEmploymentPublic', 'is_employment_public', DEFAULT_PRIVACY_SETTINGS.isPositionPublic),
+  isCompanyPublic: pickPrivacyFlag(alumni, 'isCompanyPublic', 'is_company_public', DEFAULT_PRIVACY_SETTINGS.isCompanyPublic),
+  isLocationPublic: pickPrivacyFlag(alumni, 'isLocationPublic', 'is_location_public', DEFAULT_PRIVACY_SETTINGS.isLocationPublic),
+  isSocialLinksPublic: pickPrivacyFlag(alumni, 'isSocialLinksPublic', 'is_social_links_public', DEFAULT_PRIVACY_SETTINGS.isSocialLinksPublic),
+  isSkillsPublic: pickPrivacyFlag(alumni, 'isSkillsPublic', 'is_skills_public', DEFAULT_PRIVACY_SETTINGS.isSkillsPublic)
 });
 
 const privacySettingsToAlumniFields = (settings = DEFAULT_PRIVACY_SETTINGS) => ({

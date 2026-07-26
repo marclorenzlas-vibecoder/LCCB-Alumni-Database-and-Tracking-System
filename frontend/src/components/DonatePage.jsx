@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
@@ -7,16 +6,10 @@ import donationService from '../services/donationService';
 import { authService } from '../services/authService';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { extractDonationMeta, withDonationMeta } from '../utils/donationMeta';
-import debitLogo from '../assets/debit.png';
 import paymayaLogo from '../assets/paymaya.png';
 import gcashLogo from '../assets/gcash1.png';
 
 const MAX_ITEM_IMAGES = 6;
-const walletHandoffUrls = {
-  gcash: 'https://www.gcash.com/',
-  paymaya: 'https://www.maya.ph/'
-};
-
 const countryOptions = [
   'Philippines',
   'United Kingdom',
@@ -328,7 +321,6 @@ const DonatePage = () => {
   const [countryMenuOpen, setCountryMenuOpen] = useState(false);
   const [itemCategoryMenuOpen, setItemCategoryMenuOpen] = useState(false);
   const [itemConditionMenuOpen, setItemConditionMenuOpen] = useState(false);
-  const [isReceiptFullscreen, setIsReceiptFullscreen] = useState(false);
 
   const [formData, setFormData] = useState({
     donationType: 'money',
@@ -345,12 +337,13 @@ const DonatePage = () => {
     allowContact: true,
     agreeTerms: false,
     currency: 'PHP',
-    paymentMethod: 'card'
+    paymentMethod: 'gcash'
   });
 
   const [itemName, setItemName] = useState('');
   const [itemDescription, setItemDescription] = useState('');
   const [itemImages, setItemImages] = useState([]);
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
 
   const [itemQuantity, setItemQuantity] = useState('1');
   const [itemCategory, setItemCategory] = useState('');
@@ -359,15 +352,6 @@ const DonatePage = () => {
   const [deliveryMethod, setDeliveryMethod] = useState('dropoff');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliverySchedule, setDeliverySchedule] = useState('');
-
-  const [paymentDetails, setPaymentDetails] = useState({
-    cardholderName: '',
-    cardId: '',
-    cardNumber: '',
-    expiryMonth: '',
-    expiryYear: '',
-    cvv: ''
-  });
 
   const user = authService.getCurrentUser();
   const isLoggedIn = authService.isLoggedIn();
@@ -611,24 +595,11 @@ const DonatePage = () => {
   const isWalletPaymentMethod = formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya';
 
   const paymentProviders = {
-    card: { label: 'Debit / credit card' },
     paymaya: { label: 'PayMaya' },
     gcash: { label: 'GCash' }
   };
 
   const paymentMethodOptions = [
-    {
-      key: 'card',
-      label: 'Debit / credit card',
-      icon: <img src={debitLogo} alt="Debit card" className="h-10 w-10 rounded-2xl object-contain" />,
-      logo: (
-        <div className="flex justify-center p-8">
-          <div className="rounded-3xl border border-transparent bg-white p-8 shadow-sm">
-            <img src={debitLogo} alt="Debit card logo" className="h-14 w-auto object-contain" />
-          </div>
-        </div>
-      )
-    },
     {
       key: 'paymaya',
       label: 'PayMaya',
@@ -790,9 +761,12 @@ const DonatePage = () => {
     setFormData((prev) => ({ ...prev, [name]: nextValue }));
   };
 
-  const handlePaymentDetailChange = (e) => {
-    const { name, value } = e.target;
-    setPaymentDetails((prev) => ({ ...prev, [name]: value }));
+  const handlePaymentScreenshotChange = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length > 1) {
+      toast.warning('You can only upload 1 payment screenshot.');
+    }
+    setPaymentScreenshot(files[0] || null);
   };
 
   const validateStepOne = () => {
@@ -815,15 +789,6 @@ const DonatePage = () => {
   };
 
   const validateMoneyPaymentDetails = () => {
-    if (formData.paymentMethod === 'card') {
-      const requiredCardFields = ['cardholderName', 'cardId', 'cardNumber', 'expiryMonth', 'expiryYear', 'cvv'];
-      const missingCardField = requiredCardFields.find((field) => !paymentDetails[field].trim());
-      if (missingCardField) {
-        toast.warning('Please complete your debit card details before continuing.');
-        return false;
-      }
-    }
-
     if (formData.paymentMethod === 'gcash' && !gcashNumber.trim()) {
       toast.warning('This campaign does not have a GCash number yet.');
       return false;
@@ -854,16 +819,6 @@ const DonatePage = () => {
     }
 
     return true;
-  };
-
-  const openWalletHandoff = () => {
-    if (!isMoneyPath || !isWalletPaymentMethod) return;
-
-    const walletUrl = walletHandoffUrls[formData.paymentMethod];
-
-    if (walletUrl) {
-      window.open(walletUrl, '_blank', 'noopener,noreferrer');
-    }
   };
 
   const goBack = () => setCurrentStep((step) => Math.max(1, step - 1));
@@ -906,7 +861,7 @@ const DonatePage = () => {
       campaignName: campaign?.purpose || 'Donation Campaign',
       donationTypeLabel: formData.donationType === 'items' ? `Item: ${itemName}` : 'Money',
       amountLabel: formData.donationType === 'items' ? 'Physical Item' : formatAmount(formData.amount, formData.currency),
-      paymentMethod: formData.donationType === 'items' ? 'Physical Item' : (paymentProviders[formData.paymentMethod]?.label || 'Debit / credit card')
+      paymentMethod: formData.donationType === 'items' ? 'Physical Item' : (paymentProviders[formData.paymentMethod]?.label || 'GCash')
     };
   };
 
@@ -929,8 +884,6 @@ const DonatePage = () => {
     if (isMoneyPath && !validateMoneyPaymentDetails()) return;
     if (!isMoneyPath && !validateItemDeliveryDetails()) return;
 
-    openWalletHandoff();
-
     // Generate local receipt preview first
     const receipt = buildDonationReceipt();
 
@@ -941,16 +894,6 @@ const DonatePage = () => {
     setReceiptSubmitted(false);
     setCurrentStep(4);
 
-    // Advance to Step 4 (receipt preview)
-    // Fire live donation toast immediately — the user has just clicked "Pay"
-    if (isMoneyPath && campaignId && formData.amount && parseFloat(formData.amount) > 0) {
-      donationService.broadcastDonationToast(campaignId, {
-        amount: formData.amount,
-        currency: formData.currency,
-        note: ''
-      }).catch(() => {});
-    }
-
   };
 
   const handleReceiptSubmission = async () => {
@@ -958,21 +901,17 @@ const DonatePage = () => {
       setSubmitting(true);
       setError('');
 
+      if (isMoneyPath && isWalletPaymentMethod && !paymentScreenshot) {
+        toast.warning('Please upload a screenshot of your GCash or PayMaya payment first.');
+        return;
+      }
+
       const paymentSummary = isMoneyPath
-        ? (formData.paymentMethod === 'card'
-            ? [
-                'Payment method: Debit Card',
-                `Card holder: ${paymentDetails.cardholderName}`,
-                `Card ID: ${paymentDetails.cardId}`,
-                `Card number: **** **** **** ${paymentDetails.cardNumber.replace(/\D/g, '').slice(-4)}`,
-                `Expiry: ${paymentDetails.expiryMonth}/${paymentDetails.expiryYear}`,
-                `Currency: ${formData.currency}`
-              ].join('\n')
-            : [
-                `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}`,
-                `Payment number: ${selectedWalletNumber}`,
-                `Currency: ${formData.currency}`
-              ].join('\n'))
+        ? [
+            `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}`,
+            `Payment number: ${selectedWalletNumber}`,
+            `Currency: ${formData.currency}`
+          ].join('\n')
         : [
             `Delivery method: ${deliveryMethod === 'pickup' ? 'Pickup' : 'Drop-off'}`,
             deliveryMethod === 'pickup' ? `Pickup address: ${deliveryAddress}` : null,
@@ -982,6 +921,7 @@ const DonatePage = () => {
       const donationMeta = {
         donationMode: formData.donationType === 'items' ? 'item' : 'money',
         paymentCurrency: isMoneyPath ? formData.currency : null,
+        paymentMethod: isMoneyPath ? (paymentProviders[formData.paymentMethod]?.label || 'GCash') : null,
         paymentNumber: isMoneyPath ? selectedWalletNumber : null,
         paymentMethods: isMoneyPath ? paymentMethods : null,
         deliveryMethod: !isMoneyPath ? deliveryMethod : null,
@@ -1018,6 +958,14 @@ const DonatePage = () => {
         if (itemDescription) fd.append('item_description', itemDescription);
         itemImages.forEach((file) => fd.append('images', file));
         updatedCampaign = await donationService.contributeToDonation(campaign.id, fd);
+      } else if (isWalletPaymentMethod) {
+        const fd = new FormData();
+        fd.append('amount', String(parseFloat(formData.amount)));
+        fd.append('description', withDonationMeta(donorSummary, donationMeta));
+        fd.append('date', formData.date);
+        fd.append('donation_type', 'money');
+        fd.append('payment_screenshot', paymentScreenshot);
+        updatedCampaign = await donationService.contributeToDonation(campaign.id, fd);
       } else {
         updatedCampaign = await donationService.contributeToDonation(campaign.id, payload);
       }
@@ -1029,6 +977,14 @@ const DonatePage = () => {
       });
       setReceiptSubmitted(true);
 
+      if (isMoneyPath && campaignId && formData.amount && parseFloat(formData.amount) > 0) {
+        donationService.broadcastDonationToast(campaignId, {
+          amount: formData.amount,
+          currency: formData.currency,
+          note: ''
+        }).catch(() => {});
+      }
+
       toast.success('Receipt submitted! Your donation has been recorded and is visible to the admin.', {
         autoClose: 3500
       });
@@ -1038,7 +994,10 @@ const DonatePage = () => {
       }, 1500);
     } catch (err) {
       console.error('Error submitting donation receipt:', err);
-      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to submit donation receipt';
+      const rawErrorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to submit donation receipt';
+      const errorMsg = isMoneyPath && isWalletPaymentMethod && /item photos/i.test(rawErrorMsg)
+        ? 'You can only upload 1 payment screenshot.'
+        : rawErrorMsg;
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -1317,11 +1276,38 @@ const DonatePage = () => {
                     </svg>
                   </div>
                   <h3 className="mt-3 text-2xl font-bold text-slate-900">Donation Successful!</h3>
-                  <p className="mt-1 text-sm text-slate-500">Thank you for your generous contribution.</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {isMoneyPath && isWalletPaymentMethod
+                      ? 'Upload your wallet payment screenshot so the admin can compare it with this receipt.'
+                      : 'Thank you for your generous contribution.'}
+                  </p>
                 </div>
 
                 {/* Render the receipt component */}
                 {renderReceipt()}
+
+                {isMoneyPath && isWalletPaymentMethod && (
+                  <div className="mt-6 w-full max-w-md rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                    <label className="block text-sm font-bold text-slate-900">
+                      GCash / PayMaya payment screenshot *
+                    </label>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      Upload the screenshot from your wallet app. The admin will compare the amount in this screenshot with the receipt amount.
+                    </p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple={false}
+                      onChange={handlePaymentScreenshotChange}
+                      className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+                    />
+                    {paymentScreenshot && (
+                      <p className="mt-2 truncate text-xs font-semibold text-blue-900">
+                        Selected: {paymentScreenshot.name}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Action buttons below receipt */}
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -1342,17 +1328,6 @@ const DonatePage = () => {
 
                   <button
                     type="button"
-                    onClick={() => setIsReceiptFullscreen(true)}
-                    className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 hover:border-slate-400 transition-all flex items-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                    </svg>
-                    View Fullscreen
-                  </button>
-
-                  <button
-                    type="button"
                     disabled={submitting}
                     onClick={handleReceiptSubmission}
                     className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 transition-colors flex items-center gap-2 disabled:bg-blue-400 disabled:cursor-not-allowed"
@@ -1360,49 +1335,9 @@ const DonatePage = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    {submitting ? 'Submitting...' : 'Submit Receipt'}
+                    {submitting ? 'Submitting...' : isMoneyPath && isWalletPaymentMethod ? 'Submit Receipt & Screenshot' : 'Submit Receipt'}
                   </button>
                 </div>
-
-                {/* Fullscreen Overlay Portal */}
-                {isReceiptFullscreen && createPortal(
-                  <div 
-                    className="fixed inset-0 z-[150] flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md px-4 py-8 overflow-y-auto"
-                    onClick={() => setIsReceiptFullscreen(false)}
-                  >
-                    {/* Top Info Bar */}
-                    <div className="mb-6 text-center max-w-sm pointer-events-none select-none">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 text-white rounded-full text-xs font-semibold tracking-wider uppercase mb-1">
-                        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        Fullscreen Receipt
-                      </span>
-                      <p className="text-[11px] text-slate-300 font-medium">Click outside the receipt or click exit to close</p>
-                    </div>
-
-                    {/* Receipt Wrapper with custom large scale and box glow */}
-                    <div 
-                      className="w-full max-w-sm transform scale-[1.03] sm:scale-[1.08] transition-transform duration-300 shadow-[0_24px_60px_rgba(0,0,0,0.6)] rounded-2xl overflow-visible"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {renderReceipt()}
-                    </div>
-
-                    {/* Floating Exit Button outside the screenshot bounds */}
-                    <button
-                      onClick={() => setIsReceiptFullscreen(false)}
-                      className="mt-8 rounded-xl border border-white/20 bg-white/15 px-6 py-2.5 text-xs font-bold text-white shadow-md hover:bg-white/25 hover:border-white/35 transition-all duration-200 transform active:scale-95 flex items-center gap-1.5"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Exit Fullscreen
-                    </button>
-                  </div>,
-                  document.body
-                )}
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -1757,7 +1692,7 @@ const DonatePage = () => {
                     </div>
 
                     <h3 className="text-base font-semibold text-slate-900">Please select a payment method:</h3>
-                    <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
                       {paymentMethodOptions.map((method) => (
                         <button
                           key={method.key}
@@ -1779,26 +1714,6 @@ const DonatePage = () => {
                       ))}
                     </div>
 
-                    {formData.paymentMethod === 'card' && (
-                      <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-                        <div className="flex justify-center">{paymentMethodOptions.find((method) => method.key === 'card')?.logo}</div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">Card number *</label>
-                          <input type="text" name="cardNumber" value={paymentDetails.cardNumber} onChange={handlePaymentDetailChange} placeholder="•••• •••• •••• ••••" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
-                        </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Expiration date *</label>
-                            <input type="text" name="expiryMonth" value={paymentDetails.expiryMonth} onChange={handlePaymentDetailChange} placeholder="MM/YY" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Security code *</label>
-                            <input type="password" name="cvv" value={paymentDetails.cvv} onChange={handlePaymentDetailChange} placeholder="•••" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
                     {formData.paymentMethod === 'paymaya' && (
                       <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
                         {paymentMethodOptions.find((method) => method.key === 'paymaya')?.logo}
@@ -1807,7 +1722,7 @@ const DonatePage = () => {
                           <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 font-mono text-lg font-bold text-blue-900">
                             {paymayaNumber || 'Not set'}
                           </p>
-                          <p className="mt-3 text-sm text-slate-600">Click Pay to open PayMaya, send to this number, then return here to submit your payment receipt as proof.</p>
+                          <p className="mt-3 text-sm text-slate-600">Open PayMaya, use this number to donate, take a screenshot of the payment, then click Proceed.</p>
                         </div>
                       </div>
                     )}
@@ -1820,7 +1735,7 @@ const DonatePage = () => {
                           <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 font-mono text-lg font-bold text-blue-900">
                             {gcashNumber || 'Not set'}
                           </p>
-                          <p className="mt-3 text-sm text-slate-600">Click Pay to open GCash, send to this number, then return here to submit your payment receipt as proof.</p>
+                          <p className="mt-3 text-sm text-slate-600">Open GCash, use this number to donate, take a screenshot of the payment, then click Proceed.</p>
                         </div>
                       </div>
                     )}
@@ -1837,7 +1752,7 @@ const DonatePage = () => {
                     </button>
                   ) : (
                     <button type="submit" disabled={!isLoggedIn || !canDonate || submitting} className="flex-1 rounded-xl bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400">
-                      {submitting ? 'Processing...' : isMoneyPath ? 'Pay' : 'Submit Donation Request'}
+                      {submitting ? 'Processing...' : isMoneyPath ? 'Proceed' : 'Submit Donation Request'}
                     </button>
                   )}
                 </div>

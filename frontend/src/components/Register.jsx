@@ -6,6 +6,8 @@ import { groupSectionDefinitions, levelOptions as sharedLevelOptions } from '../
 import FilterMenu from './FilterMenu';
 import { toast } from 'react-toastify';
 
+const PRIVACY_NOTICE_VERSION = '2026-07-26';
+
 
 
 const Register = () => {
@@ -49,6 +51,43 @@ const Register = () => {
     return opt ? opt.label : 'Select Level';
   };
 
+  const buildRegisterCourseSections = (selectedLevel) => groupSectionDefinitions
+    .map((section) => {
+      let items = section.items;
+      if (selectedLevel === 'INTEGRATED_SCHOOL' && section.key === 'INTEGRATED_SCHOOL') {
+        items = section.items.filter((item) => item.value !== 'Night High');
+      } else if (selectedLevel === 'NIGHT_HIGH' && section.key === 'INTEGRATED_SCHOOL') {
+        items = section.items.filter((item) => item.value === 'Night High');
+      } else if (selectedLevel && section.key !== selectedLevel) {
+        items = [];
+      }
+
+      if (section.key !== 'SENIOR_HIGH') {
+        return { ...section, items };
+      }
+
+      return {
+        ...section,
+        items: items.map((item) => {
+          const { description, ...rest } = item;
+          return rest;
+        })
+      };
+    })
+    .filter((section) => section.items.length > 0);
+
+  const registerCourseSections = buildRegisterCourseSections(formData.level);
+
+  const toggleLevelMenu = (updater) => {
+    setShowCourseMenu(false);
+    setShowLevelMenu((prev) => (typeof updater === 'function' ? updater(prev) : updater));
+  };
+
+  const toggleCourseMenu = (updater) => {
+    setShowLevelMenu(false);
+    setShowCourseMenu((prev) => (typeof updater === 'function' ? updater(prev) : updater));
+  };
+
   const getCourseLabel = (val) => {
     if (!val) return 'Select Program';
     for (const sec of groupSectionDefinitions) {
@@ -57,20 +96,6 @@ const Register = () => {
     }
     return val;
   };
-
-  const registerCourseSections = groupSectionDefinitions.map((section) => {
-    if (section.key !== 'SENIOR_HIGH') {
-      return section;
-    }
-
-    return {
-      ...section,
-      items: section.items.map((item) => {
-        const { description, ...rest } = item;
-        return rest;
-      })
-    };
-  });
 
   const validateRegistrationForm = () => {
     if (!formData.username || !formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.contactNumber || !formData.level || !formData.course || !formData.batch) {
@@ -129,7 +154,18 @@ const Register = () => {
       });
 
       // Submit registration
-      const response = await authService.register(formData);
+      const response = await authService.register({
+        ...formData,
+        consent_core: true,
+        consent_timestamp: new Date().toISOString(),
+        privacy_notice_version: PRIVACY_NOTICE_VERSION,
+        profile_visibility: {
+          email: false,
+          phone: false,
+          address: false,
+          employer: false
+        }
+      });
       console.log('✅ Registration response:', response);
       
       // Show success message - no token yet, account is pending
@@ -204,7 +240,7 @@ const Register = () => {
                 id="firstName"
                 value={formData.firstName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
+                className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
                 placeholder="First name"
                 required
               />
@@ -219,7 +255,7 @@ const Register = () => {
                 id="lastName"
                 value={formData.lastName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
+                className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
                 placeholder="Last name"
                 required
               />
@@ -236,7 +272,7 @@ const Register = () => {
               id="username"
               value={formData.username}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+              className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
               placeholder="Enter your username"
               required
             />
@@ -254,7 +290,7 @@ const Register = () => {
                 id="studentId"
                 value={formData.studentId}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
                 placeholder="e.g., 21-0087-958"
               />
             </div>
@@ -268,7 +304,7 @@ const Register = () => {
                 id="contactNumber"
                 value={formData.contactNumber}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+                className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
                 placeholder="09XXXXXXXXX"
                 required
               />
@@ -285,7 +321,7 @@ const Register = () => {
               id="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
+              className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition" 
               placeholder="Enter your email"
               required
             />
@@ -301,7 +337,7 @@ const Register = () => {
                 id="batch"
                 value={formData.batch}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
+                className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
                 placeholder="e.g., 2024"
                 min="1990"
                 max="2030"
@@ -315,14 +351,25 @@ const Register = () => {
               <FilterMenu
                 menuRef={levelMenuRef}
                 isOpen={showLevelMenu}
-                setIsOpen={setShowLevelMenu}
+                setIsOpen={toggleLevelMenu}
                 buttonLabel="Select Level"
                 selectedLabel={getLevelLabel(formData.level)}
                 selectedValue={formData.level}
                 icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5zm0 8l7.5-4.167V15L12 20l-7.5-5.167V6.833L12 11zm0 2.25L7.5 12v2.5L12 17l4.5-2.5V12L12 13.25z" /></svg>}
                 sections={[{ key: 'levels', title: 'Levels', items: sharedLevelOptions.filter(o => o.value).map(o => ({ value: o.value, label: o.label })) }]}
                 onSelect={(v) => {
-                  setFormData(prev => ({ ...prev, level: prev.level === v ? '' : v }));
+                  setFormData(prev => {
+                    const nextLevel = prev.level === v ? '' : v;
+                    const nextSections = buildRegisterCourseSections(nextLevel);
+                    const courseStillAvailable = nextSections.some((section) =>
+                      section.items.some((item) => item.value === prev.course)
+                    );
+                    return {
+                      ...prev,
+                      level: nextLevel,
+                      course: courseStillAvailable ? prev.course : ''
+                    };
+                  });
                   setShowLevelMenu(false);
                 }}
                 panelTitle="Select Level"
@@ -342,7 +389,7 @@ const Register = () => {
                 id="graduationYear"
                 value={formData.graduationYear}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
+                className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition"
                 placeholder="e.g., 2025"
                 min="1990"
                 max="2030"
@@ -356,14 +403,14 @@ const Register = () => {
               <FilterMenu
                 menuRef={courseMenuRef}
                 isOpen={showCourseMenu}
-                setIsOpen={setShowCourseMenu}
+                setIsOpen={toggleCourseMenu}
                 buttonLabel="Select Program"
                 selectedLabel={getCourseLabel(formData.course)}
                 selectedValue={formData.course}
                 icon={<svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3h12v2H4V3zM4 7h12v2H4V7zM4 11h12v2H4v-2z"/></svg>}
                 sections={registerCourseSections}
                 onSelect={(v) => { setFormData(prev => ({ ...prev, course: prev.course === v ? '' : v })); setShowCourseMenu(false); }}
-                panelTitle="All Program"
+                panelTitle={formData.level ? `${getLevelLabel(formData.level)} Programs` : 'All Programs'}
                 panelWidthClass="w-full"
                 alignClass="right-0"
               />
@@ -380,7 +427,7 @@ const Register = () => {
                 id="password"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition pr-10" 
+                className="w-full h-[50px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400 focus:bg-white transition pr-10" 
                 placeholder="Enter your password"
                 required
               />
@@ -481,22 +528,25 @@ const Register = () => {
 
             <div className="max-h-[62vh] overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700">
               <p>
-                As a graduate/alumnus of La Consolacion College Bacolod (LCCB), your privacy is important to us.
-                By creating an account in the LCCB Alumni Tracking System, you explicitly consent to the collection,
-                processing, and secure storage of your personal, academic, and employment information.
+                Creating an account means LCCB will collect and process your personal, academic, and employment information
+                as described in our{' '}
+                <a href="/privacy-notice" className="font-bold text-blue-700 underline underline-offset-2">
+                  full Privacy Notice
+                </a>
+                , per the Data Privacy Act of 2012 (RA 10173).
               </p>
 
               <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
-                <h3 className="text-sm font-bold text-slate-950">Our Commitment to You:</h3>
+                <h3 className="text-sm font-bold text-slate-950">Key points</h3>
                 <ul className="mt-3 space-y-3">
                   <li>
-                    <span className="font-bold text-slate-900">Secure Storage:</span> Your information will be securely stored inside our institutional database.
+                    <span className="font-bold text-slate-900">Secure & limited access</span> — encrypted storage, visible only to authorized staff.
                   </li>
                   <li>
-                    <span className="font-bold text-slate-900">Privacy First:</span> Your sensitive details, such as contact information and location, can be completely hidden from the directory using your personal profile privacy toggles.
+                    <span className="font-bold text-slate-900">Directory-safe by default</span> — directory listing shows only name, batch, and program; contact info, address, and other sensitive fields stay hidden unless the user opts to reveal them individually.
                   </li>
                   <li>
-                    <span className="font-bold text-slate-900">No Third-Party Sharing:</span> Your data will never be shared, sold, or distributed to outside organizations and is strictly used for school community tracking, events, employment opportunities, and donation tracking.
+                    <span className="font-bold text-slate-900">No selling your data</span> — used only for alumni tracking, events, jobs, and donations; never shared with outside organizations.
                   </li>
                 </ul>
               </div>
@@ -508,13 +558,23 @@ const Register = () => {
                   onChange={(event) => setIsConsentChecked(event.target.checked)}
                   className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
                 />
-                <span className="text-sm font-semibold leading-5 text-slate-900">
-                  I have read and agree to the Data Privacy Terms and Conditions.
+                <span className="text-sm leading-5 text-slate-700">
+                  <span className="font-semibold text-slate-900">
+                    I have read and agree to the Data Privacy Terms and Conditions.
+                  </span>
+                  <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                    Required
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">
+                    Needed to create your account and enable core alumni tracking (records, events, employment history).
+                  </span>
                 </span>
               </label>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end">
+            <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-5 text-slate-500">Declining required consent means an account cannot be created.</p>
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -541,6 +601,7 @@ const Register = () => {
                 )}
                 {isRegistering ? 'Processing...' : 'I Agree & Register'}
               </button>
+              </div>
             </div>
           </div>
         </div>

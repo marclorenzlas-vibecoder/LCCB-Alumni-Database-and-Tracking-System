@@ -254,12 +254,12 @@ export default function AlumniDetailScreen({ route, navigation }) {
   const isCoursePublic = (alumni.isCoursePublic ?? alumni.is_course_public ?? true) !== false;
   const isGraduationYearPublic = (alumni.isGraduationYearPublic ?? alumni.is_graduation_year_public ?? true) !== false;
   const isEducationHistoryPublic = (alumni.isEducationHistoryPublic ?? alumni.is_education_history_public ?? true) !== false;
-  const isEmailPublic = (alumni.isEmailPublic ?? alumni.is_email_public ?? true) !== false;
-  const isPhonePublic = (alumni.isPhonePublic ?? alumni.is_phone_public ?? true) !== false;
+  const isEmailPublic = (alumni.isEmailPublic ?? alumni.is_email_public ?? false) !== false;
+  const isPhonePublic = (alumni.isPhonePublic ?? alumni.is_phone_public ?? false) !== false;
   const isPositionPublic =
-    (alumni.isPositionPublic ?? alumni.is_position_public ?? true) !== false &&
-    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? true) !== false;
-  const isCompanyPublic = (alumni.isCompanyPublic ?? alumni.is_company_public ?? true) !== false;
+    (alumni.isPositionPublic ?? alumni.is_position_public ?? false) !== false &&
+    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? false) !== false;
+  const isCompanyPublic = (alumni.isCompanyPublic ?? alumni.is_company_public ?? false) !== false;
   const isLocationPublic = (alumni.isLocationPublic ?? alumni.is_location_public ?? true) !== false;
   const isSocialLinksPublic = (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? true) !== false;
   const isSkillsPublic = (alumni.isSkillsPublic ?? alumni.is_skills_public ?? true) !== false;

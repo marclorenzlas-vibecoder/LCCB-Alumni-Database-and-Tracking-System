@@ -36,7 +36,14 @@ export const donationService = {
   },
 
   async contributeToDonation(donationId, payload) {
-    const response = await apiClient.post(`/donations/${donationId}/contribute`, payload);
+    const isFormData = payload
+      && typeof payload.append === 'function'
+      && (typeof FormData === 'undefined' || payload instanceof FormData || Array.isArray(payload._parts));
+    const response = await apiClient.post(
+      `/donations/${donationId}/contribute`,
+      payload,
+      isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined
+    );
     return response.data;
   },
 
