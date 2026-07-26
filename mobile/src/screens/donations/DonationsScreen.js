@@ -7,12 +7,10 @@ import ScreenContainer from '../../components/ScreenContainer';
 import SectionHeader from '../../components/SectionHeader';
 import { API_ORIGIN } from '../../config/api';
 import { donationService } from '../../services/donationService';
-import { isTeacher } from '../../utils/auth';
 import { extractDonationMeta } from '../../utils/donationMeta';
 import { formatCurrency, formatDate, imageUrl } from '../../utils/formatters';
 
 export default function DonationsScreen({ navigation, user }) {
-  const teacher = isTeacher(user);
   const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,15 +117,9 @@ export default function DonationsScreen({ navigation, user }) {
         </Pressable>
 
         <View style={styles.donateActionWrap}>
-          {teacher ? (
-            <Pressable style={styles.donateBtn} onPress={() => navigation.navigate('AdminCampaignReceipts', { donationId: item.id })}>
-              <Text style={styles.donateBtnText}>View Receipts</Text>
-            </Pressable>
-          ) : (
-            <Pressable style={styles.donateBtn} onPress={() => navigation.navigate('DonationDetail', { donationId: item.id })}>
-              <Text style={styles.donateBtnText}>Donate</Text>
-            </Pressable>
-          )}
+          <Pressable style={styles.donateBtn} onPress={() => navigation.navigate('DonationDetail', { donationId: item.id })}>
+            <Text style={styles.donateBtnText}>Donate</Text>
+          </Pressable>
         </View>
 
         <View style={styles.actionsRow}>
@@ -143,10 +135,12 @@ export default function DonationsScreen({ navigation, user }) {
     <ScreenContainer
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <SectionHeader 
-        title="Support Our Causes" 
-        subtitle="Join us in making a difference through your generous contributions"
-      />
+      <View style={styles.headerRow}>
+        <SectionHeader
+          title="Support Our Causes"
+          subtitle="Join us in making a difference through your generous contributions"
+        />
+      </View>
 
       {loading ? (
         <LoadingState label="Loading donations" />

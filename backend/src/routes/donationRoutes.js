@@ -98,6 +98,8 @@ const buildDescriptionWithMeta = (cleanDescription = '', meta = {}) => {
     qrImagePath: typeof meta.qrImagePath === 'string' ? meta.qrImagePath.trim() : '',
     paymentCurrency: typeof meta.paymentCurrency === 'string' ? meta.paymentCurrency.trim() : '',
     paymentNumber: typeof meta.paymentNumber === 'string' ? meta.paymentNumber.trim() : '',
+    gcashNumber: typeof meta.gcashNumber === 'string' ? meta.gcashNumber.trim() : '',
+    paymayaNumber: typeof meta.paymayaNumber === 'string' ? meta.paymayaNumber.trim() : '',
     paymentMethods: typeof meta.paymentMethods === 'string' ? meta.paymentMethods.trim() : '',
     deliveryInstructions: typeof meta.deliveryInstructions === 'string' ? meta.deliveryInstructions.trim() : '',
     deliveryMethod: typeof meta.deliveryMethod === 'string' ? meta.deliveryMethod.trim() : '',
@@ -116,6 +118,8 @@ const buildDescriptionWithMeta = (cleanDescription = '', meta = {}) => {
     normalizedMeta.qrImagePath ||
     normalizedMeta.paymentCurrency ||
     normalizedMeta.paymentNumber ||
+    normalizedMeta.gcashNumber ||
+    normalizedMeta.paymayaNumber ||
     normalizedMeta.paymentMethods ||
     normalizedMeta.deliveryInstructions ||
     normalizedMeta.deliveryMethod ||

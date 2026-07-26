@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import AlumniLogo from "../assets/alumnilogo2.png";
 import { authService } from "../services/authService";
 import ConfirmModal from "./ConfirmModal";
+import AuthStatusOverlay from "./AuthStatusOverlay";
 import BirthdayGreetingComposer from "./BirthdayGreetingComposer";
 import BirthdayGreetingReceiptModal from "./BirthdayGreetingReceiptModal";
 import { API_BASE_URL, IMAGE_BASE_URL } from "../config/apiBaseUrl";
@@ -105,6 +106,9 @@ const formatNotificationPreview = (message = "") => String(message || "")
   .replace(/\s+/g, " ")
   .trim();
 
+const MIN_LOGOUT_DISPLAY_MS = 1200;
+const LOGOUT_SUCCESS_DISPLAY_MS = 1100;
+
 const BellNotificationIcon = ({ notification, isBirthday }) => {
   const TYPE_COLORS = {
     EVENT: 'from-purple-500 to-indigo-600',
@@ -147,6 +151,8 @@ const Navbar = () => {
   const [bellFilter, setBellFilter] = useState('all');
   const [bellMenuOpen, setBellMenuOpen] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutStatus, setLogoutStatus] = useState("processing");
   const [birthdayGreetingComposer, setBirthdayGreetingComposer] = useState({
     isOpen: false,
     birthdayAlumniId: null,
@@ -574,7 +580,19 @@ const Navbar = () => {
   }, [showUserMenu]);
 
   const handleLogout = async () => {
-    await authService.logout();
+    setLogoutStatus("processing");
+    setIsLoggingOut(true);
+    const startedAt = Date.now();
+
+    await authService.logout({ clearLocalSession: false });
+    const remainingTime = MIN_LOGOUT_DISPLAY_MS - (Date.now() - startedAt);
+    if (remainingTime > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingTime));
+    }
+
+    setLogoutStatus("success");
+    await new Promise((resolve) => setTimeout(resolve, LOGOUT_SUCCESS_DISPLAY_MS));
+    authService.clearLocalSession();
     navigate("/login", { replace: true });
   };
 
@@ -830,6 +848,16 @@ const Navbar = () => {
         cancelText="Cancel"
         type="danger"
       />
+
+      {isLoggingOut && (
+        <AuthStatusOverlay
+          status={logoutStatus}
+          processingTitle="Signing out..."
+          processingMessage="Please wait while we secure your session."
+          successTitle="Logout successful!"
+          successMessage="Redirecting to login..."
+        />
+      )}
 
       <BirthdayGreetingComposer
         isOpen={birthdayGreetingComposer.isOpen}

@@ -12,6 +12,10 @@ import paymayaLogo from '../assets/paymaya.png';
 import gcashLogo from '../assets/gcash1.png';
 
 const MAX_ITEM_IMAGES = 6;
+const walletHandoffUrls = {
+  gcash: 'https://www.gcash.com/',
+  paymaya: 'https://www.maya.ph/'
+};
 
 const countryOptions = [
   'Philippines',
@@ -314,6 +318,7 @@ const DonatePage = () => {
   const [stepLoading, setStepLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [successState, setSuccessState] = useState(null);
+  const [receiptSubmitted, setReceiptSubmitted] = useState(false);
   const addressInputRef = useRef(null);
   const currencyMenuRef = useRef(null);
   const countryMenuRef = useRef(null);
@@ -370,6 +375,8 @@ const DonatePage = () => {
   const canDonate = currentRole === 'alumni' || currentRole === 'admin' || currentRole === 'teacher';
 
   const isMoneyPath = formData.donationType === 'money';
+  const receiptRequiredMessage = 'Please submit your receipt first. Your receipt is your proof of donation.';
+  const hasPendingReceipt = Boolean(successState) && !receiptSubmitted;
   const donationSteps = isMoneyPath ? [
     { number: '1', title: 'Amount', description: 'Enter donation amount' },
     { number: '2', title: 'Verify', description: 'Review donor details' },
@@ -592,19 +599,21 @@ const DonatePage = () => {
   const donationInfo = campaign ? extractDonationMeta(campaign.description || '') : { cleanDescription: '', meta: {} };
   const campaignDescription = donationInfo.cleanDescription || '';
   const campaignMeta = donationInfo.meta || {};
-  const paymentNumber = campaignMeta.paymentNumber || '0912-345-6789';
+  const paymentNumber = campaignMeta.paymentNumber || '';
+  const gcashNumber = campaignMeta.gcashNumber || paymentNumber;
+  const paymayaNumber = campaignMeta.paymayaNumber || paymentNumber;
   const paymentMethods = campaignMeta.paymentMethods || 'GCash / PayMaya / Debit Card';
+  const selectedWalletNumber = formData.paymentMethod === 'paymaya'
+    ? paymayaNumber
+    : formData.paymentMethod === 'gcash'
+      ? gcashNumber
+      : paymentNumber;
+  const isWalletPaymentMethod = formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya';
 
   const paymentProviders = {
     card: { label: 'Debit / credit card' },
-    paymaya: {
-      label: 'PayMaya',
-      url: campaignMeta.paymayaUrl || 'https://www.paymaya.com/'
-    },
-    gcash: {
-      label: 'GCash',
-      url: campaignMeta.gcashUrl || 'https://www.gcash.com/'
-    }
+    paymaya: { label: 'PayMaya' },
+    gcash: { label: 'GCash' }
   };
 
   const paymentMethodOptions = [
@@ -728,6 +737,44 @@ const DonatePage = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!hasPendingReceipt) return undefined;
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = receiptRequiredMessage;
+      return receiptRequiredMessage;
+    };
+
+    const handlePopState = () => {
+      window.history.pushState({ pendingDonationReceipt: true }, '', window.location.href);
+      toast.warning(receiptRequiredMessage);
+    };
+
+    const handleDocumentClick = (event) => {
+      const anchor = event.target.closest?.('a[href]');
+      if (!anchor) return;
+
+      const targetUrl = new URL(anchor.href, window.location.href);
+      if (targetUrl.origin !== window.location.origin) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      toast.warning(receiptRequiredMessage);
+    };
+
+    window.history.pushState({ pendingDonationReceipt: true }, '', window.location.href);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('click', handleDocumentClick, true);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('click', handleDocumentClick, true);
+    };
+  }, [hasPendingReceipt, receiptRequiredMessage]);
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     let nextValue = type === 'checkbox' ? checked : value;
@@ -746,13 +793,6 @@ const DonatePage = () => {
   const handlePaymentDetailChange = (e) => {
     const { name, value } = e.target;
     setPaymentDetails((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handlePaymentRedirect = (method) => {
-    const provider = paymentProviders[method];
-    if (!provider?.url) return;
-    window.open(provider.url, '_blank', 'noopener,noreferrer');
-    toast.info(`Redirecting to ${provider.label}...`);
   };
 
   const validateStepOne = () => {
@@ -784,6 +824,16 @@ const DonatePage = () => {
       }
     }
 
+    if (formData.paymentMethod === 'gcash' && !gcashNumber.trim()) {
+      toast.warning('This campaign does not have a GCash number yet.');
+      return false;
+    }
+
+    if (formData.paymentMethod === 'paymaya' && !paymayaNumber.trim()) {
+      toast.warning('This campaign does not have a PayMaya number yet.');
+      return false;
+    }
+
     return true;
   };
 
@@ -804,6 +854,16 @@ const DonatePage = () => {
     }
 
     return true;
+  };
+
+  const openWalletHandoff = () => {
+    if (!isMoneyPath || !isWalletPaymentMethod) return;
+
+    const walletUrl = walletHandoffUrls[formData.paymentMethod];
+
+    if (walletUrl) {
+      window.open(walletUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const goBack = () => setCurrentStep((step) => Math.max(1, step - 1));
@@ -869,6 +929,8 @@ const DonatePage = () => {
     if (isMoneyPath && !validateMoneyPaymentDetails()) return;
     if (!isMoneyPath && !validateItemDeliveryDetails()) return;
 
+    openWalletHandoff();
+
     // Generate local receipt preview first
     const receipt = buildDonationReceipt();
 
@@ -876,6 +938,7 @@ const DonatePage = () => {
       campaign: campaign,
       receipt
     });
+    setReceiptSubmitted(false);
     setCurrentStep(4);
 
     // Advance to Step 4 (receipt preview)
@@ -888,9 +951,6 @@ const DonatePage = () => {
       }).catch(() => {});
     }
 
-    if (formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya') {
-      handlePaymentRedirect(formData.paymentMethod);
-    }
   };
 
   const handleReceiptSubmission = async () => {
@@ -908,7 +968,11 @@ const DonatePage = () => {
                 `Expiry: ${paymentDetails.expiryMonth}/${paymentDetails.expiryYear}`,
                 `Currency: ${formData.currency}`
               ].join('\n')
-            : `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}\nCurrency: ${formData.currency}`)
+            : [
+                `Payment method: ${paymentProviders[formData.paymentMethod]?.label || 'GCash'}`,
+                `Payment number: ${selectedWalletNumber}`,
+                `Currency: ${formData.currency}`
+              ].join('\n'))
         : [
             `Delivery method: ${deliveryMethod === 'pickup' ? 'Pickup' : 'Drop-off'}`,
             deliveryMethod === 'pickup' ? `Pickup address: ${deliveryAddress}` : null,
@@ -918,7 +982,7 @@ const DonatePage = () => {
       const donationMeta = {
         donationMode: formData.donationType === 'items' ? 'item' : 'money',
         paymentCurrency: isMoneyPath ? formData.currency : null,
-        paymentNumber: isMoneyPath ? paymentNumber : null,
+        paymentNumber: isMoneyPath ? selectedWalletNumber : null,
         paymentMethods: isMoneyPath ? paymentMethods : null,
         deliveryMethod: !isMoneyPath ? deliveryMethod : null,
         deliveryAddress: !isMoneyPath && deliveryMethod === 'pickup' ? deliveryAddress : null,
@@ -963,14 +1027,14 @@ const DonatePage = () => {
         ...campaign,
         amount: campaign.amount + (payload.amount || 0)
       });
+      setReceiptSubmitted(true);
 
       toast.success('Receipt submitted! Your donation has been recorded and is visible to the admin.', {
-        position: 'bottom-center',
         autoClose: 3500
       });
       
       setTimeout(() => {
-        navigate('/donations');
+        navigate('/donations', { replace: true });
       }, 1500);
     } catch (err) {
       console.error('Error submitting donation receipt:', err);
@@ -1011,9 +1075,6 @@ const DonatePage = () => {
   }
 
   const donorNameForReview = [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim() || user?.username || '';
-  const contactPreferenceForReview = formData.allowContact
-    ? [formData.contactByEmail ? 'Email' : null, formData.contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
-    : 'Do not contact';
   const verifiedChecks = [
     { label: 'Account signed in', value: user?.username || user?.email || 'Unknown account', ok: isLoggedIn },
     { label: 'Donation permission', value: canDonate ? `${currentRole || 'User'} account can donate` : 'Role cannot donate', ok: canDonate },
@@ -1267,8 +1328,12 @@ const DonatePage = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      if (!receiptSubmitted) {
+                        toast.warning(receiptRequiredMessage);
+                        return;
+                      }
                       setSuccessState(null);
-                      navigate('/donations');
+                      navigate('/donations', { replace: true });
                     }}
                     className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 transition-colors"
                   >
@@ -1611,22 +1676,6 @@ const DonatePage = () => {
                           </div>
                         )}
                       </div>
-
-                      {isMoneyPath && (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-                            <div className="font-bold text-slate-900">Donor contact</div>
-                            <div className="mt-2">{formData.email}</div>
-                            <div>{formData.phone || 'No phone number provided'}</div>
-                            <div className="mt-2 text-slate-500">{contactPreferenceForReview}</div>
-                          </div>
-                          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-                            <div className="font-bold text-slate-900">Campaign payment details</div>
-                            <div className="mt-2">Number: {paymentNumber}</div>
-                            <div>Methods: {paymentMethods}</div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1753,14 +1802,26 @@ const DonatePage = () => {
                     {formData.paymentMethod === 'paymaya' && (
                       <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
                         {paymentMethodOptions.find((method) => method.key === 'paymaya')?.logo}
-                        <p className="text-sm text-slate-600">You will be redirected to the PayMaya form. Please fill out all the required form fields.</p>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Send your donation to this PayMaya number:</p>
+                          <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 font-mono text-lg font-bold text-blue-900">
+                            {paymayaNumber || 'Not set'}
+                          </p>
+                          <p className="mt-3 text-sm text-slate-600">Click Pay to open PayMaya, send to this number, then return here to submit your payment receipt as proof.</p>
+                        </div>
                       </div>
                     )}
 
                     {formData.paymentMethod === 'gcash' && (
                       <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
                         {paymentMethodOptions.find((method) => method.key === 'gcash')?.logo}
-                        <p className="text-sm text-slate-600">You will be redirected to the GCash form. Please fill out all the required form fields.</p>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Send your donation to this GCash number:</p>
+                          <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 font-mono text-lg font-bold text-blue-900">
+                            {gcashNumber || 'Not set'}
+                          </p>
+                          <p className="mt-3 text-sm text-slate-600">Click Pay to open GCash, send to this number, then return here to submit your payment receipt as proof.</p>
+                        </div>
                       </div>
                     )}
                   </div>

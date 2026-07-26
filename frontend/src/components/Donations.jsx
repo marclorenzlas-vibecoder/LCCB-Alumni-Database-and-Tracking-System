@@ -13,7 +13,7 @@ const initialDonationForm = {
   purpose: '',
   description: '',
   category: '',
-  amount: '',
+  amount: '0',
   goal: '',
   date: '',
   image: null,
@@ -21,10 +21,9 @@ const initialDonationForm = {
   qrCodeUrl: '',
   qrImagePath: '',
   paymentNumber: '',
-  paymentMethods: '',
-  acceptedItems: '',
-  itemInstructions: '',
-  deliveryInstructions: ''
+  gcashNumber: '',
+  paymayaNumber: '',
+  paymentMethods: ''
 };
 
 function DonationCard({ donation, isTeacher, onEdit, onDelete, onDonate, onShare, formatAmount, calculateProgress }) {
@@ -246,13 +245,12 @@ const Donations = () => {
     try {
       const descriptionWithMeta = withDonationMeta(formData.description, {
         donationMode: 'both',
-        acceptedItems: formData.acceptedItems,
-        itemInstructions: formData.itemInstructions,
         qrCodeUrl: formData.qrCodeUrl,
         qrImagePath: formData.qrImagePath,
-        paymentNumber: formData.paymentNumber,
-        paymentMethods: formData.paymentMethods,
-        deliveryInstructions: formData.deliveryInstructions
+        paymentNumber: '',
+        gcashNumber: formData.gcashNumber,
+        paymayaNumber: formData.paymayaNumber,
+        paymentMethods: formData.paymentMethods
       });
 
       let payload = formData;
@@ -274,7 +272,7 @@ const Donations = () => {
         const { image, qrImage, ...rest } = formData;
         payload = {
           ...rest,
-          amount: formData.amount,
+          amount: formData.amount || '0',
           donation_type: 'both',
           description: descriptionWithMeta
         };
@@ -317,11 +315,10 @@ const Donations = () => {
       qrImage: null,
       qrCodeUrl: meta.qrCodeUrl || '',
       qrImagePath: meta.qrImagePath || '',
-      paymentNumber: meta.paymentNumber || '',
-      paymentMethods: meta.paymentMethods || '',
-      acceptedItems: meta.acceptedItems || '',
-      itemInstructions: meta.itemInstructions || '',
-      deliveryInstructions: meta.deliveryInstructions || ''
+      paymentNumber: '',
+      gcashNumber: meta.gcashNumber || meta.paymentNumber || '',
+      paymayaNumber: meta.paymayaNumber || meta.paymentNumber || '',
+      paymentMethods: meta.paymentMethods || ''
     });
     setShowModal(true);
   };
@@ -364,12 +361,15 @@ const Donations = () => {
     return Math.min((raised / goal) * 100, 100);
   };
 
-  const buildGeneratedQrDataUrl = async (donation, paymentNumber, paymentMethods) => {
+  const buildGeneratedQrDataUrl = async (donation, paymentDetails) => {
+    const gcashNumber = paymentDetails.gcashNumber || paymentDetails.paymentNumber || 'N/A';
+    const paymayaNumber = paymentDetails.paymayaNumber || paymentDetails.paymentNumber || 'N/A';
     const payload = [
       'LCCB Alumni Donation',
       `Campaign: ${donation.purpose || 'General Campaign'}`,
-      `Payment Number: ${paymentNumber || 'N/A'}`,
-      `Payment Methods: ${paymentMethods || 'GCash / PayMaya / Bank Transfer'}`,
+      `GCash Number: ${gcashNumber}`,
+      `PayMaya Number: ${paymayaNumber}`,
+      `Payment Methods: ${paymentDetails.paymentMethods || 'GCash / PayMaya / Bank Transfer'}`,
       `Donate Link: ${window.location.origin}/donate/${donation.id}`
     ].join('\n');
 
@@ -385,11 +385,17 @@ const Donations = () => {
 
   const resolveQrPreviewData = async (donation, meta) => {
     const normalizedPaymentMethods = meta.paymentMethods || 'GCash / PayMaya / Bank Transfer';
+    const paymentDetails = {
+      paymentNumber: meta.paymentNumber || '',
+      gcashNumber: meta.gcashNumber || '',
+      paymayaNumber: meta.paymayaNumber || '',
+      paymentMethods: normalizedPaymentMethods
+    };
 
     if (meta.qrImagePath) {
       return {
         qrData: meta.qrImagePath.startsWith('/') ? `${IMAGE_BASE_URL}${meta.qrImagePath}` : meta.qrImagePath,
-        paymentMethods: normalizedPaymentMethods
+        ...paymentDetails
       };
     }
 
@@ -400,7 +406,7 @@ const Donations = () => {
       if (looksLikeImage) {
         return {
           qrData: rawQrValue,
-          paymentMethods: normalizedPaymentMethods
+          ...paymentDetails
         };
       }
 
@@ -413,13 +419,13 @@ const Donations = () => {
             light: '#FFFFFF'
           }
         }),
-        paymentMethods: normalizedPaymentMethods
+        ...paymentDetails
       };
     }
 
     return {
-      qrData: await buildGeneratedQrDataUrl(donation, meta.paymentNumber || '0912-345-6789', normalizedPaymentMethods),
-      paymentMethods: normalizedPaymentMethods
+      qrData: await buildGeneratedQrDataUrl(donation, paymentDetails),
+      ...paymentDetails
     };
   };
 
@@ -579,22 +585,6 @@ const Donations = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Current Amount Raised (PHP) *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="amount"
-                        value={formData.amount}
-                        onChange={handleInputChange}
-                        required
-                        className="app-input"
-                        placeholder="750000.00"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Goal Amount (PHP)
                       </label>
                       <input
@@ -637,62 +627,38 @@ const Donations = () => {
                       )}
                     </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Accepted Item Classifications
-                      </label>
-                      <textarea
-                        name="acceptedItems"
-                        value={formData.acceptedItems}
-                        onChange={handleInputChange}
-                        rows="3"
-                        className="app-textarea"
-                        placeholder="Educational Supplies / Books&#10;IT Hardware / Electronic Equipment&#10;Classroom Furniture / General Supplies"
-                      />
-                    </div>
+                    <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <h4 className="text-sm font-semibold text-slate-900">Wallet Payment Numbers</h4>
+                      <p className="mt-1 text-xs text-slate-500">Use the official LCCB GCash and PayMaya numbers that donors should send money to.</p>
+                      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            GCash Number
+                          </label>
+                          <input
+                            type="text"
+                            name="gcashNumber"
+                            value={formData.gcashNumber}
+                            onChange={handleInputChange}
+                            className="app-input"
+                            placeholder="e.g., 0912-345-6789"
+                          />
+                        </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Item Donation Instructions
-                      </label>
-                      <textarea
-                        name="itemInstructions"
-                        value={formData.itemInstructions}
-                        onChange={handleInputChange}
-                        rows="3"
-                        className="app-textarea"
-                        placeholder="Describe required item condition, documentation, or preparation notes..."
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Delivery Instructions
-                      </label>
-                      <textarea
-                        name="deliveryInstructions"
-                        value={formData.deliveryInstructions}
-                        onChange={handleInputChange}
-                        rows="3"
-                        className="app-textarea"
-                        placeholder="Drop-off location, pickup availability, receiving hours, or contact instructions..."
-                      />
-                    </div>
-
-
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Payment Number / Account (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        name="paymentNumber"
-                        value={formData.paymentNumber}
-                        onChange={handleInputChange}
-                        className="app-input"
-                        placeholder="e.g., 0912-345-6789"
-                      />
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            PayMaya Number
+                          </label>
+                          <input
+                            type="text"
+                            name="paymayaNumber"
+                            value={formData.paymayaNumber}
+                            onChange={handleInputChange}
+                            className="app-input"
+                            placeholder="e.g., 0912-345-6789"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="sm:col-span-2">
@@ -773,8 +739,16 @@ const Donations = () => {
 
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-gray-600">Payment Number</span>
-                  <span className="font-semibold text-gray-900">{selectedQrDonation._meta.paymentNumber}</span>
+                  <span className="text-gray-600">GCash Number</span>
+                  <span className="font-semibold text-gray-900">
+                    {selectedQrDonation._meta.gcashNumber || selectedQrDonation._meta.paymentNumber || 'Not set'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-gray-600">PayMaya Number</span>
+                  <span className="font-semibold text-gray-900">
+                    {selectedQrDonation._meta.paymayaNumber || selectedQrDonation._meta.paymentNumber || 'Not set'}
+                  </span>
                 </div>
                 <p className="text-gray-600">{selectedQrDonation._meta.paymentMethods}</p>
               </div>

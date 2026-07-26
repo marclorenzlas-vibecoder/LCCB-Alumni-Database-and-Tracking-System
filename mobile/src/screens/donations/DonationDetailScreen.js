@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,9 +7,10 @@ import ScreenContainer from '../../components/ScreenContainer';
 import LoadingState from '../../components/LoadingState';
 import BackButton from '../../components/BackButton';
 import { donationService } from '../../services/donationService';
-import { isAlumni, isTeacher } from '../../utils/auth';
+import { isAlumni } from '../../utils/auth';
 import { safeGoBack } from '../../utils/safeGoBack';
 import { extractDonationMeta, withDonationMeta } from '../../utils/donationMeta';
+import { setPendingDonationReceipt, showPendingReceiptAlert } from '../../utils/donationReceiptGuard';
 
 const MAX_ITEM_IMAGES = 6;
 
@@ -208,6 +209,21 @@ const PAYMENT_METHODS = [
   { key: 'paymaya', label: 'PayMaya', icon: 'phone-portrait-outline' }
 ];
 
+const WALLET_HANDOFF_TARGETS = {
+  gcash: {
+    label: 'GCash',
+    appUrls: ['gcash://'],
+    androidPackage: 'com.globe.gcash.android',
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.globe.gcash.android'
+  },
+  paymaya: {
+    label: 'PayMaya',
+    appUrls: ['paymaya://', 'maya://'],
+    androidPackage: 'com.paymaya',
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.paymaya'
+  }
+};
+
 const ITEM_CATEGORIES = [
   'Educational Supplies / Books',
   'School Uniforms / Clothing',
@@ -221,10 +237,8 @@ const ITEM_CONDITIONS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
 
 export default function DonationDetailScreen({ route, navigation, user }) {
   const { donationId } = route.params || {};
-  const teacher = isTeacher(user);
   const alumniUser = isAlumni(user);
-  const role = String(user?.role || '').toUpperCase();
-  const canDonate = alumniUser || teacher || role === 'ADMIN';
+  const canDonate = alumniUser;
 
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -233,6 +247,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [successState, setSuccessState] = useState(null);
+  const [receiptSubmitted, setReceiptSubmitted] = useState(false);
 
   const [currency, setCurrency] = useState('PHP');
   const [amount, setAmount] = useState('');
@@ -289,6 +304,63 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           { number: '4', title: 'Complete' }
         ]
   ), [isMoneyPath]);
+  const stepProgress = useRef(new Animated.Value(0)).current;
+  const stepContentOpacity = useRef(new Animated.Value(1)).current;
+  const stepContentTranslate = useRef(new Animated.Value(0)).current;
+  const stepFillWidth = stepProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%']
+  });
+
+  const animateStepContentIn = useCallback((direction = 1) => {
+    stepContentOpacity.setValue(0);
+    stepContentTranslate.setValue(14 * direction);
+    Animated.parallel([
+      Animated.timing(stepContentOpacity, {
+        toValue: 1,
+        duration: 240,
+        useNativeDriver: true
+      }),
+      Animated.timing(stepContentTranslate, {
+        toValue: 0,
+        duration: 240,
+        useNativeDriver: true
+      })
+    ]).start();
+  }, [stepContentOpacity, stepContentTranslate]);
+
+  const transitionToStep = useCallback((nextStep, direction = 1) => {
+    Animated.parallel([
+      Animated.timing(stepContentOpacity, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true
+      }),
+      Animated.timing(stepContentTranslate, {
+        toValue: -10 * direction,
+        duration: 120,
+        useNativeDriver: true
+      })
+    ]).start(() => {
+      setCurrentStep(nextStep);
+      animateStepContentIn(direction);
+    });
+  }, [animateStepContentIn, stepContentOpacity, stepContentTranslate]);
+
+  useEffect(() => {
+    const targetProgress = (Math.min(currentStep, steps.length) - 1) / Math.max(steps.length - 1, 1);
+    Animated.timing(stepProgress, {
+      toValue: targetProgress,
+      duration: 340,
+      useNativeDriver: false
+    }).start();
+  }, [currentStep, stepProgress, steps.length]);
+
+  useEffect(() => {
+    if (successState) {
+      animateStepContentIn(1);
+    }
+  }, [animateStepContentIn, successState]);
 
   const loadCampaign = useCallback(async () => {
     if (!donationId) { setError('Donation not found'); return; }
@@ -328,12 +400,38 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 
   const donationInfo = campaign ? extractDonationMeta(campaign.description || '') : { cleanDescription: '', meta: {} };
   const campaignMeta = donationInfo.meta || {};
-  const paymentNumber = campaignMeta.paymentNumber || '0912-345-6789';
+  const paymentNumber = campaignMeta.paymentNumber || '';
+  const gcashNumber = campaignMeta.gcashNumber || paymentNumber;
+  const paymayaNumber = campaignMeta.paymayaNumber || paymentNumber;
   const paymentMethods = campaignMeta.paymentMethods || 'GCash / PayMaya / Debit Card';
-  const paymentRedirects = {
-    gcash: campaignMeta.gcashUrl || 'https://www.gcash.com/',
-    paymaya: campaignMeta.paymayaUrl || 'https://www.paymaya.com/'
-  };
+  const selectedWalletNumber = paymentMethod === 'paymaya'
+    ? paymayaNumber
+    : paymentMethod === 'gcash'
+      ? gcashNumber
+      : paymentNumber;
+  const isWalletPaymentMethod = paymentMethod === 'gcash' || paymentMethod === 'paymaya';
+  const hasPendingReceipt = Boolean(successState) && !receiptSubmitted;
+  const showReceiptRequiredAlert = useCallback(() => {
+    showPendingReceiptAlert();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      if (!hasPendingReceipt) return;
+
+      event.preventDefault();
+      showReceiptRequiredAlert();
+    });
+
+    return unsubscribe;
+  }, [hasPendingReceipt, navigation, showReceiptRequiredAlert]);
+
+  useEffect(() => {
+    setPendingDonationReceipt(hasPendingReceipt);
+    return () => {
+      setPendingDonationReceipt(false);
+    };
+  }, [hasPendingReceipt]);
 
   const getSymbol = (cur) => CURRENCY_SYMBOLS[cur] || cur;
   const formatAmount = (val, cur) => {
@@ -345,10 +443,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     () => [firstName, lastName].filter(Boolean).join(' ').trim() || user?.username || '',
     [firstName, lastName, user]
   );
-  const contactPreferenceForReview = allowContact
-    ? [contactByEmail ? 'Email' : null, contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
-    : 'Do not contact';
-  const displayRole = String(user?.role || role || 'User').toLowerCase();
+  const displayRole = String(user?.role || 'alumni').toLowerCase();
   const verifiedChecks = useMemo(() => ([
     { label: 'Account signed in', value: user?.username || user?.email || 'Unknown account', ok: Boolean(user) },
     { label: 'Donation permission', value: canDonate ? `${displayRole} account can donate` : 'Role cannot donate', ok: canDonate },
@@ -396,7 +491,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     }
     if (step === 2) {
       if (!user || !canDonate) {
-        Alert.alert('Donation unavailable', 'Please log in with an alumni or admin account to donate.');
+        Alert.alert('Donation unavailable', 'Please log in with an alumni account to donate.');
         return false;
       }
       return true;
@@ -419,6 +514,14 @@ export default function DonationDetailScreen({ route, navigation, user }) {
           return false;
         }
       }
+      if (paymentMethod === 'gcash' && !gcashNumber.trim()) {
+        Alert.alert('GCash Number Required', 'This campaign does not have a GCash number yet.');
+        return false;
+      }
+      if (paymentMethod === 'paymaya' && !paymayaNumber.trim()) {
+        Alert.alert('PayMaya Number Required', 'This campaign does not have a PayMaya number yet.');
+        return false;
+      }
       return true;
     }
     return true;
@@ -426,15 +529,19 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 
   const goNext = () => {
     if (!validateStep(currentStep)) return;
-    setCurrentStep(s => Math.min(3, s + 1));
+    transitionToStep(Math.min(3, currentStep + 1), 1);
   };
   const goBack = () => {
     if (successState) {
+      if (!receiptSubmitted) {
+        showReceiptRequiredAlert();
+        return;
+      }
       setSuccessState(null);
       setCurrentStep(3);
       return;
     }
-    if (currentStep > 1) setCurrentStep(s => s - 1);
+    if (currentStep > 1) transitionToStep(currentStep - 1, -1);
     else safeGoBack(navigation);
   };
 
@@ -449,12 +556,48 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     amountLabel: donationType === 'item' ? 'Item' : formatAmount(amount, currency)
   });
 
+  const openWalletHandoff = async () => {
+    if (!isMoneyPath || !isWalletPaymentMethod) return;
+
+    const target = WALLET_HANDOFF_TARGETS[paymentMethod];
+    if (!target) return;
+
+    for (const appUrl of target.appUrls) {
+      try {
+        await Linking.openURL(appUrl);
+        return;
+      } catch (_) {
+        // Try the next supported handoff target.
+      }
+    }
+
+    const androidStoreUrl = `market://details?id=${target.androidPackage}`;
+    const fallbackStoreUrl = target.playStoreUrl;
+
+    try {
+      await Linking.openURL(Platform.OS === 'android' ? androidStoreUrl : fallbackStoreUrl);
+    } catch (_) {
+      try {
+        await Linking.openURL(fallbackStoreUrl);
+        return;
+      } catch (_) {
+        // Show the number if neither app nor store can be opened.
+      }
+      Alert.alert(
+        `${target.label} is not installed`,
+        `Please install ${target.label}, then send your donation to:\n${selectedWalletNumber}`
+      );
+    }
+  };
+
   const handleSubmit = async () => {
     if (!campaign) return;
     if (!validateStep(currentStep)) return;
 
     const receipt = buildReceipt();
+    await openWalletHandoff();
     setSuccessState(receipt);
+    setReceiptSubmitted(false);
     setCurrentStep(4);
 
     if (donationType === 'money' && amount && parseFloat(amount) > 0) {
@@ -467,9 +610,6 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       });
     }
 
-    if (donationType === 'money' && (paymentMethod === 'gcash' || paymentMethod === 'paymaya')) {
-      Linking.openURL(paymentRedirects[paymentMethod]).catch(() => {});
-    }
   };
 
   const handleReceiptSubmission = async () => {
@@ -486,7 +626,11 @@ export default function DonationDetailScreen({ route, navigation, user }) {
             `Expiry: ${expiryMonth}/${expiryYear}`,
             `Currency: ${currency}`
           ].join('\n')
-        : `Payment method: ${paymentLabel}\nCurrency: ${currency}`;
+        : [
+            `Payment method: ${paymentLabel}`,
+            `Payment number: ${selectedWalletNumber}`,
+            `Currency: ${currency}`
+          ].join('\n');
 
       const contactPreference = allowContact
         ? [contactByEmail ? 'Email' : null, contactByPhone ? 'Phone' : null].filter(Boolean).join(', ') || 'Open to contact'
@@ -494,7 +638,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
       const donationMeta = {
         donationMode: donationType === 'item' ? 'item' : 'money',
         paymentCurrency: donationType === 'money' ? currency : null,
-        paymentNumber: donationType === 'money' ? paymentNumber : null,
+        paymentNumber: donationType === 'money' ? selectedWalletNumber : null,
         paymentMethods: donationType === 'money' ? paymentMethods : null,
         deliveryMethod: donationType === 'item' ? deliveryMethod : null,
         deliveryAddress: donationType === 'item' && deliveryMethod === 'pickup' ? deliveryAddress : null,
@@ -551,6 +695,7 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 
       const result = await donationService.contributeToDonation(campaign.id, payload);
       setCampaign(result || { ...campaign, amount: (campaign.amount || 0) + parseFloat(amount) });
+      setReceiptSubmitted(true);
       Alert.alert('Receipt submitted', 'Your donation has been recorded and is visible to the admin.', [
         { text: 'OK', onPress: () => navigation.navigate('DonationsList') }
       ]);
@@ -578,75 +723,77 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     return (
       <ScreenContainer>
         <ScrollView contentContainerStyle={styles.successWrap}>
-          <View style={styles.successIconBox}>
-            <View style={styles.receiptIconCircle}>
-              <Ionicons name="checkmark" size={32} color="#fff" />
-            </View>
-          </View>
-          <Text style={styles.successTitle}>Review Receipt</Text>
-          <Text style={styles.successSub}>Submit this receipt to record your donation for admin review.</Text>
-
-          <View style={styles.receiptCard}>
-            <View style={styles.receiptHeaderRow}>
-              <Ionicons name="school-outline" size={16} color="#1d4ed8" />
-              <View>
-                <Text style={styles.receiptHeader}>LCCB ALUMNI</Text>
-                <Text style={styles.receiptSubheader}>Donation Receipt</Text>
+          <Animated.View style={[styles.successAnimatedWrap, { opacity: stepContentOpacity, transform: [{ translateY: stepContentTranslate }] }]}>
+            <View style={styles.successIconBox}>
+              <View style={styles.receiptIconCircle}>
+                <Ionicons name="checkmark" size={32} color="#fff" />
               </View>
             </View>
-            <View style={styles.receiptDivider} />
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Receipt No</Text>
-              <Text style={styles.receiptValue}>{successState.receiptNumber}</Text>
-            </View>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Date</Text>
-              <Text style={styles.receiptValue}>{successState.issuedAt}</Text>
-            </View>
-            <View style={styles.receiptDivider} />
-            <View style={styles.receiptCenter}>
-              <Text style={styles.receiptCenterLabel}>Campaign</Text>
-              <Text style={styles.receiptCenterValue}>{successState.campaignName}</Text>
-            </View>
-            <View style={styles.receiptDivider} />
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Donor</Text>
-              <Text style={styles.receiptValue}>{successState.donorName}</Text>
-            </View>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Type</Text>
-              <Text style={styles.receiptValue}>{successState.donationTypeLabel || 'Money'}</Text>
-            </View>
-            <View style={styles.receiptDivider} />
-            <View style={styles.receiptTotalRow}>
-              <Text style={styles.receiptTotalLabel}>Total Amount</Text>
-              <Text style={styles.receiptTotalAmount}>{successState.amountLabel}</Text>
-            </View>
-            <View style={styles.receiptDivider} />
-            <View style={styles.receiptPaidBadge}>
-              <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
-              <Text style={styles.receiptPaidText}>{donationType === 'item' ? 'READY' : 'PAID'}</Text>
-            </View>
-            <View style={styles.receiptFooterWrap}>
-              <Text style={styles.receiptFooter}>Thank you for your generous donation!</Text>
-              <Text style={styles.receiptFooterSub}>This receipt serves as your proof of donation.</Text>
-            </View>
-            <View style={styles.receiptBarcode}>
-              {Array.from({ length: 30 }).map((_, i) => (
-                <View key={i} style={{ width: i % 3 === 0 ? 2 : 1, height: i % 5 === 0 ? 18 : i % 3 === 0 ? 14 : 10, backgroundColor: '#0f172a', opacity: 0.4 }} />
-              ))}
-            </View>
-            <Text style={styles.receiptBarcodeText}>{successState.receiptNumber}</Text>
-          </View>
+            <Text style={styles.successTitle}>Review Receipt</Text>
+            <Text style={styles.successSub}>Submit this receipt to record your donation for admin review.</Text>
 
-          <View style={styles.successActions}>
-            <Pressable style={styles.successBtnOutline} onPress={goBack} disabled={submitting}>
-              <Text style={styles.successBtnOutlineText}>Back</Text>
-            </Pressable>
-            <Pressable style={[styles.successBtnSolid, submitting && styles.btnDisabled]} onPress={handleReceiptSubmission} disabled={submitting}>
-              <Text style={styles.successBtnSolidText}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
-            </Pressable>
-          </View>
+            <View style={styles.receiptCard}>
+              <View style={styles.receiptHeaderRow}>
+                <Ionicons name="school-outline" size={16} color="#1d4ed8" />
+                <View>
+                  <Text style={styles.receiptHeader}>LCCB ALUMNI</Text>
+                  <Text style={styles.receiptSubheader}>Donation Receipt</Text>
+                </View>
+              </View>
+              <View style={styles.receiptDivider} />
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Receipt No</Text>
+                <Text style={styles.receiptValue}>{successState.receiptNumber}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Date</Text>
+                <Text style={styles.receiptValue}>{successState.issuedAt}</Text>
+              </View>
+              <View style={styles.receiptDivider} />
+              <View style={styles.receiptCenter}>
+                <Text style={styles.receiptCenterLabel}>Campaign</Text>
+                <Text style={styles.receiptCenterValue}>{successState.campaignName}</Text>
+              </View>
+              <View style={styles.receiptDivider} />
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Donor</Text>
+                <Text style={styles.receiptValue}>{successState.donorName}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Type</Text>
+                <Text style={styles.receiptValue}>{successState.donationTypeLabel || 'Money'}</Text>
+              </View>
+              <View style={styles.receiptDivider} />
+              <View style={styles.receiptTotalRow}>
+                <Text style={styles.receiptTotalLabel}>Total Amount</Text>
+                <Text style={styles.receiptTotalAmount}>{successState.amountLabel}</Text>
+              </View>
+              <View style={styles.receiptDivider} />
+              <View style={styles.receiptPaidBadge}>
+                <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                <Text style={styles.receiptPaidText}>{donationType === 'item' ? 'READY' : 'PAID'}</Text>
+              </View>
+              <View style={styles.receiptFooterWrap}>
+                <Text style={styles.receiptFooter}>Thank you for your generous donation!</Text>
+                <Text style={styles.receiptFooterSub}>This receipt serves as your proof of donation.</Text>
+              </View>
+              <View style={styles.receiptBarcode}>
+                {Array.from({ length: 30 }).map((_, i) => (
+                  <View key={i} style={{ width: i % 3 === 0 ? 2 : 1, height: i % 5 === 0 ? 18 : i % 3 === 0 ? 14 : 10, backgroundColor: '#0f172a', opacity: 0.4 }} />
+                ))}
+              </View>
+              <Text style={styles.receiptBarcodeText}>{successState.receiptNumber}</Text>
+            </View>
+
+            <View style={styles.successActions}>
+              <Pressable style={styles.successBtnOutline} onPress={goBack} disabled={submitting}>
+                <Text style={styles.successBtnOutlineText}>Back</Text>
+              </Pressable>
+              <Pressable style={[styles.successBtnSolid, submitting && styles.btnDisabled]} onPress={handleReceiptSubmission} disabled={submitting}>
+                <Text style={styles.successBtnSolidText}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
+              </Pressable>
+            </View>
+          </Animated.View>
         </ScrollView>
       </ScreenContainer>
     );
@@ -658,27 +805,33 @@ export default function DonationDetailScreen({ route, navigation, user }) {
         {/* Step Indicator */}
         <View style={styles.stepperCard}>
           <Text style={styles.stepperLabel}>Step {currentStep} of {steps.length}</Text>
-          <View style={styles.stepperRow}>
-            {steps.map((step, i) => {
-              const stepNum = i + 1;
-              const isComplete = stepNum < currentStep;
-              const isLastStep = stepNum === steps.length;
-              const showCheck = isComplete || (currentStep >= steps.length && isLastStep);
-              const isActive = stepNum === currentStep;
-              return (
-                <View key={step.number} style={styles.stepItem}>
-                  <View style={[styles.stepDot, showCheck && styles.stepDotComplete, isActive && styles.stepDotActive]}>
-                    {showCheck ? <Ionicons name="checkmark" size={12} color="#fff" /> : <Text style={[styles.stepDotText, isActive && styles.stepDotTextActive]}>{step.number}</Text>}
+          <View style={styles.stepperTrackWrap}>
+            <View style={styles.stepperTrackBg}>
+              <Animated.View style={[styles.stepperTrackFill, { width: stepFillWidth }]} />
+            </View>
+            <View style={styles.stepperRow}>
+              {steps.map((step, i) => {
+                const stepNum = i + 1;
+                const isComplete = stepNum < currentStep;
+                const isLastStep = stepNum === steps.length;
+                const showCheck = isComplete || (currentStep >= steps.length && isLastStep);
+                const isActive = stepNum === currentStep;
+                return (
+                  <View key={step.number} style={styles.stepItem}>
+                    <View style={[styles.stepDot, showCheck && styles.stepDotComplete, isActive && styles.stepDotActive]}>
+                      {showCheck ? <Ionicons name="checkmark" size={12} color="#fff" /> : <Text style={[styles.stepDotText, isActive && styles.stepDotTextActive]}>{step.number}</Text>}
+                    </View>
+                    <Text style={[styles.stepTitle, isActive && styles.stepTitleActive]}>{step.title}</Text>
                   </View>
-                  <Text style={[styles.stepTitle, isActive && styles.stepTitleActive]}>{step.title}</Text>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </View>
         </View>
 
-        {/* Step 1: Amount / Item */}
-        {currentStep === 1 && (
+        <Animated.View style={{ opacity: stepContentOpacity, transform: [{ translateY: stepContentTranslate }] }}>
+          {/* Step 1: Amount / Item */}
+          {currentStep === 1 && (
           <View style={styles.stepCard}>
             <Text style={styles.stepCardTitle}>Donation Type</Text>
             <Text style={styles.stepCardSub}>Choose how you would like to contribute.</Text>
@@ -779,10 +932,10 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               </>
             )}
           </View>
-        )}
+          )}
 
-        {/* Step 2: Verify */}
-        {currentStep === 2 && (
+          {/* Step 2: Verify */}
+          {currentStep === 2 && (
           <View style={styles.verifySection}>
             <View style={styles.verifyHeader}>
               <View style={{ flex: 1 }}>
@@ -851,27 +1004,11 @@ export default function DonationDetailScreen({ route, navigation, user }) {
                 </View>
               )}
             </View>
-
-            {isMoneyPath && (
-              <View style={styles.verifyInfoRow}>
-                <View style={[styles.verifyInfoCard, { flex: 1 }]}>
-                  <Text style={styles.verifyInfoTitle}>Donor contact</Text>
-                  <Text style={styles.verifyInfoText}>{email}</Text>
-                  <Text style={styles.verifyInfoText}>{phone || 'No phone number provided'}</Text>
-                  <Text style={styles.verifyInfoMeta}>{contactPreferenceForReview}</Text>
-                </View>
-                <View style={[styles.verifyInfoCard, { flex: 1 }]}>
-                  <Text style={styles.verifyInfoTitle}>Campaign payment details</Text>
-                  <Text style={styles.verifyInfoText}>Number: {paymentNumber}</Text>
-                  <Text style={styles.verifyInfoText}>Methods: {paymentMethods}</Text>
-                </View>
-              </View>
-            )}
           </View>
-        )}
+          )}
 
-        {/* Step 3: Delivery or Pay */}
-        {currentStep === 3 && !isMoneyPath && (
+          {/* Step 3: Delivery or Pay */}
+          {currentStep === 3 && !isMoneyPath && (
           <View style={styles.stepCard}>
             <Text style={styles.verifyEyebrow}>Delivery details</Text>
             <Text style={styles.stepCardTitle}>Delivery Information</Text>
@@ -917,9 +1054,9 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               />
             </View>
           </View>
-        )}
+          )}
 
-        {currentStep === 3 && isMoneyPath && (
+          {currentStep === 3 && isMoneyPath && (
           <View style={styles.stepCard}>
             <View style={styles.paymentSummary}>
               <Text style={styles.paymentSummaryLabel}>Payment summary</Text>
@@ -972,12 +1109,18 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 
             {(paymentMethod === 'gcash' || paymentMethod === 'paymaya') && (
               <View style={styles.redirectInfo}>
-                <Ionicons name="information-circle-outline" size={20} color="#475569" />
-                <Text style={styles.redirectText}>You will be redirected to {PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label} to complete the payment.</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.redirectText}>
+                    Send your donation to this {PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label} number.
+                  </Text>
+                  <Text style={styles.walletNumberText}>{selectedWalletNumber || 'Not set'}</Text>
+                  <Text style={styles.redirectText}>Tap Pay to open the wallet app. If it is not installed, the Play Store page will open.</Text>
+                </View>
               </View>
             )}
           </View>
-        )}
+          )}
+        </Animated.View>
 
         {/* Actions */}
         <View style={styles.actions}>
@@ -990,7 +1133,11 @@ export default function DonationDetailScreen({ route, navigation, user }) {
             </Pressable>
           ) : (
             <Pressable style={[styles.nextBtn, (submitting || !user || !canDonate) && styles.btnDisabled]} onPress={handleSubmit} disabled={submitting || !user || !canDonate}>
-              <Text style={styles.nextBtnText}>{submitting ? 'Processing...' : isMoneyPath ? 'Pay' : 'Submit Donation Request'}</Text>
+              <Text style={styles.nextBtnText}>
+                {submitting
+                  ? 'Processing...'
+                  : isMoneyPath ? 'Pay' : 'Submit Donation Request'}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -1086,19 +1233,22 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 48, paddingHorizontal: 16 },
-  stepperCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 14, marginBottom: 12 },
+  scrollContent: { paddingBottom: 48, paddingHorizontal: 0 },
+  stepperCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 12, marginBottom: 12 },
   stepperLabel: { fontSize: 11, color: '#64748b', fontWeight: '600', marginBottom: 10 },
-  stepperRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  stepItem: { alignItems: 'center', gap: 4 },
-  stepDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  stepperTrackWrap: { position: 'relative' },
+  stepperTrackBg: { position: 'absolute', left: '12.5%', right: '12.5%', top: 13, height: 3, borderRadius: 999, backgroundColor: '#e2e8f0', overflow: 'hidden' },
+  stepperTrackFill: { height: 3, borderRadius: 999, backgroundColor: '#1d4ed8' },
+  stepperRow: { position: 'relative', zIndex: 1, flexDirection: 'row', justifyContent: 'space-between' },
+  stepItem: { flex: 1, alignItems: 'center', gap: 4 },
+  stepDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#e2e8f0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', zIndex: 2 },
   stepDotComplete: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
   stepDotActive: { backgroundColor: '#1d4ed8', borderColor: '#1d4ed8' },
   stepDotText: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
   stepDotTextActive: { color: '#fff' },
-  stepTitle: { fontSize: 10, fontWeight: '600', color: '#94a3b8' },
+  stepTitle: { fontSize: 10, fontWeight: '600', color: '#94a3b8', textAlign: 'center' },
   stepTitleActive: { color: '#1d4ed8' },
-  stepCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 12, gap: 12 },
+  stepCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 14, marginBottom: 12, gap: 12 },
   stepCardTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   stepCardSub: { fontSize: 13, color: '#64748b', marginTop: -8 },
   currencyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12, backgroundColor: '#f8fafc' },
@@ -1144,7 +1294,7 @@ const styles = StyleSheet.create({
   verifyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   verifyLabel: { fontSize: 11, color: '#64748b', fontWeight: '600' },
   verifyValue: { fontSize: 14, color: '#0f172a', fontWeight: '600' },
-  verifySection: { backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 12, gap: 14 },
+  verifySection: { backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 14, marginBottom: 12, gap: 14 },
   verifyHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   verifyEyebrow: { fontSize: 11, fontWeight: '700', color: '#64748b', letterSpacing: 1.2, textTransform: 'uppercase' },
   verifyTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginTop: 4 },
@@ -1184,11 +1334,7 @@ const styles = StyleSheet.create({
   verifyItemMetaStrong: { fontWeight: '700', color: '#475569' },
   verifyItemPhotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   verifyItemPhoto: { width: 48, height: 48, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  verifyInfoRow: { flexDirection: 'column', gap: 10 },
-  verifyInfoCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
-  verifyInfoTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   verifyInfoText: { fontSize: 12, color: '#475569', marginTop: 6 },
-  verifyInfoMeta: { fontSize: 12, color: '#64748b', marginTop: 6 },
   deliveryOption: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 14, backgroundColor: '#fff' },
   deliveryOptionActive: { borderColor: '#1e3a8a', backgroundColor: '#eff6ff' },
   deliveryOptionTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
@@ -1207,13 +1353,15 @@ const styles = StyleSheet.create({
   categoryField: { flex: 1.3, minWidth: 0 },
   redirectInfo: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12 },
   redirectText: { flex: 1, fontSize: 13, color: '#475569', lineHeight: 19 },
+  walletNumberText: { marginVertical: 8, borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 10, fontSize: 18, fontWeight: '800', color: '#1e3a8a', textAlign: 'center' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   cancelBtn: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingVertical: 13, alignItems: 'center', backgroundColor: '#fff' },
   cancelBtnText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
   nextBtn: { flex: 1.5, backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
   nextBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   btnDisabled: { opacity: 0.6 },
-  successWrap: { alignItems: 'center', gap: 12, paddingBottom: 48, paddingHorizontal: 16 },
+  successWrap: { alignItems: 'center', gap: 12, paddingBottom: 48, paddingHorizontal: 0 },
+  successAnimatedWrap: { width: '100%', alignItems: 'center', gap: 12 },
   successIconBox: { marginTop: 20 },
   receiptIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center' },
   successTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a' },

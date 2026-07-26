@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   createDrawerNavigator,
@@ -19,8 +19,7 @@ import HomeStack from "./HomeStack";
 import AchievementsStack from "./AchievementsStack";
 import NotificationsStack from "./NotificationsStack";
 import SettingsStack from "./SettingsStack";
-import AdminStack from "./AdminStack";
-import { isTeacher } from "../utils/auth";
+import { showPendingReceiptAlert, subscribePendingDonationReceipt } from "../utils/donationReceiptGuard";
 
 const Drawer = createDrawerNavigator();
 const AlumniLogo = require("../../assets/alumnilogo2.png");
@@ -36,7 +35,6 @@ const iconForRoute = (routeName, focused) => {
     Settings: focused ? "settings" : "settings-outline",
     MyProfile: focused ? "person" : "person-outline",
     ChangePassword: focused ? "lock-closed" : "lock-closed-outline",
-    Admin: focused ? "settings" : "settings-outline",
   };
   return map[routeName] || "ellipse-outline";
 };
@@ -81,14 +79,13 @@ const RouteIcon = ({ routeName, focused, color, size = 20 }) => {
 };
 
 function CustomDrawerContent(props) {
-  const { state, navigation, descriptors, user } = props;
+  const { state, navigation, descriptors, user, receiptNavigationBlocked } = props;
   const insets = useSafeAreaInsets();
 
   const topGroup = ["Home", "Alumni", "Events", "Achievements", "Employment", "Donations"];
   const bottomGroupOrder = [
     "Notifications",
     "Settings",
-    "Admin",
   ];
 
   const routeNames = state.routes.map((route) => route.name);
@@ -99,13 +96,18 @@ function CustomDrawerContent(props) {
     Employment: "JobsList",
     Alumni: "AlumniDirectory",
     Donations: "DonationsList",
-    Admin: "AdminHub",
     Settings: "SettingsScreen",
     Notifications: "NotificationsScreen",
     Achievements: "AchievementsScreen",
   };
 
   const handleDrawerNavigate = (routeName) => {
+    if (receiptNavigationBlocked) {
+      navigation.dispatch(DrawerActions.closeDrawer());
+      showPendingReceiptAlert();
+      return;
+    }
+
     navigation.dispatch(DrawerActions.closeDrawer());
 
     const rootScreen = rootStackScreen[routeName] || null;
@@ -173,7 +175,7 @@ function CustomDrawerContent(props) {
             {user?.username || "Alumni"}
           </Text>
           <Text style={styles.profileRole}>
-            {isTeacher(user) ? "Teacher / Staff" : "Alumni Member"}
+            Alumni Member
           </Text>
         </View>
       </View>
@@ -194,10 +196,22 @@ function CustomDrawerContent(props) {
 }
 
 export default function MainTabs({ user, setUser }) {
+  const [receiptNavigationBlocked, setReceiptNavigationBlocked] = useState(false);
+
+  useEffect(() => {
+    return subscribePendingDonationReceipt(setReceiptNavigationBlocked);
+  }, []);
+
   return (
     <Drawer.Navigator
       initialRouteName="Home"
-      drawerContent={(props) => <CustomDrawerContent {...props} user={user} />}
+      drawerContent={(props) => (
+        <CustomDrawerContent
+          {...props}
+          user={user}
+          receiptNavigationBlocked={receiptNavigationBlocked}
+        />
+      )}
       style={{ backgroundColor: "#ffffff" }}
       screenOptions={({ route, navigation }) => ({
         headerShown: false,
@@ -210,7 +224,8 @@ export default function MainTabs({ user, setUser }) {
           backgroundColor: "#1e40af",
         },
         overlayColor: "rgba(15, 23, 42, 0.46)",
-        swipeEdgeWidth: 52,
+        swipeEnabled: !receiptNavigationBlocked,
+        swipeEdgeWidth: receiptNavigationBlocked ? 0 : 52,
         drawerIcon: ({ focused, color }) => (
           <RouteIcon routeName={route.name} focused={focused} size={20} color={color} />
         ),
@@ -243,11 +258,6 @@ export default function MainTabs({ user, setUser }) {
       >
         {(props) => <DonationsStack {...props} user={user} />}
       </Drawer.Screen>
-      {isTeacher(user) ? (
-        <Drawer.Screen name="Admin" options={{ headerShown: false }}>
-          {(props) => <AdminStack {...props} user={user} />}
-        </Drawer.Screen>
-      ) : null}
       <Drawer.Screen name="Notifications" options={{ headerShown: false }}>
         {(props) => <NotificationsStack {...props} user={user} />}
       </Drawer.Screen>

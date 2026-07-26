@@ -89,9 +89,18 @@ const recordActivity = async ({
   summary,
   details = null
 }) => {
+  const normalizedAction = safeString(action, 'ACTION')?.toUpperCase();
+  if (normalizedAction === 'LOGIN' || normalizedAction === 'LOGOUT') {
+    return;
+  }
+
   try {
     await ensureActivityLogTable();
     const actor = normalizeActor(req);
+    if (!['ADMIN', 'TEACHER'].includes(actor.actorRole)) {
+      return;
+    }
+
     const numericEntityId = Number(entityId);
     const detailsText = details ? JSON.stringify(details) : null;
 
@@ -111,7 +120,7 @@ const recordActivity = async ({
         ${actor.actorId},
         ${safeString(actor.actorName, 'System')},
         ${safeString(actor.actorRole, 'SYSTEM')},
-        ${safeString(action, 'ACTION')},
+        ${safeString(normalizedAction, 'ACTION')},
         ${safeString(entityType, 'system')},
         ${Number.isFinite(numericEntityId) && numericEntityId > 0 ? numericEntityId : null},
         ${safeString(entityLabel)},
@@ -129,12 +138,14 @@ const recordActivity = async ({
   }
 };
 
-const listActivityLogs = async ({ limit = 30, excludeSessionActivity = false } = {}) => {
+const listActivityLogs = async ({ limit = 30 } = {}) => {
   await ensureActivityLogTable();
   const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
-  const whereClause = excludeSessionActivity
-    ? "WHERE action NOT IN ('LOGIN', 'LOGOUT')"
-    : '';
+  const filters = [
+    "actor_role IN ('ADMIN', 'TEACHER')",
+    "action NOT IN ('LOGIN', 'LOGOUT')"
+  ];
+  const whereClause = `WHERE ${filters.join(' AND ')}`;
 
   return prisma.$queryRawUnsafe(`
     SELECT
@@ -165,8 +176,19 @@ const deleteSessionActivityLogs = async () => {
   return Number(result) || 0;
 };
 
+const deleteNonAdminActivityLogs = async () => {
+  await ensureActivityLogTable();
+  const result = await prisma.$executeRaw`
+    DELETE FROM activity_log
+    WHERE actor_role NOT IN ('ADMIN', 'TEACHER')
+       OR action IN ('LOGIN', 'LOGOUT')
+  `;
+  return Number(result) || 0;
+};
+
 module.exports = {
   buildChangeSet,
+  deleteNonAdminActivityLogs,
   deleteSessionActivityLogs,
   ensureActivityLogTable,
   listActivityLogs,

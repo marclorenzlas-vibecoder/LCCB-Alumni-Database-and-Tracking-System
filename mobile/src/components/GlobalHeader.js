@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_ORIGIN } from "../config/api";
 import { imageUrl } from "../utils/formatters";
 import { navigateToDrawerRoute } from "../navigation/drawerNavigation";
+import { hasPendingDonationReceipt, showPendingReceiptAlert } from "../utils/donationReceiptGuard";
 
 export function GlobalHeader({ user, navigation }) {
   const insets = useSafeAreaInsets();
@@ -20,6 +21,10 @@ export function GlobalHeader({ user, navigation }) {
   const profileImage = imageUrl(user?.profile_image, API_ORIGIN);
 
   const sendFeedback = () => {
+    if (hasPendingDonationReceipt()) {
+      showPendingReceiptAlert();
+      return;
+    }
     setShowMenu(false);
     Alert.alert(
       "Feedback",
@@ -34,7 +39,13 @@ export function GlobalHeader({ user, navigation }) {
       ) : null}
       <View style={[styles.headerContainer, { paddingTop: insets.top + 12 }]}>
         <Pressable
-          onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
+          onPress={() => {
+            if (hasPendingDonationReceipt()) {
+              showPendingReceiptAlert();
+              return;
+            }
+            navigation.dispatch(DrawerActions.toggleDrawer());
+          }}
           style={styles.hamburgerBtn}
         >
           <Ionicons name="menu" size={28} color="#0f172a" />
@@ -44,9 +55,13 @@ export function GlobalHeader({ user, navigation }) {
 
         <View style={styles.rightGroup}>
           <Pressable
-            onPress={() =>
-              navigateToDrawerRoute(navigation, "Settings", "SettingsScreen")
-            }
+            onPress={() => {
+              if (hasPendingDonationReceipt()) {
+                showPendingReceiptAlert();
+                return;
+              }
+              navigateToDrawerRoute(navigation, "Settings", "SettingsScreen");
+            }}
             style={styles.avatarBtn}
           >
             {profileImage ? (

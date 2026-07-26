@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import AlumniLogo from "../assets/alumnilogo2.png";
 import Navbar from "./Navbar";
 import ConfirmModal from "./ConfirmModal";
+import AuthStatusOverlay from "./AuthStatusOverlay";
 import { authService } from "../services/authService";
 import { IMAGE_BASE_URL } from "../config/apiBaseUrl";
 
@@ -130,6 +131,8 @@ const getRoleLabel = (role) => {
 };
 
 const SIDEBAR_SCROLL_KEY = "userSidebarScrollTop";
+const MIN_LOGOUT_DISPLAY_MS = 1200;
+const LOGOUT_SUCCESS_DISPLAY_MS = 1100;
 
 const SidebarIcon = ({ d, className = "h-5 w-5" }) => (
   <svg
@@ -200,6 +203,8 @@ const UserLayout = ({ children }) => {
 
   const [collapsed, setCollapsed] = useState(readCollapsedPreference);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutStatus, setLogoutStatus] = useState("processing");
   const sidebarScrollRef = useRef(null);
   const prevScrollRef = useRef(null);
   const user = authService.getCurrentUser();
@@ -315,7 +320,19 @@ const UserLayout = ({ children }) => {
   };
 
   const handleLogout = async () => {
-    await authService.logout();
+    setLogoutStatus("processing");
+    setIsLoggingOut(true);
+    const startedAt = Date.now();
+
+    await authService.logout({ clearLocalSession: false });
+    const remainingTime = MIN_LOGOUT_DISPLAY_MS - (Date.now() - startedAt);
+    if (remainingTime > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingTime));
+    }
+
+    setLogoutStatus("success");
+    await new Promise((resolve) => setTimeout(resolve, LOGOUT_SUCCESS_DISPLAY_MS));
+    authService.clearLocalSession();
     navigate("/login", { replace: true });
   };
 
@@ -483,6 +500,16 @@ const UserLayout = ({ children }) => {
         cancelText="Cancel"
         type="danger"
       />
+
+      {isLoggingOut && (
+        <AuthStatusOverlay
+          status={logoutStatus}
+          processingTitle="Signing out..."
+          processingMessage="Please wait while we secure your session."
+          successTitle="Logout successful!"
+          successMessage="Redirecting to login..."
+        />
+      )}
 
       {isLargeScreen ? (
         <div className="app-sidebar-shell h-full">
