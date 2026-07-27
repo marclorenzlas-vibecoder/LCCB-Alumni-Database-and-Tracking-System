@@ -764,6 +764,36 @@ const AlumniDirectory = () => {
 
   // Rendering
   const addActionClass = 'inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-blue-100';
+  const hasActiveFilters = selectedLevel || selectedBatch || selectedGroup;
+  const clearFiltersButton = hasActiveFilters && (
+    <button
+      type="button"
+      onClick={() => { setSelectedLevel(''); setSelectedBatch(''); setSelectedGroup(''); setSearchTerm(''); }}
+      className="inline-flex h-[46px] w-36 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+    >
+      <span className="truncate">Clear Filters</span>
+    </button>
+  );
+  const batchOfficersButton = (
+    <button
+      type="button"
+      onClick={() => {
+        if (!selectedBatch) return;
+        setShowOfficersModal(true);
+      }}
+      disabled={!selectedBatch}
+      className={`inline-flex h-[46px] w-52 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${selectedBatch
+          ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
+          : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+        }`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+        <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
+      </svg>
+      <span className="min-w-0 truncate">{selectedBatch ? `Batch ${selectedBatch} Officers (${batchOfficers.length})` : 'Batch Officers'}</span>
+    </button>
+  );
+
   return (
     <UserLayout>
       <div className="bg-white shadow sm:rounded-lg">
@@ -1651,40 +1681,17 @@ const AlumniDirectory = () => {
                   panelWidthClass="w-96"
                   alignClass="right-0"
                 />
-                {(selectedLevel || selectedBatch || selectedGroup) && (
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedLevel(''); setSelectedBatch(''); setSelectedGroup(''); setSearchTerm(''); }}
-                    className="inline-flex h-[46px] w-36 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
-                  >
-                    <span className="truncate">Clear Filters</span>
-                  </button>
-                )}
+                {isTeacher && batchOfficersButton}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!selectedBatch) return;
-                    setShowOfficersModal(true);
-                  }}
-                  disabled={!selectedBatch}
-                  className={`inline-flex h-[46px] w-44 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${selectedBatch
-                      ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
-                      : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
-                    }`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                    <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
-                  </svg>
-                  <span className="min-w-0 truncate">{selectedBatch ? `Batch ${selectedBatch} Officers (${batchOfficers.length})` : 'Batch Officers'}</span>
-                </button>
+                {!isTeacher && batchOfficersButton}
                 {isTeacher && (
                   <button type="button" onClick={generateCsv} className="inline-flex h-[46px] w-56 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 16v-4m0 0V8m0 4h4m-4 0H8M5 20h14a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-4.828-4.828A2 2 0 0014.172 2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                     <span className="min-w-0 truncate">Generate List (CSV)</span>
                   </button>
                 )}
+                {clearFiltersButton}
               </div>
             </div>
           </div>
