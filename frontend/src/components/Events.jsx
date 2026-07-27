@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import eventService from '../services/eventService';
 import { realtimeClient } from '../services/realtimeClient';
@@ -10,9 +10,7 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 
 const Events = () => {
-  const navigate = useNavigate();
   const isTeacher = authService.isTeacher();
-  const currentUser = authService.getCurrentUser();
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,31 +27,40 @@ const Events = () => {
   });
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('');
+  const [selectedBatchFilter, setSelectedBatchFilter] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [isCurrentEventsExpanded, setIsCurrentEventsExpanded] = useState(true);
   const [isUpcomingEventsExpanded, setIsUpcomingEventsExpanded] = useState(true);
   const [isPastEventsExpanded, setIsPastEventsExpanded] = useState(false);
-  const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const [showBatchMenu, setShowBatchMenu] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const typeMenuRef = useRef(null);
+  const batchMenuRef = useRef(null);
   const statusMenuRef = useRef(null);
   const sortMenuRef = useRef(null);
 
-  const eventTypes = useMemo(() => [...new Set(events.map((event) => event.type).filter(Boolean))], [events]);
+  const eventTargetBatches = useMemo(() => {
+    const batches = new Set();
+    events.forEach((event) => {
+      if (event.target_batch) {
+        batches.add(String(event.target_batch));
+      }
+    });
+    return Array.from(batches).sort((a, b) => Number(a) - Number(b));
+  }, [events]);
 
-  const typeMenuSections = useMemo(() => ([
+  const batchMenuSections = useMemo(() => ([
     {
-      key: 'EVENT_TYPES',
+      key: 'EVENT_BATCHES',
       title: '',
       items: [
-        { value: '', label: 'All Types' },
-        ...eventTypes.map((type) => ({ value: type, label: type }))
+        { value: '', label: 'All Batch' },
+        { value: 'open', label: 'Open to All' },
+        ...eventTargetBatches.map((batch) => ({ value: batch, label: `Batch ${batch}` }))
       ]
     }
-  ]), [eventTypes]);
+  ]), [eventTargetBatches]);
 
   const statusMenuSections = [
     {
@@ -80,9 +87,9 @@ const Events = () => {
     }
   ];
 
-  const setOnlyTypeMenuOpen = (valueOrUpdater) => {
-    const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showTypeMenu) : valueOrUpdater;
-    setShowTypeMenu(nextIsOpen);
+  const setOnlyBatchMenuOpen = (valueOrUpdater) => {
+    const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showBatchMenu) : valueOrUpdater;
+    setShowBatchMenu(nextIsOpen);
     if (nextIsOpen) {
       setShowStatusMenu(false);
       setShowSortMenu(false);
@@ -93,7 +100,7 @@ const Events = () => {
     const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showStatusMenu) : valueOrUpdater;
     setShowStatusMenu(nextIsOpen);
     if (nextIsOpen) {
-      setShowTypeMenu(false);
+      setShowBatchMenu(false);
       setShowSortMenu(false);
     }
   };
@@ -102,21 +109,21 @@ const Events = () => {
     const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showSortMenu) : valueOrUpdater;
     setShowSortMenu(nextIsOpen);
     if (nextIsOpen) {
-      setShowTypeMenu(false);
+      setShowBatchMenu(false);
       setShowStatusMenu(false);
     }
   };
 
   useEffect(() => {
-    if (!showTypeMenu && !showStatusMenu && !showSortMenu) return undefined;
+    if (!showBatchMenu && !showStatusMenu && !showSortMenu) return undefined;
 
     const handlePointerDown = (event) => {
-      const clickInsideType = typeMenuRef.current && typeMenuRef.current.contains(event.target);
+      const clickInsideBatch = batchMenuRef.current && batchMenuRef.current.contains(event.target);
       const clickInsideStatus = statusMenuRef.current && statusMenuRef.current.contains(event.target);
       const clickInsideSort = sortMenuRef.current && sortMenuRef.current.contains(event.target);
 
-      if (!clickInsideType && !clickInsideStatus && !clickInsideSort) {
-        setShowTypeMenu(false);
+      if (!clickInsideBatch && !clickInsideStatus && !clickInsideSort) {
+        setShowBatchMenu(false);
         setShowStatusMenu(false);
         setShowSortMenu(false);
       }
@@ -124,7 +131,7 @@ const Events = () => {
 
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
-        setShowTypeMenu(false);
+        setShowBatchMenu(false);
         setShowStatusMenu(false);
         setShowSortMenu(false);
       }
@@ -137,7 +144,7 @@ const Events = () => {
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [showTypeMenu, showStatusMenu, showSortMenu]);
+  }, [showBatchMenu, showStatusMenu, showSortMenu]);
 
   useEffect(() => {
     loadEvents();
@@ -269,23 +276,6 @@ const Events = () => {
     });
   };
 
-  const handleQuickJoinEvent = async (eventId) => {
-    try {
-      const alumniId = currentUser?.alumni?.id;
-      if (!alumniId) {
-        toast.warning('You need to complete your alumni profile first');
-        return;
-      }
-
-      await eventService.joinEvent(eventId, alumniId);
-      await loadEvents();
-      toast.success('Joined event successfully!');
-    } catch (error) {
-      console.error('Error joining event:', error);
-      toast.error(error.response?.data?.error || 'Failed to join event');
-    }
-  };
-
   const getEventCalendarKey = (dateValue) => {
     if (!dateValue) return null;
 
@@ -302,10 +292,64 @@ const Events = () => {
     return `${year}-${month}-${day}`;
   };
 
-  const categorizeEvents = () => {
+  const getEventAttendeeCount = useCallback((event) => {
+    if (typeof event.attendees === 'number') return event.attendees;
+    if (Array.isArray(event.attendees)) return event.attendees.length;
+    if (typeof event.attendeesCount === 'number') return event.attendeesCount;
+    if (typeof event.attendanceCount === 'number') return event.attendanceCount;
+    if (typeof event._count?.event_attendance === 'number') return event._count.event_attendance;
+    return 0;
+  }, []);
+
+  const getEventStatusKey = useCallback((event) => {
+    const todayKey = getEventCalendarKey(new Date());
+    const rawStatus = (event.status || '').toString().toUpperCase();
+    const eventKey = event.date ? getEventCalendarKey(event.date) : null;
+
+    if (eventKey) {
+      if (eventKey === todayKey) return 'current';
+      if (eventKey < todayKey) return 'past';
+      return 'upcoming';
+    }
+
+    if (rawStatus === 'PREVIOUS' || rawStatus === 'PAST') return 'past';
+    if (rawStatus === 'CURRENT' || rawStatus === 'TODAY' || rawStatus === 'HAPPENING') return 'current';
+    return 'upcoming';
+  }, []);
+
+  const eventMatchesSearchAndBatch = useCallback((event) => {
+    const normalizedSearch = searchTerm.toLowerCase();
+    const matchesSearch =
+      event.name.toLowerCase().includes(normalizedSearch) ||
+      (event.description && event.description.toLowerCase().includes(normalizedSearch)) ||
+      (event.location && event.location.toLowerCase().includes(normalizedSearch)) ||
+      (event.tags && event.tags.some(tag => tag.toLowerCase().includes(normalizedSearch)));
+
+    const matchesBatch =
+      selectedBatchFilter === '' ||
+      (selectedBatchFilter === 'open' && !event.target_batch) ||
+      String(event.target_batch || '') === selectedBatchFilter;
+
+    return matchesSearch && matchesBatch;
+  }, [searchTerm, selectedBatchFilter]);
+
+  const sortEvents = useCallback((eventList) => [...eventList].sort((a, b) => {
+    switch (sortBy) {
+      case 'date':
+        return new Date(a.date || 0) - new Date(b.date || 0);
+      case 'name':
+        return (a.name || '').localeCompare(b.name || '');
+      case 'attendees':
+        return getEventAttendeeCount(b) - getEventAttendeeCount(a);
+      default:
+        return 0;
+    }
+  }), [getEventAttendeeCount, sortBy]);
+
+  const categorizeEvents = useCallback((eventList = events) => {
     const todayKey = getEventCalendarKey(new Date());
 
-    return events.reduce((acc, event) => {
+    return eventList.reduce((acc, event) => {
       const rawStatus = (event.status || '').toString().toUpperCase();
       const eventKey = event.date ? getEventCalendarKey(event.date) : null;
 
@@ -335,53 +379,27 @@ const Events = () => {
 
       return acc;
     }, { past: [], current: [], upcoming: [] });
-  };
-
-  const categorizedEvents = categorizeEvents();
+  }, [events]);
 
   const filteredEvents = useMemo(() => {
-    let filtered = events.filter(event => {
-      const matchesSearch = 
-        event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (event.location && event.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (event.tags && event.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
-      
-      const matchesType = selectedType === '' || event.type === selectedType;
-      const matchesStatus = selectedStatus === '' || (() => {
-        const todayKey = getEventCalendarKey(new Date());
-        const eventKey = getEventCalendarKey(event.date);
-        if (selectedStatus === 'past') return eventKey < todayKey;
-        if (selectedStatus === 'current') return eventKey === todayKey;
-        if (selectedStatus === 'upcoming') return eventKey > todayKey;
-        return false;
-      })();
-      
-      return matchesSearch && matchesType && matchesStatus;
+    const filtered = events.filter(event => {
+      const matchesStatus = selectedStatus === '' || getEventStatusKey(event) === selectedStatus;
+      return eventMatchesSearchAndBatch(event) && matchesStatus;
     });
 
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'date':
-          return new Date(a.date) - new Date(b.date);
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'attendees':
-          return (b.attendees || 0) - (a.attendees || 0);
-        default:
-          return 0;
-      }
-    });
+    return sortEvents(filtered);
+  }, [eventMatchesSearchAndBatch, getEventStatusKey, selectedStatus, sortEvents, events]);
 
-    return filtered;
-  }, [searchTerm, selectedType, selectedStatus, sortBy, events]);
+  const categorizedEvents = useMemo(() => (
+    categorizeEvents(sortEvents(events.filter(eventMatchesSearchAndBatch)))
+  ), [categorizeEvents, eventMatchesSearchAndBatch, sortEvents, events]);
 
   const clearFilters = () => {
     setSearchTerm('');
-    setSelectedType('');
+    setSelectedBatchFilter('');
     setSelectedStatus('');
     setSortBy('date');
-    setShowTypeMenu(false);
+    setShowBatchMenu(false);
     setShowStatusMenu(false);
     setShowSortMenu(false);
   };
@@ -481,19 +499,25 @@ const Events = () => {
           {/* Filter Dropdowns */}
           <div className="flex flex-wrap items-center gap-3">
             <FilterMenu
-              menuRef={typeMenuRef}
-              isOpen={showTypeMenu}
-              setIsOpen={setOnlyTypeMenuOpen}
-              buttonLabel="Event Type"
-              selectedLabel={selectedType || 'All Types'}
-              selectedValue={selectedType}
-              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
-              sections={typeMenuSections}
+              menuRef={batchMenuRef}
+              isOpen={showBatchMenu}
+              setIsOpen={setOnlyBatchMenuOpen}
+              buttonLabel="All Batch"
+              selectedLabel={
+                selectedBatchFilter === ''
+                  ? 'All Batch'
+                  : selectedBatchFilter === 'open'
+                    ? 'Open to All'
+                    : `Batch ${selectedBatchFilter}`
+              }
+              selectedValue={selectedBatchFilter}
+              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+              sections={batchMenuSections}
               onSelect={(value) => {
-                setSelectedType(value);
-                setShowTypeMenu(false);
+                setSelectedBatchFilter(value);
+                setShowBatchMenu(false);
               }}
-              panelTitle="All Types"
+              panelTitle="All Batch"
               panelWidthClass="w-56"
               alignClass="right-0"
             />
@@ -534,7 +558,7 @@ const Events = () => {
               alignClass="right-0"
             />
 
-            {(selectedType || selectedStatus) && (
+            {(selectedBatchFilter || selectedStatus) && (
               <button
                 onClick={clearFilters}
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
@@ -601,14 +625,8 @@ const Events = () => {
                   aria-hidden={!isUpcomingEventsExpanded}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {categorizedEvents.upcoming.filter(event => {
-                      const matchesSearch = 
-                        event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
-                      const matchesType = selectedType === '' || event.type === selectedType;
-                      return matchesSearch && matchesType;
-                    }).map((event) => (
-                      <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                    {categorizedEvents.upcoming.map((event) => (
+                      <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                     ))}
                   </div>
                 </div>
@@ -643,14 +661,8 @@ const Events = () => {
                     aria-hidden={!isCurrentEventsExpanded}
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {categorizedEvents.current.filter(event => {
-                        const matchesSearch = 
-                          event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
-                        const matchesType = selectedType === '' || event.type === selectedType;
-                        return matchesSearch && matchesType;
-                      }).map((event) => (
-                        <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                      {categorizedEvents.current.map((event) => (
+                        <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                       ))}
                     </div>
                   </div>
@@ -685,14 +697,8 @@ const Events = () => {
                   aria-hidden={!isPastEventsExpanded}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {categorizedEvents.past.filter(event => {
-                      const matchesSearch = 
-                        event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
-                      const matchesType = selectedType === '' || event.type === selectedType;
-                      return matchesSearch && matchesType;
-                    }).map((event) => (
-                      <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                    {categorizedEvents.past.map((event) => (
+                      <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                     ))}
                   </div>
                 </div>
@@ -704,7 +710,7 @@ const Events = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEvents.map((event) => (
-              <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+              <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
             ))}
           </div>
         )}
@@ -916,7 +922,7 @@ const Events = () => {
   );
 };
 
-const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent, handleDeleteEvent }) => {
+const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => {
   const navigate = useNavigate();
   const titleRef = React.useRef(null);
   const [descLines, setDescLines] = React.useState(4);

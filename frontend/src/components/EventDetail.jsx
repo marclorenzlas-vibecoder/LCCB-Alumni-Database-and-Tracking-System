@@ -803,7 +803,7 @@ const EventDetail = () => {
                     </div>
                     <button
                       onClick={handleLeaveEvent}
-                      className="app-danger-button w-full px-4 py-2.5 text-sm"
+                      className="app-danger-button w-full px-4 py-3 text-sm"
                     >
                       Leave Event
                     </button>
@@ -851,19 +851,6 @@ const EventDetail = () => {
                       onClick={handleJoinEvent}
                       className="w-full app-primary-button px-4 py-3 text-sm"
                     >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 4v16m8-8H4"
-                        />
-                      </svg>
                       Join Event
                     </button>
                   </div>
@@ -879,12 +866,12 @@ const EventDetail = () => {
             <h2 className="text-sm font-semibold uppercase tracking-widest text-blue-600">
               Attendees
             </h2>
-            <span className="text-xs text-gray-400 font-medium">
+            <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-100">
               {attendees.length}
             </span>
           </div>
           {attendees.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
               {attendees.map((attendance) => (
                 <div
                   key={attendance.id}

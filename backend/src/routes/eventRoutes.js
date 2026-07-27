@@ -42,6 +42,13 @@ const upload = multer({
 router.get('/', async (req, res) => {
   try {
     const events = await prisma.event.findMany({
+      include: {
+        _count: {
+          select: {
+            event_attendance: true
+          }
+        }
+      },
       orderBy: { date: 'desc' }
     });
     res.json(events);

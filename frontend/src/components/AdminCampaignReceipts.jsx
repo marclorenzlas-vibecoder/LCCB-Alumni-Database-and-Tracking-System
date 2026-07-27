@@ -385,7 +385,6 @@ function ItemGalleryModal({ entry, campaign, campaignImages = [], loadingImages,
             )}
             <ReceiptRow label="Campaign" value={campaign?.purpose || '—'} />
             <ReceiptRow label="Date Recorded" value={formatDateLong(entry.recordedAt)} />
-            {entry.alumniId && <ReceiptRow label="Donor ID" value={`#${entry.alumniId}`} />}
             {deliveryMethodLabel && (
               <ReceiptRow label="Delivery Method" value={deliveryMethodLabel} />
             )}
