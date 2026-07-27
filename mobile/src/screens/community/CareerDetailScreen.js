@@ -5,9 +5,9 @@ import ScreenContainer from '../../components/ScreenContainer';
 import BackButton from '../../components/BackButton';
 
 const getAlignmentLabel = (value) => {
-  if (value === 'ALIGNED') return 'Aligned';
-  if (value === 'NOT_ALIGNED') return 'Not aligned';
-  return 'Needs review';
+  if (value === 'ALIGNED') return 'Related';
+  if (value === 'NOT_ALIGNED') return 'Not Related';
+  return 'Needs Checking';
 };
 
 const getAlignmentStyle = (value) => {

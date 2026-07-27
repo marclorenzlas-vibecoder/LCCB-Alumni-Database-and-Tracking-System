@@ -110,22 +110,14 @@ class AlumniService {
       is_phone_public: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? false,
       isPositionPublic:
         (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
-          false &&
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       is_position_public:
         (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
-          false &&
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       isEmploymentPublic:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
-          false &&
         (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       is_employment_public:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
-          false &&
         (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
           false,
       isCompanyPublic:

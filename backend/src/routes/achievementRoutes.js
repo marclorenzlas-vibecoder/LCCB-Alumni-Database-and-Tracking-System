@@ -6,6 +6,38 @@ const { buildChangeSet, recordActivity } = require("../services/activityLogServi
 const prisma = new PrismaClient();
 const router = express.Router();
 
+const isStaffRequest = (req) => {
+  const role = String(req.user?.role || '').toUpperCase();
+  return role === 'TEACHER' || role === 'ADMIN';
+};
+
+const getAuthenticatedAlumniId = async (req) => {
+  const tokenAlumniId = Number(req.user?.alumniId || req.user?.alumni_id || 0);
+  if (Number.isFinite(tokenAlumniId) && tokenAlumniId > 0) {
+    return tokenAlumniId;
+  }
+
+  const userId = Number(req.user?.id || 0);
+  if (Number.isFinite(userId) && userId > 0) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { alumni: { select: { id: true } } }
+    });
+    if (user?.alumni?.id) return Number(user.alumni.id);
+  }
+
+  const email = typeof req.user?.email === 'string' ? req.user.email : '';
+  if (email) {
+    const alumni = await prisma.alumni.findFirst({
+      where: { email },
+      select: { id: true }
+    });
+    if (alumni?.id) return Number(alumni.id);
+  }
+
+  return null;
+};
+
 // Get all achievements
 router.get("/", async (req, res) => {
   try {
@@ -131,6 +163,14 @@ router.post(
         });
       }
 
+      const requestedAlumniId = alumni_id ? Number(alumni_id) : null;
+      const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+      if (!isStaffRequest(req)) {
+        if (!requestedAlumniId || authenticatedAlumniId !== requestedAlumniId) {
+          return res.status(403).json({ error: "You can only create achievements for your own profile" });
+        }
+      }
+
       const mediaFile = req.files?.find(f => f.fieldname === 'image' || f.fieldname === 'video');
       const mediaPath = mediaFile
         ? `/uploads/achievements/${mediaFile.filename}`
@@ -145,7 +185,7 @@ router.post(
       };
 
       if (alumni_id) {
-        createData.alumni_id = Number(alumni_id);
+        createData.alumni_id = requestedAlumniId;
       }
 
       const achievement = await prisma.achievement.create({
@@ -204,6 +244,11 @@ router.put(
 
       if (!oldAchievement) {
         return res.status(404).json({ error: "Achievement not found" });
+      }
+
+      const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+      if (!isStaffRequest(req) && authenticatedAlumniId !== oldAchievement.alumni_id) {
+        return res.status(403).json({ error: "You can only update your own achievements" });
       }
 
       const updateData = {};
@@ -292,6 +337,11 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 
     if (!achievementToDelete) {
       return res.status(404).json({ error: "Achievement not found" });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== achievementToDelete.alumni_id) {
+      return res.status(403).json({ error: "You can only delete your own achievements" });
     }
 
     // Delete the achievement

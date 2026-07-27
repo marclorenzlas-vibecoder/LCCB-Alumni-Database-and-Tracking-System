@@ -1,5 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { teacherAuthMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -104,7 +105,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // Add new alumni to list (admin only)
-router.post('/', async (req, res) => {
+router.post('/', teacherAuthMiddleware, async (req, res) => {
   try {
     const { student_id, first_name, last_name, middle_name, course, level, batch, graduation_year } = req.body;
     
@@ -138,7 +139,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update alumni record
-router.put('/:id', async (req, res) => {
+router.put('/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { student_id, first_name, last_name, middle_name, course, level, batch, graduation_year, status } = req.body;
@@ -166,7 +167,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete alumni record
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     

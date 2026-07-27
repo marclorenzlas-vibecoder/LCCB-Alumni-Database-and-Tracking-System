@@ -16,7 +16,6 @@ import LoadingState from "../../components/LoadingState";
 import BackButton from "../../components/BackButton";
 import { API_ORIGIN } from "../../config/api";
 import { communityService } from "../../services/communityService";
-import { donationService } from "../../services/donationService";
 import { imageUrl } from "../../utils/formatters";
 
 function getSocialIconMeta(link) {
@@ -113,13 +112,15 @@ function formatBirthday(dateStr) {
   }
 }
 
+const isEmploymentHistoryPublic = (record = {}) =>
+  (record.isEmploymentPublic ?? record.is_employment_public ?? false) !== false;
+
 export default function AlumniDetailScreen({ route, navigation }) {
   const { alumniId, alumni: routeAlumni = null } = route.params || {};
   const resolvedAlumniId = alumniId || routeAlumni?.id;
   const [alumni, setAlumni] = useState(routeAlumni);
   const [achievements, setAchievements] = useState([]);
   const [careers, setCareers] = useState([]);
-  const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [imgErrored, setImgErrored] = useState(false);
 
@@ -154,50 +155,59 @@ export default function AlumniDetailScreen({ route, navigation }) {
       }
 
       if (routeAlumni) setAlumni(routeAlumni);
+      setAchievements([]);
+      setCareers([]);
       setImgErrored(false);
       setLoading(!routeAlumni);
-      Promise.allSettled([
-        communityService.getAlumniById(resolvedAlumniId),
-        communityService.getAchievements(resolvedAlumniId),
-        communityService.getCareers(resolvedAlumniId),
-        donationService.getByAlumni(resolvedAlumniId),
-      ])
-        .then(([detailResult, achievementsResult, careersResult, donationsResult]) => {
-          if (!mounted) return;
+      const loadDetail = async () => {
+        const [detailResult, achievementsResult] = await Promise.allSettled([
+          communityService.getAlumniById(resolvedAlumniId),
+          communityService.getAchievements(resolvedAlumniId),
+        ]);
 
-          if (detailResult.status === "fulfilled") {
-            setAlumni(detailResult.value);
-          } else if (routeAlumni) {
-            console.error("Failed to load full alumni detail:", detailResult.reason?.message || detailResult.reason);
-            setAlumni(routeAlumni);
-          } else {
-            console.error("Failed to load alumni detail:", detailResult.reason?.message || detailResult.reason);
-            Alert.alert("Error", "Failed to load alumni details.");
-            setAlumni(null);
-          }
+        if (!mounted) return;
 
-          if (achievementsResult.status === "fulfilled") {
-            setAchievements(achievementsResult.value || []);
-          } else {
-            console.warn("Failed to load alumni achievements:", achievementsResult.reason?.message || achievementsResult.reason);
-            setAchievements([]);
-          }
+        let resolvedAlumni = routeAlumni;
 
-          if (careersResult.status === "fulfilled") {
-            setCareers(careersResult.value || []);
-          } else {
-            console.warn("Failed to load alumni careers:", careersResult.reason?.message || careersResult.reason);
-            setCareers([]);
-          }
+        if (detailResult.status === "fulfilled") {
+          resolvedAlumni = detailResult.value;
+          setAlumni(detailResult.value);
+        } else if (routeAlumni) {
+          console.error("Failed to load full alumni detail:", detailResult.reason?.message || detailResult.reason);
+          setAlumni(routeAlumni);
+        } else {
+          console.error("Failed to load alumni detail:", detailResult.reason?.message || detailResult.reason);
+          Alert.alert("Error", "Failed to load alumni details.");
+          setAlumni(null);
+        }
 
-          const donationsData = donationsResult.status === "fulfilled" ? donationsResult.value : [];
-          if (donationsResult.status === "rejected") {
-            console.warn("Failed to load alumni donations:", donationsResult.reason?.message || donationsResult.reason);
+        if (achievementsResult.status === "fulfilled") {
+          setAchievements(achievementsResult.value || []);
+        } else {
+          console.warn("Failed to load alumni achievements:", achievementsResult.reason?.message || achievementsResult.reason);
+          setAchievements([]);
+        }
+
+        if (!resolvedAlumni || !isEmploymentHistoryPublic(resolvedAlumni)) {
+          setCareers([]);
+          return;
+        }
+
+        try {
+          const careerData = await communityService.getCareers(resolvedAlumniId);
+          if (mounted && isEmploymentHistoryPublic(resolvedAlumni)) {
+            setCareers(careerData || []);
           }
-          const sortedDonations = (donationsData || [])
-            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
-            .slice(0, 3);
-          setDonations(sortedDonations);
+        } catch (error) {
+          console.warn("Failed to load alumni careers:", error?.message || error);
+          if (mounted) setCareers([]);
+        }
+      };
+
+      loadDetail()
+        .catch((error) => {
+          console.error("Failed to load alumni detail:", error?.message || error);
+          if (mounted) Alert.alert("Error", "Failed to load alumni details.");
         })
         .finally(() => {
           if (mounted) setLoading(false);
@@ -257,8 +267,8 @@ export default function AlumniDetailScreen({ route, navigation }) {
   const isEmailPublic = (alumni.isEmailPublic ?? alumni.is_email_public ?? false) !== false;
   const isPhonePublic = (alumni.isPhonePublic ?? alumni.is_phone_public ?? false) !== false;
   const isPositionPublic =
-    (alumni.isPositionPublic ?? alumni.is_position_public ?? false) !== false &&
-    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? false) !== false;
+    (alumni.isPositionPublic ?? alumni.is_position_public ?? false) !== false;
+  const employmentPublic = isEmploymentHistoryPublic(alumni);
   const isCompanyPublic = (alumni.isCompanyPublic ?? alumni.is_company_public ?? false) !== false;
   const isLocationPublic = (alumni.isLocationPublic ?? alumni.is_location_public ?? true) !== false;
   const isSocialLinksPublic = (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? true) !== false;
@@ -505,6 +515,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
         </View>
 
         {/* Employment History */}
+        {employmentPublic ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="briefcase" size={18} color="#1d4ed8" />
@@ -546,43 +557,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
             ))
           )}
         </View>
-
-        {/* Donations */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="cash" size={18} color="#1d4ed8" />
-            <Text style={styles.sectionTitle}>Donations</Text>
-          </View>
-
-          {donations.length === 0 ? (
-            <Text style={styles.emptyText}>No donations yet.</Text>
-          ) : (
-            donations.map((item) => (
-              <Pressable
-                key={item.id}
-                style={styles.cardItem}
-                onPress={() => navigation.navigate('AlumniDonationReceipt', { item })}
-              >
-                <View style={styles.cardItemHeaderRow}>
-                  <Text style={styles.cardItemTitle}>
-                    {item.purpose || "Donation"}
-                  </Text>
-                  <Text style={styles.cardItemMeta}>
-                    {item.date
-                      ? new Date(item.date).toLocaleDateString()
-                      : "N/A"}
-                  </Text>
-                </View>
-                <Text style={styles.donationAmount}>
-                  PHP {Number(item.amount || 0).toLocaleString()}
-                </Text>
-                {item.description ? (
-                  <Text style={styles.cardItemDesc} numberOfLines={3} ellipsizeMode="tail">{item.description}</Text>
-                ) : null}
-              </Pressable>
-            ))
-          )}
-        </View>
+        ) : null}
       </ScrollView>
     </ScreenContainer>
   );
@@ -798,11 +773,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#1d4ed8",
     fontWeight: "600",
-  },
-  donationAmount: {
-    fontSize: 14,
-    color: "#0f172a",
-    fontWeight: "700",
   },
   bioText: {
     fontSize: 14,

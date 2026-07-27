@@ -48,6 +48,16 @@ export const communityService = {
     return response.data;
   },
 
+  async updateCareer(careerId, payload) {
+    const response = await apiClient.put(`/careers/${careerId}`, payload);
+    return response.data;
+  },
+
+  async deleteCareer(careerId) {
+    const response = await apiClient.delete(`/careers/${careerId}`);
+    return response.data;
+  },
+
   async createAchievement(formData) {
     const response = await apiClient.post('/achievements', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }

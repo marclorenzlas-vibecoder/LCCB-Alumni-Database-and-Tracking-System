@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import alumniService from '../services/alumniService';
-import donationService from '../services/donationService';
 import { authService } from '../services/authService';
 
 const levelLabelMap = {
@@ -45,7 +44,6 @@ const AlumniProfile = () => {
   const [reportEvidenceFile, setReportEvidenceFile] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportStatusMessage, setReportStatusMessage] = useState('');
-  const [donations, setDonations] = useState([]);
 
   const handleReportDeceasedSubmit = async (event) => {
     event.preventDefault();
@@ -112,18 +110,6 @@ const AlumniProfile = () => {
     loadProfile();
   }, [id]);
 
-  useEffect(() => {
-    if (!id) return;
-    donationService.getDonationsByAlumni(id)
-      .then((data) => {
-        const sorted = (Array.isArray(data) ? data : []).sort(
-          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
-        );
-        setDonations(sorted.slice(0, 3));
-      })
-      .catch(() => setDonations([]));
-  }, [id]);
-
   // Show loading state
   if (loading) {
     return (
@@ -167,7 +153,8 @@ const AlumniProfile = () => {
   const isEducationHistoryPublic = flagIsPublic('isEducationHistoryPublic', 'is_education_history_public');
   const isEmailPublic = flagIsPublic('isEmailPublic', 'is_email_public');
   const isPhonePublic = flagIsPublic('isPhonePublic', 'is_phone_public');
-  const isPositionPublic = flagIsPublic('isPositionPublic', 'is_position_public') && flagIsPublic('isEmploymentPublic', 'is_employment_public');
+  const isPositionPublic = flagIsPublic('isPositionPublic', 'is_position_public');
+  const isEmploymentPublic = (profile.isEmploymentPublic ?? profile.is_employment_public ?? false) !== false;
   const isCompanyPublic = flagIsPublic('isCompanyPublic', 'is_company_public');
   const isLocationPublic = flagIsPublic('isLocationPublic', 'is_location_public');
   const isSocialLinksPublic = flagIsPublic('isSocialLinksPublic', 'is_social_links_public');
@@ -201,7 +188,7 @@ const AlumniProfile = () => {
     })) : [
       { name: 'No skills listed', level: 0, category: 'General' }
     ],
-    careerHistory: profile.careerHistory && profile.careerHistory.length > 0 && isPositionPublic ? profile.careerHistory : (isPositionPublic && isCompanyPublic && profile.currentPosition && profile.company ? [
+    careerHistory: profile.careerHistory && profile.careerHistory.length > 0 && isEmploymentPublic ? profile.careerHistory : (isEmploymentPublic && isPositionPublic && isCompanyPublic && profile.currentPosition && profile.company ? [
       { 
         id: '1', 
         company: profile.company || 'Not specified', 
@@ -239,7 +226,6 @@ const AlumniProfile = () => {
     { id: 'skills', label: 'Skills', icon: '🛠️' },
     { id: 'projects', label: 'Projects', icon: '🚀' },
     { id: 'achievements', label: 'Achievements', icon: '🏆' },
-    { id: 'donations', label: 'Donations', icon: '💰' }
   ];
 
   const getSkillCategoryColor = (category) => {
@@ -568,46 +554,6 @@ const AlumniProfile = () => {
     </div>
   );
 
-  const renderDonations = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-xl font-semibold text-gray-900 mb-6">Donations History</h3>
-        {donations.length > 0 ? (
-          <div className="space-y-4">
-            {donations.map((donation) => (
-              <div
-                key={donation.id}
-                className="block flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow cursor-pointer"
-                onClick={() => navigate('/donations')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/donations'); }}
-              >
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-lg font-semibold text-gray-900">{donation.purpose || 'Donation'}</h4>
-                  <p className="text-green-600 font-medium">PHP {Number(donation.amount || 0).toLocaleString()}</p>
-                  <p className="text-gray-500 text-sm">{donation.date ? new Date(donation.date).toLocaleDateString() : 'N/A'}</p>
-                  {donation.description && (
-                    <p className="text-gray-700 mt-2" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{donation.description}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            <p>No donations listed yet.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
   const renderAchievements = () => (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -815,7 +761,6 @@ const AlumniProfile = () => {
           {activeTab === 'skills' && renderSkills()}
           {activeTab === 'projects' && renderProjects()}
           {activeTab === 'achievements' && renderAchievements()}
-          {activeTab === 'donations' && renderDonations()}
         </div>
 
         {/* Back to Directory */}

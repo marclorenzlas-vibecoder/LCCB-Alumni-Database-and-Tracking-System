@@ -6,7 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const notificationService = require('../services/notificationService');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, teacherAuthMiddleware } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
@@ -15,6 +15,38 @@ const eventsDir = path.join(__dirname, '../../uploads/events');
 if (!fs.existsSync(eventsDir)) {
   fs.mkdirSync(eventsDir, { recursive: true });
 }
+
+const isStaffRequest = (req) => {
+  const role = String(req.user?.role || '').toUpperCase();
+  return role === 'TEACHER' || role === 'ADMIN';
+};
+
+const getAuthenticatedAlumniId = async (req) => {
+  const tokenAlumniId = Number(req.user?.alumniId || req.user?.alumni_id || 0);
+  if (Number.isFinite(tokenAlumniId) && tokenAlumniId > 0) {
+    return tokenAlumniId;
+  }
+
+  const userId = Number(req.user?.id || 0);
+  if (Number.isFinite(userId) && userId > 0) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { alumni: { select: { id: true } } }
+    });
+    if (user?.alumni?.id) return Number(user.alumni.id);
+  }
+
+  const email = typeof req.user?.email === 'string' ? req.user.email : '';
+  if (email) {
+    const alumni = await prisma.alumni.findFirst({
+      where: { email },
+      select: { id: true }
+    });
+    if (alumni?.id) return Number(alumni.id);
+  }
+
+  return null;
+};
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -98,7 +130,7 @@ const runUpload = (req, res, next) => {
 };
 
 // Create new event
-router.post('/', authenticateToken, runUpload, async (req, res) => {
+router.post('/', teacherAuthMiddleware, runUpload, async (req, res) => {
   try {
     const { name, description, date, location, sendNotification, notifyBatch, targetBatch } = req.body;
 
@@ -167,7 +199,7 @@ router.post('/', authenticateToken, runUpload, async (req, res) => {
 });
 
 // Update event
-router.put('/:id', authenticateToken, runUpload, async (req, res) => {
+router.put('/:id', teacherAuthMiddleware, runUpload, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, date, location, targetBatch } = req.body;
@@ -236,7 +268,7 @@ router.put('/:id', authenticateToken, runUpload, async (req, res) => {
 });
 
 // Delete event
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -292,13 +324,19 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Join event (register attendance)
-router.post('/:id/join', async (req, res) => {
+router.post('/:id/join', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { alumni_id } = req.body;
 
     if (!alumni_id) {
       return res.status(400).json({ error: 'Alumni ID is required' });
+    }
+    const requestedAlumniId = Number(alumni_id);
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+
+    if (!isStaffRequest(req) && authenticatedAlumniId !== requestedAlumniId) {
+      return res.status(403).json({ error: 'You can only join events using your own alumni profile' });
     }
 
     // Fetch event to check batch restriction
@@ -309,7 +347,7 @@ router.post('/:id/join', async (req, res) => {
 
     // Batch restriction check
     if (event.target_batch) {
-      const alumni = await prisma.alumni.findUnique({ where: { id: Number(alumni_id) } });
+      const alumni = await prisma.alumni.findUnique({ where: { id: requestedAlumniId } });
       if (!alumni || alumni.batch !== event.target_batch) {
         return res.status(403).json({
           error: `This event is restricted to Batch ${event.target_batch}. Your batch does not match.`
@@ -321,7 +359,7 @@ router.post('/:id/join', async (req, res) => {
     const existing = await prisma.event_attendance.findFirst({
       where: {
         event_id: Number(id),
-        alumni_id: Number(alumni_id)
+        alumni_id: requestedAlumniId
       }
     });
 
@@ -333,12 +371,12 @@ router.post('/:id/join', async (req, res) => {
     const attendance = await prisma.event_attendance.create({
       data: {
         event_id: Number(id),
-        alumni_id: Number(alumni_id),
+        alumni_id: requestedAlumniId,
         attended: false
       }
     });
 
-    broadcastUpdate('event.attendance.changed', { eventId: Number(id), alumniId: Number(alumni_id), action: 'joined' });
+    broadcastUpdate('event.attendance.changed', { eventId: Number(id), alumniId: requestedAlumniId, action: 'joined' });
 
     res.json({ message: 'Successfully joined event', attendance });
   } catch (error) {
@@ -348,15 +386,25 @@ router.post('/:id/join', async (req, res) => {
 });
 
 // Leave event (unregister attendance)
-router.post('/:id/leave', async (req, res) => {
+router.post('/:id/leave', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { alumni_id } = req.body;
 
+    if (!alumni_id) {
+      return res.status(400).json({ error: 'Alumni ID is required' });
+    }
+    const requestedAlumniId = Number(alumni_id);
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+
+    if (!isStaffRequest(req) && authenticatedAlumniId !== requestedAlumniId) {
+      return res.status(403).json({ error: 'You can only leave events using your own alumni profile' });
+    }
+
     const attendance = await prisma.event_attendance.findFirst({
       where: {
         event_id: Number(id),
-        alumni_id: Number(alumni_id)
+        alumni_id: requestedAlumniId
       }
     });
 
@@ -368,7 +416,7 @@ router.post('/:id/leave', async (req, res) => {
       where: { id: attendance.id }
     });
 
-    broadcastUpdate('event.attendance.changed', { eventId: Number(id), alumniId: Number(alumni_id), action: 'left' });
+    broadcastUpdate('event.attendance.changed', { eventId: Number(id), alumniId: requestedAlumniId, action: 'left' });
 
     res.json({ message: 'Successfully left event' });
   } catch (error) {
@@ -406,14 +454,20 @@ router.get('/:id/attendees', async (req, res) => {
 });
 
 // Check if user is attending
-router.get('/:id/check-attendance/:alumniId', async (req, res) => {
+router.get('/:id/check-attendance/:alumniId', authenticateToken, async (req, res) => {
   try {
     const { id, alumniId } = req.params;
+    const requestedAlumniId = Number(alumniId);
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+
+    if (!isStaffRequest(req) && authenticatedAlumniId !== requestedAlumniId) {
+      return res.status(403).json({ error: 'You can only check your own attendance status' });
+    }
     
     const attendance = await prisma.event_attendance.findFirst({
       where: {
         event_id: Number(id),
-        alumni_id: Number(alumniId)
+        alumni_id: requestedAlumniId
       }
     });
 

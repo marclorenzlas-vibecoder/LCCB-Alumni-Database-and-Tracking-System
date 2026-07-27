@@ -59,7 +59,8 @@ const PRIVACY_FIELD_MAP = [
   { bodyKeys: ['isEducationHistoryPublic', 'is_education_history_public'], dbKey: 'is_education_history_public' },
   { bodyKeys: ['isEmailPublic', 'is_email_public'], dbKey: 'is_email_public' },
   { bodyKeys: ['isPhonePublic', 'is_phone_public'], dbKey: 'is_phone_public' },
-  { bodyKeys: ['isPositionPublic', 'is_position_public', 'isEmploymentPublic', 'is_employment_public'], dbKey: 'is_position_public' },
+  { bodyKeys: ['isPositionPublic', 'is_position_public'], dbKey: 'is_position_public' },
+  { bodyKeys: ['isEmploymentPublic', 'is_employment_public'], dbKey: 'is_employment_public' },
   { bodyKeys: ['isCompanyPublic', 'is_company_public'], dbKey: 'is_company_public' },
   { bodyKeys: ['isLocationPublic', 'is_location_public'], dbKey: 'is_location_public' },
   { bodyKeys: ['isSocialLinksPublic', 'is_social_links_public'], dbKey: 'is_social_links_public' },
@@ -88,12 +89,6 @@ const appendPrivacyUpdates = (body, target) => {
     if (parsed !== undefined) target[dbKey] = parsed;
   });
 
-  if (
-    target.is_position_public !== undefined &&
-    (body.isEmploymentPublic !== undefined || body.is_employment_public !== undefined)
-  ) {
-    target.is_employment_public = target.is_position_public;
-  }
 };
 
 const hasPrivacyInput = (body) =>
@@ -135,10 +130,10 @@ const alumniPrivacyPayload = (alumni = {}) => ({
   is_email_public: readPrivacyFlag(alumni, 'is_email_public'),
   isPhonePublic: readPrivacyFlag(alumni, 'is_phone_public'),
   is_phone_public: readPrivacyFlag(alumni, 'is_phone_public'),
-  isPositionPublic: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
-  is_position_public: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
-  isEmploymentPublic: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
-  is_employment_public: readPrivacyFlag(alumni, 'is_position_public') && readPrivacyFlag(alumni, 'is_employment_public'),
+  isPositionPublic: readPrivacyFlag(alumni, 'is_position_public'),
+  is_position_public: readPrivacyFlag(alumni, 'is_position_public'),
+  isEmploymentPublic: readPrivacyFlag(alumni, 'is_employment_public'),
+  is_employment_public: readPrivacyFlag(alumni, 'is_employment_public'),
   isCompanyPublic: readPrivacyFlag(alumni, 'is_company_public'),
   is_company_public: readPrivacyFlag(alumni, 'is_company_public'),
   isLocationPublic: readPrivacyFlag(alumni, 'is_location_public'),
@@ -237,7 +232,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Teacher (Admin) register route - Admin only
-router.post('/register-teacher', async (req, res) => {
+router.post('/register-teacher', teacherAuthMiddleware, async (req, res) => {
   try {
     // Support both JSON and form-urlencoded submissions
     const username = req.body.username || req.body.fullName;
@@ -278,7 +273,7 @@ router.post('/register-teacher', async (req, res) => {
 });
 
 // Get all teachers - Admin only
-router.get('/teachers', async (req, res) => {
+router.get('/teachers', teacherAuthMiddleware, async (req, res) => {
   try {
     const teachers = await prisma.teacher.findMany({
       select: {
@@ -453,7 +448,7 @@ router.get('/verify-student-id/:studentId', async (req, res) => {
 });
 
 // Get pending registrations - Admin only
-router.get('/pending-registrations', async (req, res) => {
+router.get('/pending-registrations', teacherAuthMiddleware, async (req, res) => {
   try {
     const { getPendingRegistrations } = require('../services/authService');
     const pending = await getPendingRegistrations();
@@ -787,12 +782,23 @@ router.get('/active-users', authMiddleware, (req, res) => {
 
   res.json(getLimiterStatus());
 });
+const canAccessAccountRecord = (req, userId) => {
+  const requesterId = Number(req.user?.id);
+  const requesterRole = String(req.user?.role || '').toUpperCase();
+  const isStaff = requesterRole === 'TEACHER' || requesterRole === 'ADMIN';
+  return isStaff || requesterId === Number(userId);
+};
+
 // Get user profile with alumni data
-router.get('/profile/:id', async (req, res) => {
+router.get('/profile/:id', authMiddleware, async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');
     const userId = parseInt(req.params.id);
+
+    if (!canAccessAccountRecord(req, userId)) {
+      return res.status(403).json({ error: 'You can only view your own profile' });
+    }
     
     // Check if user is a teacher or regular user
     const teacher = await prisma.teacher.findUnique({
@@ -1272,16 +1278,20 @@ router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async 
 });
 
 // Change password
-router.put('/change-password/:id', async (req, res) => {
+router.put('/change-password/:id', authMiddleware, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const { currentPassword, newPassword, email } = req.body;
+
+    if (!canAccessAccountRecord(req, userId)) {
+      return res.status(403).json({ error: 'You can only change your own password' });
+    }
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Current and new passwords are required' });
     }
 
-    const emailDomain = email.split('@')[1];
+    const emailDomain = String(email || req.user?.email || '').split('@')[1];
     let user;
     
     if (emailDomain === 'lccbonline.com') {
@@ -1324,7 +1334,7 @@ router.put('/change-password/:id', async (req, res) => {
 });
 
 // Get pending user accounts (Admin only)
-router.get('/pending-users', async (req, res) => {
+router.get('/pending-users', teacherAuthMiddleware, async (req, res) => {
   try {
     const pendingUsers = await prisma.pending_registration.findMany({
       where: { status: 'PENDING' },
@@ -1413,9 +1423,17 @@ router.put('/approve-user/:id', teacherAuthMiddleware, async (req, res) => {
 });
 
 // Get user notifications
-router.get('/notifications/:userId', async (req, res) => {
+router.get('/notifications/:userId', authMiddleware, async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
+    const requesterId = Number(req.user?.id);
+    const requesterRole = String(req.user?.role || '').toUpperCase();
+    const isStaff = requesterRole === 'TEACHER' || requesterRole === 'ADMIN';
+
+    if (!isStaff && requesterId !== userId) {
+      return res.status(403).json({ error: 'You can only view your own notifications' });
+    }
+
     const notifications = await prisma.notification.findMany({
       where: { user_id: userId },
       orderBy: { created_at: 'desc' },
@@ -1430,7 +1448,7 @@ router.get('/notifications/:userId', async (req, res) => {
 
 // Get admin notifications (pending registrations)
 // Deprecated - using new notification system
-router.get('/admin-notifications', async (req, res) => {
+router.get('/admin-notifications', teacherAuthMiddleware, async (req, res) => {
   try {
     // Return empty array for backward compatibility
     res.json([]);
@@ -1441,9 +1459,26 @@ router.get('/admin-notifications', async (req, res) => {
 });
 
 // Mark notification as read
-router.put('/notifications/:id/read', async (req, res) => {
+router.put('/notifications/:id/read', authMiddleware, async (req, res) => {
   try {
     const notificationId = parseInt(req.params.id);
+    const notification = await prisma.notification.findUnique({
+      where: { id: notificationId },
+      select: { user_id: true }
+    });
+
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    const requesterId = Number(req.user?.id);
+    const requesterRole = String(req.user?.role || '').toUpperCase();
+    const isStaff = requesterRole === 'TEACHER' || requesterRole === 'ADMIN';
+
+    if (!isStaff && requesterId !== notification.user_id) {
+      return res.status(403).json({ error: 'You can only update your own notifications' });
+    }
+
     await prisma.notification.update({
       where: { id: notificationId },
       data: { is_read: true }
@@ -1456,7 +1491,7 @@ router.put('/notifications/:id/read', async (req, res) => {
 });
 
 // Get all users (Admin only)
-router.get('/all-users', async (req, res) => {
+router.get('/all-users', teacherAuthMiddleware, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -1536,11 +1571,19 @@ router.put('/users/:userId/block', teacherAuthMiddleware, async (req, res) => {
 });
 
 // Get notification preferences
-router.get('/notification-preference/:userId', async (req, res) => {
+router.get('/notification-preference/:userId', authMiddleware, async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
     if (isNaN(userId)) {
       return res.status(400).json({ error: 'Valid User ID is required' });
+    }
+
+    const requesterId = Number(req.user?.id);
+    const requesterRole = String(req.user?.role || '').toUpperCase();
+    const isStaff = requesterRole === 'TEACHER' || requesterRole === 'ADMIN';
+
+    if (!isStaff && requesterId !== userId) {
+      return res.status(403).json({ error: 'You can only view your own notification preferences' });
     }
 
     const user = await prisma.user.findUnique({
@@ -1571,7 +1614,7 @@ router.get('/notification-preference/:userId', async (req, res) => {
 });
 
 // Update notification preference
-router.put('/notification-preference', async (req, res) => {
+router.put('/notification-preference', authMiddleware, async (req, res) => {
   try {
     const {
       userId,
@@ -1588,6 +1631,15 @@ router.put('/notification-preference', async (req, res) => {
     
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const parsedUserId = parseInt(userId);
+    const requesterId = Number(req.user?.id);
+    const requesterRole = String(req.user?.role || '').toUpperCase();
+    const isStaff = requesterRole === 'TEACHER' || requesterRole === 'ADMIN';
+
+    if (!isStaff && requesterId !== parsedUserId) {
+      return res.status(403).json({ error: 'You can only update your own notification preferences' });
     }
 
     const updateData = {};
@@ -1621,7 +1673,7 @@ router.put('/notification-preference', async (req, res) => {
 
     // Check if user exists first
     const existingUser = await prisma.user.findUnique({
-      where: { id: parseInt(userId) }
+      where: { id: parsedUserId }
     });
 
     if (!existingUser) {
@@ -1629,7 +1681,7 @@ router.put('/notification-preference', async (req, res) => {
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id: parseInt(userId) },
+      where: { id: parsedUserId },
       data: updateData
     });
 

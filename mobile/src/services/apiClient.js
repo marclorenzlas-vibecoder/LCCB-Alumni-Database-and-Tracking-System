@@ -52,14 +52,20 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const status = error?.response?.status;
-    const serverMessage = error?.response?.data?.error || '';
+    const responseData = error?.response?.data || {};
+    const serverMessage = responseData.error || responseData.message || '';
+    const responseCode = responseData.code || '';
+    const isExpiredToken =
+      status === 401 ||
+      (status === 403 && /invalid|expired|token/i.test(serverMessage));
+    const isBlockedAccount = status === 403 && responseCode === 'ACCOUNT_BLOCKED';
 
-    if (status === 403) {
-      console.warn('[apiClient] 403 received:', serverMessage);
+    if (isExpiredToken || isBlockedAccount) {
+      console.warn('[apiClient] auth error received:', status, serverMessage);
       await AsyncStorage.removeItem(TOKEN_KEY);
       await AsyncStorage.removeItem(USER_KEY);
       if (onAuthError) {
-        onAuthError('Your session has expired. Please log in again.');
+        onAuthError(isBlockedAccount ? serverMessage : 'Your session has expired. Please log in again.');
       }
     }
 

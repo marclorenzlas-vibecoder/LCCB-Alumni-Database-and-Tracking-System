@@ -4,7 +4,6 @@ import alumniService from '../services/alumniService';
 import achievementService from '../services/achievementService';
 import careerService from '../services/careerService';
 import { realtimeClient } from '../services/realtimeClient';
-import donationService from '../services/donationService';
 import officerService from '../services/officerService';
 import { authService } from '../services/authService';
 import ConfirmModal from './ConfirmModal';
@@ -151,13 +150,13 @@ const registerCourseSections = buildRegisterCourseSections();
 
 const PROGRAM_ALIGNMENT_OPTIONS = [
   { value: '', label: 'Auto-check' },
-  { value: 'ALIGNED', label: 'Aligned' },
-  { value: 'NOT_ALIGNED', label: 'Not aligned' },
-  { value: 'NEEDS_REVIEW', label: 'Needs review' }
+  { value: 'ALIGNED', label: 'Related' },
+  { value: 'NOT_ALIGNED', label: 'Not Related' },
+  { value: 'NEEDS_REVIEW', label: 'Needs Checking' }
 ];
 
 const getProgramAlignmentLabel = (value) => (
-  PROGRAM_ALIGNMENT_OPTIONS.find((option) => option.value === value)?.label || 'Needs review'
+  PROGRAM_ALIGNMENT_OPTIONS.find((option) => option.value === value)?.label || 'Needs Checking'
 );
 
 const getProgramAlignmentClass = (value) => {
@@ -172,6 +171,9 @@ const AlumniDirectory = () => {
   const currentUser = useMemo(() => authService.getCurrentUser(), []);
   const privateLabel = 'Hidden by User';
   const fieldIsPublic = (record, camelKey, snakeKey) => isTeacher || (record?.[camelKey] ?? record?.[snakeKey] ?? true) !== false;
+  const canViewEmploymentHistory = (record) => (
+    (record?.isEmploymentPublic ?? record?.is_employment_public ?? false) !== false
+  );
   const visibleOrPrivate = (record, value, camelKey, snakeKey, fallback = 'Not specified') => {
     if (!fieldIsPublic(record, camelKey, snakeKey)) return privateLabel;
     return value || fallback;
@@ -210,12 +212,10 @@ const AlumniDirectory = () => {
   // Related record modals
   const [showAchievementModal, setShowAchievementModal] = useState(false);
   const [showCareerModal, setShowCareerModal] = useState(false);
-  const [showDonationModal, setShowDonationModal] = useState(false);
 
   // Related records data
   const [achievements, setAchievements] = useState([]);
   const [careers, setCareers] = useState([]);
-  const [donations, setDonations] = useState([]);
 
   // Batch officers
   const [batchOfficers, setBatchOfficers] = useState([]);
@@ -235,7 +235,6 @@ const AlumniDirectory = () => {
     alignment_notes: '',
     description: ''
   });
-  const [newDonation, setNewDonation] = useState({ amount: '', purpose: '', date: '' });
 
   // Confirm modal
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'danger' });
@@ -479,10 +478,10 @@ const AlumniDirectory = () => {
       if (error.response?.status === 401 || error.response?.status === 403) {
         const errorMsg = error.response?.data?.error || '';
         if (errorMsg.includes('expired') || errorMsg.includes('Invalid')) {
-          setToast({ isOpen: true, message: 'Your session has expired. Please log in again to continue.', type: 'error' });
+          toast.error('Your session has expired. Please log in again to continue.');
           window.location.href = '/';
         } else {
-          setToast({ isOpen: true, message: 'Access denied. You need teacher privileges to perform this action.', type: 'error' });
+          toast.error('Access denied. You need teacher privileges to perform this action.');
         }
       } else {
         toast.error(error.response?.data?.message || 'Failed to assign officer');
@@ -508,11 +507,11 @@ const AlumniDirectory = () => {
       if (error.response?.status === 401 || error.response?.status === 403) {
         const errorMsg = error.response?.data?.error || '';
         if (errorMsg.includes('expired') || errorMsg.includes('Invalid')) {
-          setToast({ isOpen: true, message: 'Your session has expired. Please log in again to continue.', type: 'error' });
+          toast.error('Your session has expired. Please log in again to continue.');
           // Optionally redirect to login
           window.location.href = '/';
         } else {
-          setToast({ isOpen: true, message: 'Access denied. You need teacher privileges to perform this action.', type: 'error' });
+          toast.error('Access denied. You need teacher privileges to perform this action.');
         }
       } else {
         toast.error('Failed to remove officer. Please try again.');
@@ -602,6 +601,8 @@ const AlumniDirectory = () => {
   const openViewModal = async (alumnus) => {
     // Set initial data and open modal immediately
     setViewingAlumni(alumnus);
+    setAchievements([]);
+    setCareers([]);
     setShowViewModal(true);
 
     try {
@@ -611,21 +612,23 @@ const AlumniDirectory = () => {
         setViewingAlumni(normalized);
       }
 
-      const [ach, car, don] = await Promise.all([
+      const effectiveAlumni = normalized || alumnus;
+      const [ach, car] = await Promise.all([
         achievementService.getAchievementsByAlumni(alumnus.id),
-        careerService.getCareersByAlumni(alumnus.id),
-        donationService.getDonationsByAlumni(alumnus.id)
+        canViewEmploymentHistory(effectiveAlumni)
+          ? careerService.getCareersByAlumni(alumnus.id)
+          : Promise.resolve([])
       ]);
       setAchievements(ach || []);
       setCareers(car || []);
-      setDonations(don || []);
     } catch (e) {
       console.warn('Failed loading related records:', e.message);
-      setAchievements([]); setCareers([]); setDonations([]);
+      setAchievements([]);
+      setCareers([]);
     }
   };
 
-  // Delete helpers (achievements/careers/donations)
+  // Delete helpers (achievements/careers)
   const handleDeleteAchievement = (id) => {
     setConfirmModal({
       isOpen: true,
@@ -662,25 +665,6 @@ const AlumniDirectory = () => {
       }
     });
   };
-  const handleDeleteDonation = (id) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Delete Donation',
-      message: 'Remove this donation entry?',
-      type: 'danger',
-      onConfirm: async () => {
-        try {
-          await donationService.deleteDonation(id);
-          setDonations(prev => prev.filter(d => d.id !== id));
-        } catch (e) {
-          toast.error('Failed to delete donation');
-        } finally {
-          setConfirmModal(m => ({ ...m, isOpen: false }));
-        }
-      }
-    });
-  };
-
   // Create related records
   const handleAddAchievement = async (e) => {
     e.preventDefault();
@@ -713,22 +697,28 @@ const AlumniDirectory = () => {
       });
     } catch (err) { toast.error('Failed to add employment'); }
   };
-  const handleAddDonation = async (e) => {
-    e.preventDefault();
-    if (!viewingAlumni) return;
+
+  const handleReviewCareerMatch = async (careerId, programAlignment) => {
     try {
-      // Don't send alumniId - it's automatically obtained from authentication token
-      const payload = { ...newDonation };
-      const created = await donationService.createDonation(payload);
-      setDonations(prev => [...prev, created]);
-      setShowDonationModal(false);
-      setNewDonation({ amount: '', purpose: '', date: '' });
+      let updated;
+      try {
+        updated = await careerService.reviewCareerMatch(careerId, {
+          program_alignment: programAlignment
+        });
+      } catch (reviewError) {
+        if (reviewError.response?.status !== 404) {
+          throw reviewError;
+        }
+        updated = await careerService.updateCareer(careerId, {
+          program_alignment: programAlignment
+        });
+      }
+      setCareers(prev => prev.map(c => (c.id === careerId ? updated : c)));
+      toast.success('Employment match updated');
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to add donation';
-      toast.error(errorMsg);
+      toast.error(err.response?.data?.error || 'Failed to update employment match');
     }
   };
-
   // CSV export (teacher only)
   const generateCsv = () => {
     const rows = [
@@ -995,12 +985,12 @@ const AlumniDirectory = () => {
                   )}
                   {/* Achievements */}
                   <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
-                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>Achievements</h3>{isTeacher && <button onClick={() => setShowAchievementModal(true)} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-700 rounded-lg hover:bg-blue-800">Add New</button>}</div>
+                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>Achievements</h3></div>
                     <div className="space-y-3">{achievements.length === 0 ? <p className="text-gray-500 text-sm">No achievements recorded yet.</p> : achievements.map(a => (<div key={a.id} className="rounded-2xl border border-transparent bg-transparent p-4"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">{a.title}</h4>{a.description && <p className="text-sm text-gray-600 mt-1" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.description}</p>}{a.date && <p className="text-xs text-gray-500 mt-2">{new Date(a.date).toLocaleDateString()}</p>}</div>{isTeacher && <button onClick={() => handleDeleteAchievement(a.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
                   </div>
                   {/* Employment */}
-                  <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
-                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3>{isTeacher && <button onClick={() => setShowCareerModal(true)} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-700 rounded-lg hover:bg-blue-800">Add New</button>}</div>
+                  {canViewEmploymentHistory(viewingAlumni) && <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
+                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3></div>
                     <div className="space-y-2">
                       {careers.length === 0 ? (
                         <p className="text-gray-500 text-sm">No employment history recorded yet.</p>
@@ -1021,6 +1011,20 @@ const AlumniDirectory = () => {
                                 </span>
                                 {c.alignment_notes && <span className="text-xs text-gray-500">{c.alignment_notes}</span>}
                               </div>
+                              {isTeacher && (
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Program Match</label>
+                                  <select
+                                    value={c.program_alignment || 'NEEDS_REVIEW'}
+                                    onChange={(event) => handleReviewCareerMatch(c.id, event.target.value)}
+                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                                  >
+                                    {PROGRAM_ALIGNMENT_OPTIONS.filter((option) => option.value).map((option) => (
+                                      <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
                               {c.description && <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{c.description}</p>}
                             </div>
                             {isTeacher && <button onClick={() => handleDeleteCareer(c.id)} className="text-red-600 hover:text-red-800 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}
@@ -1028,12 +1032,7 @@ const AlumniDirectory = () => {
                         </div>
                       ))}
                     </div>
-                  </div>
-                  {/* Donations */}
-                  <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
-                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Donations</h3>{isTeacher && <button onClick={() => setShowDonationModal(true)} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-700 rounded-lg hover:bg-blue-800">Add New</button>}</div>
-                    <div className="space-y-3">{donations.length === 0 ? <p className="text-gray-500 text-sm">No donations recorded yet.</p> : donations.map(d => (<div key={d.id} className="rounded-2xl border border-transparent bg-transparent p-4"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">${d.amount}</h4>{d.purpose && <p className="text-sm text-gray-600 mt-1">{d.purpose}</p>}{d.date && <p className="text-xs text-gray-500 mt-2">{new Date(d.date).toLocaleDateString()}</p>}</div>{isTeacher && <button onClick={() => handleDeleteDonation(d.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
-                  </div>
+                  </div>}
                 </div>
               </div>
             </div>
@@ -1321,7 +1320,7 @@ const AlumniDirectory = () => {
               <form onSubmit={handleAddCareer} className="space-y-4 sm:space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Position *</label>
                     <input
                       type="text"
                       value={newCareer.job_title}
@@ -1373,7 +1372,7 @@ const AlumniDirectory = () => {
                     </div>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Program-job alignment</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Program Match</label>
                     <select
                       value={newCareer.program_alignment}
                       onChange={e => setNewCareer(s => ({ ...s, program_alignment: e.target.value }))}
@@ -1385,7 +1384,7 @@ const AlumniDirectory = () => {
                     </select>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Alignment Notes</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Review Notes</label>
                     <input
                       type="text"
                       value={newCareer.alignment_notes}
@@ -1408,55 +1407,6 @@ const AlumniDirectory = () => {
                 <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-6 sm:mt-8 pt-4 border-t border-gray-200">
                   <button type="button" onClick={() => setShowCareerModal(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
                   <button type="submit" className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Add Employment</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Donation Modal */}
-        {showDonationModal && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[110]">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
-              <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Donation</h3>
-              <form onSubmit={handleAddDonation} className="space-y-4 sm:space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount (PHP) *</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₱</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newDonation.amount}
-                      onChange={e => setNewDonation(s => ({ ...s, amount: e.target.value }))}
-                      className="mt-1 block w-full pl-8 pr-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Purpose</label>
-                  <input
-                    type="text"
-                    value={newDonation.purpose}
-                    onChange={e => setNewDonation(s => ({ ...s, purpose: e.target.value }))}
-                    className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                    placeholder="e.g., Scholarship Fund, Building Renovation"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={newDonation.date}
-                    onChange={e => setNewDonation(s => ({ ...s, date: e.target.value }))}
-                    className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                  />
-                </div>
-                <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-6 sm:mt-8 pt-4 border-t border-gray-200">
-                  <button type="button" onClick={() => setShowDonationModal(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button type="submit" className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Add Donation</button>
                 </div>
               </form>
             </div>
@@ -1716,6 +1666,7 @@ const AlumniDirectory = () => {
             const levelText = fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public')
               ? getLevelLabel(a.level)
               : 'Level hidden';
+            const educationSummary = [courseText, levelText].filter(Boolean).join(' \u00b7 ');
             const userStatus = userStatuses[getAlumniChatUserId(a)];
             const isOnline = Boolean(userStatus?.online);
 
@@ -1724,7 +1675,7 @@ const AlumniDirectory = () => {
                 key={a.id}
                 role="button"
                 tabIndex={0}
-                className="group flex h-full min-h-[120px] w-full cursor-pointer items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-3 text-left shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/80 hover:bg-slate-50 hover:shadow-[0_16px_34px_-22px_rgba(15,23,42,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+                className="alumni-directory-card group flex h-full min-h-[120px] w-full cursor-pointer items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-3 text-left shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/80 hover:bg-slate-50 hover:shadow-[0_16px_34px_-22px_rgba(15,23,42,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
                 onClick={() => openViewModal(a)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1734,27 +1685,18 @@ const AlumniDirectory = () => {
                 }}
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="relative h-12 w-12 shrink-0">
+                  <div className="h-12 w-12 shrink-0">
                     <img
                       src={a.profileImage || getInitialAvatarSrc(a.firstName, a.lastName, 96)}
                       onError={(event) => handleProfileImageError(event, a.firstName, a.lastName, 96)}
                       alt={fullName}
-                      className="h-12 w-12 rounded-full border-2 border-white object-cover shadow-sm ring-1 ring-slate-200"
+                      title={`${fullName} - ${isOnline ? 'Online' : 'Offline'}`}
+                      className={`avatar alumni-list-avatar h-12 w-12 rounded-full object-cover ${isOnline ? 'online' : 'offline'}`}
                     />
-                    {isOnline && (
-                      <span
-                        className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 shadow-sm"
-                        aria-label="Online"
-                        title="Online"
-                      />
-                    )}
                   </div>
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-gray-950 sm:text-base" title={fullName}>{fullName}</h3>
-                    <p className="mt-0.5 line-clamp-2 text-xs font-medium leading-snug text-slate-600 sm:text-sm" title={courseText}>{courseText}</p>
-                    <p className="mt-1 text-[11px] font-medium leading-snug text-slate-500 sm:text-xs" title={levelText}>
-                      <span className="line-clamp-2">{levelText}</span>
-                    </p>
+                    <p className="mt-0.5 truncate text-xs font-medium leading-snug text-slate-600 sm:text-sm" title={educationSummary}>{educationSummary}</p>
                   </div>
                 </div>
               </div>

@@ -9,7 +9,7 @@ import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
 import { communityService } from '../../services/communityService';
 import { adminService } from '../../services/adminService';
-import { getSystemUserId, listenToConversationSummaries } from '../../services/firebaseChatService';
+import { getAlumniChatUserId, getSystemUserId, listenToConversationSummaries, listenToUserStatuses } from '../../services/firebaseChatService';
 import { realtimeClient } from '../../services/realtimeClient';
 import { imageUrl } from '../../utils/formatters';
 import { dataEmitter } from '../../utils/EventEmitter';
@@ -196,6 +196,7 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
   const [query, setQuery] = useState('');
   const [erroredImages, setErroredImages] = useState(new Set());
   const [conversationSummaries, setConversationSummaries] = useState({});
+  const [userStatuses, setUserStatuses] = useState({});
   const [selectedLevel, setSelectedLevel] = useState('ALL');
   const [selectedBatch, setSelectedBatch] = useState('ALL');
   const [selectedGroup, setSelectedGroup] = useState('ALL');
@@ -227,6 +228,16 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
       ),
     [conversationSummaries]
   );
+
+  const statusUserIdKey = useMemo(() => {
+    const ids = list.map((item) => getAlumniChatUserId(item)).filter(Boolean);
+    return Array.from(new Set(ids)).join('|');
+  }, [list]);
+
+  useEffect(() => {
+    const ids = statusUserIdKey ? statusUserIdKey.split('|') : [];
+    return listenToUserStatuses(ids, setUserStatuses);
+  }, [statusUserIdKey]);
 
   const loadAlumni = React.useCallback((showSpinner = true) => {
     if (showSpinner) setLoading(true);
@@ -486,6 +497,9 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
           const primaryEducation = getPrimaryEducation(item);
           const course = item.course || 'Course not provided';
           const level = getLevelDisplayLabel(primaryEducation.level || item.level);
+          const educationSummary = [course, level].filter(Boolean).join(' \u00b7 ');
+          const userStatus = userStatuses[getAlumniChatUserId(item)];
+          const avatarStatusStyle = userStatus?.online ? styles.avatarOnline : styles.avatarOffline;
           const hasErrored = erroredImages.has(item.id);
 
           return (
@@ -494,22 +508,19 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
                 {img && !hasErrored ? (
                   <Image
                     source={{ uri: img }}
-                    style={styles.avatar}
+                    style={[styles.avatar, avatarStatusStyle]}
                     resizeMode="cover"
                     onError={() => setErroredImages((prev) => new Set(prev).add(item.id))}
                   />
                 ) : (
-                  <View style={styles.avatarFallback}>
+                  <View style={[styles.avatarFallback, avatarStatusStyle]}>
                     <Text style={styles.avatarInitial}>{fullName.slice(0, 1).toUpperCase()}</Text>
                   </View>
                 )}
 
                 <View style={styles.infoBlock}>
                   <Text style={styles.name}>{fullName}</Text>
-                  <Text style={styles.metaLine} numberOfLines={1} ellipsizeMode="tail">{course}</Text>
-                  <View style={styles.levelBadge}>
-                    <Text style={styles.levelBadgeText} numberOfLines={1} ellipsizeMode="tail">{level}</Text>
-                  </View>
+                  <Text style={styles.metaLine} numberOfLines={1} ellipsizeMode="tail">{educationSummary}</Text>
                 </View>
               </View>
             </Pressable>
@@ -931,8 +942,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#e2e8f0',
-    overflow: 'hidden'
+    backgroundColor: '#e2e8f0'
   },
   avatarFallback: {
     width: 36,
@@ -941,6 +951,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe',
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  avatarOnline: {
+    boxShadow: '0 0 0 2px #ffffff, 0 0 0 4px #22c55e'
+  },
+  avatarOffline: {
+    boxShadow: '0 0 0 2px #ffffff, 0 0 0 4px #d1d5db'
   },
   avatarInitial: {
     color: '#1e3a8a',
@@ -959,20 +975,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748b',
     maxWidth: '100%'
-  },
-  levelBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 3,
-    maxWidth: '100%',
-    borderRadius: 999,
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 8,
-    paddingVertical: 3
-  },
-  levelBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1d4ed8'
   },
   schoolId: {
     width: 60,

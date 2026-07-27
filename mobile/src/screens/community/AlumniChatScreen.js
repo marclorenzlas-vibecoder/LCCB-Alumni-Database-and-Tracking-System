@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -35,6 +37,7 @@ import {
   unblockChatUser
 } from '../../services/firebaseChatService';
 import { imageUrl } from '../../utils/formatters';
+import { isTeacher } from '../../utils/auth';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -196,7 +199,20 @@ function SectionTitle({ children }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
-function RequestSectionToggle({ title, count, expanded, onPress }) {
+function RequestSectionToggle({ title, count, expanded, onPress, animationProgress }) {
+  const chevronStyle = animationProgress
+    ? {
+        transform: [
+          {
+            rotate: animationProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['0deg', '180deg']
+            })
+          }
+        ]
+      }
+    : null;
+
   return (
     <Pressable style={styles.sectionToggle} onPress={onPress}>
       <View style={styles.sectionToggleTitle}>
@@ -205,7 +221,9 @@ function RequestSectionToggle({ title, count, expanded, onPress }) {
           <Text style={styles.sectionCountText}>{count > 99 ? '99+' : count}</Text>
         </View>
       </View>
-      <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+      <Animated.View style={chevronStyle}>
+        <Ionicons name="chevron-down" size={16} color={expanded ? '#2563eb' : '#64748b'} />
+      </Animated.View>
     </Pressable>
   );
 }
@@ -251,6 +269,8 @@ export default function AlumniChatScreen({ navigation, user }) {
   const [isSending, setIsSending] = useState(false);
   const [requestActionId, setRequestActionId] = useState('');
   const [showSentRequests, setShowSentRequests] = useState(false);
+  const [renderSentRequests, setRenderSentRequests] = useState(false);
+  const sentRequestsAnimation = useRef(new Animated.Value(0)).current;
   const listRef = useRef(null);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
@@ -265,7 +285,7 @@ export default function AlumniChatScreen({ navigation, user }) {
       try {
         const [alumni, staff] = await Promise.all([
           communityService.getAllAlumni(),
-          adminService.getTeachers().catch(() => [])
+          isTeacher(user) ? adminService.getTeachers().catch(() => []) : Promise.resolve([])
         ]);
 
         if (!mounted) return;
@@ -294,7 +314,7 @@ export default function AlumniChatScreen({ navigation, user }) {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   const alumniSearchContacts = useMemo(() => {
     const seen = new Set();
@@ -533,6 +553,13 @@ export default function AlumniChatScreen({ navigation, user }) {
     }
   }, [messages.length]);
 
+  useEffect(() => {
+    if (sentRequests.length > 0) return;
+    setShowSentRequests(false);
+    setRenderSentRequests(false);
+    sentRequestsAnimation.setValue(0);
+  }, [sentRequests.length, sentRequestsAnimation]);
+
   const handleSendMessage = async () => {
     if (!selectedContact || isSending || !canSendMessage) return;
 
@@ -606,8 +633,25 @@ export default function AlumniChatScreen({ navigation, user }) {
   };
 
   const toggleSentRequests = () => {
+    const shouldOpen = !showSentRequests;
+
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setShowSentRequests((previous) => !previous);
+    if (shouldOpen) {
+      setRenderSentRequests(true);
+    }
+    setShowSentRequests(shouldOpen);
+
+    Animated.timing(sentRequestsAnimation, {
+      toValue: shouldOpen ? 1 : 0,
+      duration: shouldOpen ? 220 : 180,
+      easing: shouldOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      useNativeDriver: true
+    }).start(({ finished }) => {
+      if (finished && !shouldOpen) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setRenderSentRequests(false);
+      }
+    });
   };
 
   const renderRequestActions = (contact) => (
@@ -790,9 +834,25 @@ export default function AlumniChatScreen({ navigation, user }) {
             count={sentRequests.length}
             expanded={showSentRequests}
             onPress={toggleSentRequests}
+            animationProgress={sentRequestsAnimation}
           />
-          {showSentRequests ? (
-            <View style={styles.collapsibleContent}>
+          {renderSentRequests ? (
+            <Animated.View
+              style={[
+                styles.collapsibleContent,
+                {
+                  opacity: sentRequestsAnimation,
+                  transform: [
+                    {
+                      translateY: sentRequestsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-6, 0]
+                      })
+                    }
+                  ]
+                }
+              ]}
+            >
               {sentRequests.map((contact) => (
                 <ContactRow
                   key={`sent-${contact.userId}`}
@@ -803,7 +863,7 @@ export default function AlumniChatScreen({ navigation, user }) {
                   onPress={() => openContact(contact)}
                 />
               ))}
-            </View>
+            </Animated.View>
           ) : null}
         </View>
       ) : null}

@@ -1,28 +1,93 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, teacherAuthMiddleware } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { inferProgramAlignment, normalizeProgramAlignment } = require('../utils/programAlignment');
+const jwt = require('jsonwebtoken');
 const prisma = new PrismaClient();
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+const softAuth = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization || req.headers.Authorization || req.headers['x-access-token'] || '';
+    const token = String(authHeader).replace(/^Bearer\s+/i, '').trim();
+    req.user = token ? jwt.verify(token, JWT_SECRET) : null;
+  } catch {
+    req.user = null;
+  }
+  next();
+};
+
+const isStaffRequest = (req) => {
+  const role = String(req.user?.role || '').toUpperCase();
+  return role === 'TEACHER' || role === 'ADMIN';
+};
+
+const getAuthenticatedAlumniId = async (req) => {
+  const tokenAlumniId = Number(req.user?.alumniId || req.user?.alumni_id || 0);
+  if (Number.isFinite(tokenAlumniId) && tokenAlumniId > 0) {
+    return tokenAlumniId;
+  }
+
+  const userId = Number(req.user?.id || 0);
+  if (Number.isFinite(userId) && userId > 0) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { alumni: { select: { id: true } } }
+    });
+    if (user?.alumni?.id) return Number(user.alumni.id);
+  }
+
+  const email = typeof req.user?.email === 'string' ? req.user.email : '';
+  if (email) {
+    const alumni = await prisma.alumni.findFirst({
+      where: { email },
+      select: { id: true }
+    });
+    if (alumni?.id) return Number(alumni.id);
+  }
+
+  return null;
+};
+
+const canViewCareerForAlumni = (req, alumni) => {
+  if (!alumni) return false;
+  if (isStaffRequest(req)) return true;
+
+  const viewerId = Number(req.user?.id);
+  const viewerAlumniId = Number(req.user?.alumniId || req.user?.alumni_id);
+  const viewerEmail = String(req.user?.email || '').toLowerCase();
+  const alumniEmail = String(alumni.email || '').toLowerCase();
+
+  if (viewerId && Number(alumni.user_id) === viewerId) return true;
+  if (viewerAlumniId && Number(alumni.id) === viewerAlumniId) return true;
+  if (viewerEmail && alumniEmail && viewerEmail === alumniEmail) return true;
+
+  return alumni.is_employment_public === true;
+};
 
 // Get all career entries
-router.get('/', async (req, res) => {
+router.get('/', softAuth, async (req, res) => {
   try {
     const careers = await prisma.career_entry.findMany({
       include: {
         alumni: {
           select: {
+            id: true,
+            user_id: true,
             first_name: true,
             last_name: true,
-            email: true
+            email: true,
+            is_position_public: true,
+            is_employment_public: true
           }
         }
       },
       orderBy: { start_date: 'desc' }
     });
-    res.json(careers);
+    res.json(careers.filter((career) => canViewCareerForAlumni(req, career.alumni)));
   } catch (error) {
     console.error('Error fetching all career entries:', error);
     res.status(500).json({ error: 'Failed to fetch career entries' });
@@ -30,9 +95,24 @@ router.get('/', async (req, res) => {
 });
 
 // Get all career entries for an alumni
-router.get('/alumni/:alumniId', async (req, res) => {
+router.get('/alumni/:alumniId', softAuth, async (req, res) => {
   try {
     const { alumniId } = req.params;
+    const alumni = await prisma.alumni.findUnique({
+      where: { id: Number(alumniId) },
+      select: {
+        id: true,
+        user_id: true,
+        email: true,
+        is_position_public: true,
+        is_employment_public: true
+      }
+    });
+
+    if (!canViewCareerForAlumni(req, alumni)) {
+      return res.json([]);
+    }
+
     const careers = await prisma.career_entry.findMany({
       where: { alumni_id: Number(alumniId) },
       orderBy: { start_date: 'desc' }
@@ -66,8 +146,14 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    const requestedAlumniId = Number(alumni_id);
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== requestedAlumniId) {
+      return res.status(403).json({ error: 'You can only create career entries for your own profile' });
+    }
+
     const alumni = await prisma.alumni.findUnique({
-      where: { id: Number(alumni_id) },
+      where: { id: requestedAlumniId },
       select: { course: true }
     });
     const inferredAlignment = inferProgramAlignment({
@@ -76,11 +162,11 @@ router.post('/', authenticateToken, async (req, res) => {
       company,
       description
     });
-    const manualAlignment = normalizeProgramAlignment(program_alignment);
+    const manualAlignment = isStaffRequest(req) ? normalizeProgramAlignment(program_alignment) : null;
 
     const career = await prisma.career_entry.create({
       data: {
-        alumni_id: Number(alumni_id),
+        alumni_id: requestedAlumniId,
         company: company.trim(),
         job_title: job_title.trim(),
         start_date: start_date ? new Date(start_date) : null,
@@ -88,7 +174,7 @@ router.post('/', authenticateToken, async (req, res) => {
         description: description ? description.trim() : null,
         is_current: is_current || false,
         program_alignment: manualAlignment || inferredAlignment.status,
-        alignment_notes: alignment_notes ? alignment_notes.trim() : inferredAlignment.notes
+        alignment_notes: isStaffRequest(req) && alignment_notes ? alignment_notes.trim() : inferredAlignment.notes
       }
     });
 
@@ -144,6 +230,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Career entry not found' });
     }
 
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== oldCareer.alumni_id) {
+      return res.status(403).json({ error: 'You can only update your own career entries' });
+    }
+
     const updateData = {};
     if (company) updateData.company = company.trim();
     if (job_title) updateData.job_title = job_title.trim();
@@ -151,15 +242,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (end_date !== undefined) updateData.end_date = end_date ? new Date(end_date) : null;
     if (description !== undefined) updateData.description = description ? description.trim() : null;
     if (is_current !== undefined) updateData.is_current = is_current;
-    if (program_alignment !== undefined) {
+    if (isStaffRequest(req) && program_alignment !== undefined) {
       const manualAlignment = normalizeProgramAlignment(program_alignment);
       updateData.program_alignment = manualAlignment || oldCareer.program_alignment || 'NEEDS_REVIEW';
     }
-    if (alignment_notes !== undefined) {
+    if (isStaffRequest(req) && alignment_notes !== undefined) {
       updateData.alignment_notes = alignment_notes ? alignment_notes.trim() : null;
     }
 
-    if (program_alignment === undefined) {
+    if (!isStaffRequest(req) || program_alignment === undefined) {
       const inferredAlignment = inferProgramAlignment({
         course: oldCareer.alumni?.course,
         jobTitle: updateData.job_title || oldCareer.job_title,
@@ -208,11 +299,78 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Review course/program match for an employment record (Admin/teacher only)
+router.patch('/:id/review', teacherAuthMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { program_alignment, alignment_notes } = req.body;
+    const normalizedAlignment = normalizeProgramAlignment(program_alignment);
+
+    if (!normalizedAlignment) {
+      return res.status(400).json({
+        error: 'Program match is required',
+        allowed: ['ALIGNED', 'NOT_ALIGNED', 'NEEDS_REVIEW']
+      });
+    }
+
+    const oldCareer = await prisma.career_entry.findUnique({
+      where: { id: Number(id) }
+    });
+
+    if (!oldCareer) {
+      return res.status(404).json({ error: 'Career entry not found' });
+    }
+
+    const career = await prisma.career_entry.update({
+      where: { id: Number(id) },
+      data: {
+        program_alignment: normalizedAlignment,
+        alignment_notes: alignment_notes ? String(alignment_notes).trim() : null
+      }
+    });
+
+    broadcastUpdate('career.updated', { careerId: career.id, alumniId: career.alumni_id });
+
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'career_entry',
+      entityId: career.id,
+      entityLabel: `${career.job_title} at ${career.company}`,
+      summary: `Reviewed employment match for "${career.job_title} at ${career.company}"`,
+      details: {
+        changes: buildChangeSet(oldCareer, career, [
+          { key: 'program_alignment', label: 'Program Match' },
+          { key: 'alignment_notes', label: 'Review Notes' }
+        ])
+      }
+    });
+
+    res.json(career);
+  } catch (error) {
+    console.error('Error reviewing career entry:', error);
+    res.status(500).json({
+      error: 'Failed to review career entry',
+      details: error.message
+    });
+  }
+});
+
 // Delete career entry
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await prisma.career_entry.findUnique({ where: { id: Number(id) } });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Career entry not found' });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== existing.alumni_id) {
+      return res.status(403).json({ error: 'You can only delete your own career entries' });
+    }
+
     await prisma.career_entry.delete({
       where: { id: Number(id) }
     });

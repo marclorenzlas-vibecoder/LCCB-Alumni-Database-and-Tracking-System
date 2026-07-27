@@ -8,6 +8,7 @@ import PrimaryButton from '../../components/PrimaryButton';
 import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
 import { authService } from '../../services/authService';
+import { communityService } from '../../services/communityService';
 import { realtimeClient } from '../../services/realtimeClient';
 import { getAlumniId } from '../../utils/auth';
 import { imageUrl } from '../../utils/formatters';
@@ -68,6 +69,30 @@ const getPrimaryEducation = (history = []) => {
 
 const formatLevelLabel = (value) => LEVEL_LABELS[value] || value || 'Not set';
 
+const createCareerForm = (entry = {}) => ({
+  company: entry.company || '',
+  job_title: entry.job_title || '',
+  start_date: entry.start_date ? String(entry.start_date).slice(0, 10) : '',
+  end_date: entry.end_date ? String(entry.end_date).slice(0, 10) : '',
+  is_current: entry.is_current !== false,
+  description: entry.description || ''
+});
+
+const emptyCareerForm = () => createCareerForm({ is_current: true });
+
+const formatCareerDate = (value) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+};
+
+const getAlignmentLabel = (value) => {
+  if (value === 'ALIGNED') return 'Related';
+  if (value === 'NOT_ALIGNED') return 'Not Related';
+  return 'Needs Checking';
+};
+
 const DEFAULT_PRIVACY_SETTINGS = {
   isStudentIdPublic: false,
   isDateOfBirthPublic: false,
@@ -77,6 +102,7 @@ const DEFAULT_PRIVACY_SETTINGS = {
   isEmailPublic: false,
   isPhonePublic: false,
   isPositionPublic: false,
+  isEmploymentPublic: false,
   isCompanyPublic: false,
   isLocationPublic: false,
   isSocialLinksPublic: false,
@@ -92,8 +118,9 @@ const normalizePrivacySettings = (alumni = {}) => ({
   isEmailPublic: (alumni.isEmailPublic ?? alumni.is_email_public ?? DEFAULT_PRIVACY_SETTINGS.isEmailPublic) !== false,
   isPhonePublic: (alumni.isPhonePublic ?? alumni.is_phone_public ?? DEFAULT_PRIVACY_SETTINGS.isPhonePublic) !== false,
   isPositionPublic:
-    (alumni.isPositionPublic ?? alumni.is_position_public ?? DEFAULT_PRIVACY_SETTINGS.isPositionPublic) !== false &&
-    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? DEFAULT_PRIVACY_SETTINGS.isPositionPublic) !== false,
+    (alumni.isPositionPublic ?? alumni.is_position_public ?? DEFAULT_PRIVACY_SETTINGS.isPositionPublic) !== false,
+  isEmploymentPublic:
+    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? DEFAULT_PRIVACY_SETTINGS.isEmploymentPublic) !== false,
   isCompanyPublic: (alumni.isCompanyPublic ?? alumni.is_company_public ?? DEFAULT_PRIVACY_SETTINGS.isCompanyPublic) !== false,
   isLocationPublic: (alumni.isLocationPublic ?? alumni.is_location_public ?? DEFAULT_PRIVACY_SETTINGS.isLocationPublic) !== false,
   isSocialLinksPublic: (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? DEFAULT_PRIVACY_SETTINGS.isSocialLinksPublic) !== false,
@@ -127,6 +154,11 @@ export default function ProfileScreen({ navigation, user, setUser }) {
   const [imageAsset, setImageAsset] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [privacySettings, setPrivacySettings] = useState(normalizePrivacySettings(user?.alumni || {}));
+  const [careerHistory, setCareerHistory] = useState([]);
+  const [careerForm, setCareerForm] = useState(emptyCareerForm());
+  const [editingCareerId, setEditingCareerId] = useState(null);
+  const [showCareerForm, setShowCareerForm] = useState(false);
+  const [careerSubmitting, setCareerSubmitting] = useState(false);
   const [pickerState, setPickerState] = useState({
     visible: false,
     field: null,
@@ -161,6 +193,20 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       })
       .catch((error) => console.error('Failed to refresh profile:', error));
   }, [setUser, user?.id]);
+
+  const loadCareerHistory = React.useCallback(() => {
+    if (!alumniId) {
+      setCareerHistory([]);
+      return Promise.resolve();
+    }
+
+    return communityService.getCareers(alumniId)
+      .then((data) => setCareerHistory(Array.isArray(data) ? data : []))
+      .catch((error) => {
+        console.error('Failed to load employment history:', error?.message || error);
+        setCareerHistory([]);
+      });
+  }, [alumniId]);
 
   const setField = (key, value) => {
     setForm((prev) => {
@@ -248,6 +294,7 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       // If the updated alumni is the current user's alumni record, refetch user data
       if (updatedAlumnus?.id === alumniId || updatedAlumnus?.user_id === user?.id) {
         refreshProfile();
+        loadCareerHistory();
       }
     };
 
@@ -261,22 +308,36 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       if (!alumniId || !payload?.alumniId) return;
       if (Number(payload.alumniId) === Number(alumniId)) {
         refreshProfile();
+        loadCareerHistory();
       }
+    });
+    const unsubCareerCreated = realtimeClient.subscribe('career.created', () => {
+      loadCareerHistory();
+    });
+    const unsubCareerUpdated = realtimeClient.subscribe('career.updated', () => {
+      loadCareerHistory();
+    });
+    const unsubCareerDeleted = realtimeClient.subscribe('career.deleted', () => {
+      loadCareerHistory();
     });
 
     return () => {
       unsubscribe();
       unsubProfileRealtime();
       unsubAlumniRealtime();
+      unsubCareerCreated();
+      unsubCareerUpdated();
+      unsubCareerDeleted();
     };
-  }, [alumniId, refreshProfile, user?.id]);
+  }, [alumniId, loadCareerHistory, refreshProfile, user?.id]);
 
   // Refetch profile data when screen comes into focus (catches updates from web)
   useFocusEffect(
     React.useCallback(() => {
       refreshProfile();
+      loadCareerHistory();
       return () => {};
-    }, [refreshProfile])
+    }, [loadCareerHistory, refreshProfile])
   );
 
   const onPickImage = async () => {
@@ -334,7 +395,7 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       formData.append('isEmailPublic', String(privacySettings.isEmailPublic));
       formData.append('isPhonePublic', String(privacySettings.isPhonePublic));
       formData.append('isPositionPublic', String(privacySettings.isPositionPublic));
-      formData.append('isEmploymentPublic', String(privacySettings.isPositionPublic));
+      formData.append('isEmploymentPublic', String(privacySettings.isEmploymentPublic));
       formData.append('isCompanyPublic', String(privacySettings.isCompanyPublic));
       formData.append('isLocationPublic', String(privacySettings.isLocationPublic));
       formData.append('isSocialLinksPublic', String(privacySettings.isSocialLinksPublic));
@@ -393,8 +454,8 @@ export default function ProfileScreen({ navigation, user, setUser }) {
           is_phone_public: updatedAlumni.isPhonePublic ?? updatedAlumni.is_phone_public ?? privacySettings.isPhonePublic,
           isPositionPublic: updatedAlumni.isPositionPublic ?? updatedAlumni.is_position_public ?? privacySettings.isPositionPublic,
           is_position_public: updatedAlumni.isPositionPublic ?? updatedAlumni.is_position_public ?? privacySettings.isPositionPublic,
-          isEmploymentPublic: updatedAlumni.isEmploymentPublic ?? updatedAlumni.is_employment_public ?? privacySettings.isPositionPublic,
-          is_employment_public: updatedAlumni.isEmploymentPublic ?? updatedAlumni.is_employment_public ?? privacySettings.isPositionPublic,
+          isEmploymentPublic: updatedAlumni.isEmploymentPublic ?? updatedAlumni.is_employment_public ?? privacySettings.isEmploymentPublic,
+          is_employment_public: updatedAlumni.isEmploymentPublic ?? updatedAlumni.is_employment_public ?? privacySettings.isEmploymentPublic,
           isCompanyPublic: updatedAlumni.isCompanyPublic ?? updatedAlumni.is_company_public ?? privacySettings.isCompanyPublic,
           is_company_public: updatedAlumni.isCompanyPublic ?? updatedAlumni.is_company_public ?? privacySettings.isCompanyPublic,
           isLocationPublic: updatedAlumni.isLocationPublic ?? updatedAlumni.is_location_public ?? privacySettings.isLocationPublic,
@@ -418,6 +479,7 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       setEducationHistory(finalEducationHistory);
       setImageAsset(null);
       setEditMode(false);
+      resetCareerForm();
       await refreshProfile();
       // Emit event to notify other screens about data change
       dataEmitter.emit('profileUpdated', nextUser);
@@ -427,6 +489,84 @@ export default function ProfileScreen({ navigation, user, setUser }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const resetCareerForm = () => {
+    setCareerForm(emptyCareerForm());
+    setEditingCareerId(null);
+    setShowCareerForm(false);
+  };
+
+  const setCareerField = (key, value) => {
+    setCareerForm((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === 'is_current' && value ? { end_date: '' } : {})
+    }));
+  };
+
+  const onEditCareer = (entry) => {
+    setEditingCareerId(entry.id);
+    setCareerForm(createCareerForm(entry));
+    setShowCareerForm(true);
+  };
+
+  const onSaveCareer = async () => {
+    if (!alumniId) {
+      Alert.alert('No alumni profile', 'Your account is missing an alumni profile.');
+      return;
+    }
+
+    if (!careerForm.company.trim() || !careerForm.job_title.trim()) {
+      Alert.alert('Missing fields', 'Company and position are required.');
+      return;
+    }
+
+    setCareerSubmitting(true);
+    try {
+      const payload = {
+        alumni_id: alumniId,
+        company: careerForm.company.trim(),
+        job_title: careerForm.job_title.trim(),
+        start_date: careerForm.start_date || null,
+        end_date: careerForm.is_current ? null : (careerForm.end_date || null),
+        is_current: careerForm.is_current,
+        description: careerForm.description.trim() || null
+      };
+
+      if (editingCareerId) {
+        await communityService.updateCareer(editingCareerId, payload);
+      } else {
+        await communityService.createCareer(payload);
+      }
+
+      resetCareerForm();
+      await loadCareerHistory();
+      Alert.alert('Saved', 'Employment history saved.');
+    } catch (error) {
+      Alert.alert('Unable to save', error?.response?.data?.error || 'Employment history update failed.');
+    } finally {
+      setCareerSubmitting(false);
+    }
+  };
+
+  const onDeleteCareer = (entryId) => {
+    Alert.alert('Delete Employment', 'Delete this employment record?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await communityService.deleteCareer(entryId);
+            if (editingCareerId === entryId) resetCareerForm();
+            await loadCareerHistory();
+          } catch (error) {
+            Alert.alert('Delete failed', error?.response?.data?.error || 'Unable to delete employment history.');
+          }
+        }
+      }
+    ]);
   };
 
   return (
@@ -456,7 +596,13 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Profile Information</Text>
-          <Pressable style={styles.editBtn} onPress={() => setEditMode((prev) => !prev)}>
+          <Pressable
+            style={styles.editBtn}
+            onPress={() => {
+              if (editMode) resetCareerForm();
+              setEditMode((prev) => !prev);
+            }}
+          >
             <Text style={styles.editBtnText}>{editMode ? 'Cancel' : 'Edit Profile'}</Text>
           </Pressable>
         </View>
@@ -561,6 +707,104 @@ export default function ProfileScreen({ navigation, user, setUser }) {
 
         {renderLabel('Location', 'isLocationPublic')}
         {editMode ? <TextInput style={styles.input} value={form.location} onChangeText={(v) => setField('location', v)} /> : <Text style={styles.value}>{form.location || '-'}</Text>}
+
+        <View style={styles.employmentHeaderRow}>
+          {renderLabel('Employment History', 'isEmploymentPublic')}
+          {editMode ? (
+            <Pressable
+              style={styles.addEmploymentButton}
+              onPress={() => {
+                if (showCareerForm) {
+                  resetCareerForm();
+                } else {
+                  setShowCareerForm(true);
+                }
+              }}
+            >
+              <Text style={styles.addEmploymentText}>{showCareerForm ? 'Cancel' : '+ Add Employment'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {editMode && showCareerForm ? (
+          <View style={styles.careerFormCard}>
+            <Text style={styles.careerFormTitle}>{editingCareerId ? 'Edit Employment Record' : 'Add Employment Record'}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Position"
+              value={careerForm.job_title}
+              onChangeText={(value) => setCareerField('job_title', value)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Company"
+              value={careerForm.company}
+              onChangeText={(value) => setCareerField('company', value)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Start Date (YYYY-MM-DD)"
+              value={careerForm.start_date}
+              onChangeText={(value) => setCareerField('start_date', value)}
+            />
+            {!careerForm.is_current ? (
+              <TextInput
+                style={styles.input}
+                placeholder="End Date (YYYY-MM-DD)"
+                value={careerForm.end_date}
+                onChangeText={(value) => setCareerField('end_date', value)}
+              />
+            ) : null}
+            <Pressable
+              style={styles.currentWorkRow}
+              onPress={() => setCareerField('is_current', !careerForm.is_current)}
+            >
+              <View style={[styles.currentWorkCheckbox, careerForm.is_current && styles.currentWorkCheckboxActive]}>
+                {careerForm.is_current ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
+              </View>
+              <Text style={styles.currentWorkText}>I currently work here</Text>
+            </Pressable>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Description"
+              value={careerForm.description}
+              onChangeText={(value) => setCareerField('description', value)}
+              multiline
+              numberOfLines={3}
+            />
+            <PrimaryButton label={careerSubmitting ? 'Saving...' : editingCareerId ? 'Update Employment' : 'Save Employment'} onPress={onSaveCareer} disabled={careerSubmitting} />
+          </View>
+        ) : null}
+
+        <View style={styles.careerList}>
+          {careerHistory.length === 0 ? (
+            <Text style={styles.emptyEmploymentText}>No employment history added yet.</Text>
+          ) : (
+            careerHistory.map((entry) => (
+              <View key={entry.id} style={styles.careerCard}>
+                <View style={styles.careerCardTop}>
+                  <View style={styles.careerCardMain}>
+                    <Text style={styles.careerTitle}>{entry.job_title || 'Position'}</Text>
+                    <Text style={styles.careerCompany}>{entry.company || 'Company not set'}</Text>
+                  </View>
+                  <Text style={styles.careerDate}>{formatCareerDate(entry.start_date)} - {entry.is_current ? 'Present' : formatCareerDate(entry.end_date)}</Text>
+                </View>
+                <Text style={styles.alignmentPill}>{getAlignmentLabel(entry.program_alignment)}</Text>
+                {entry.description ? <Text style={styles.careerDescription}>{entry.description}</Text> : null}
+                {editMode ? (
+                  <View style={styles.careerActions}>
+                    <Pressable style={styles.careerEditButton} onPress={() => onEditCareer(entry)}>
+                      <Text style={styles.careerEditText}>Edit</Text>
+                    </Pressable>
+                    <Pressable style={styles.careerDeleteButton} onPress={() => onDeleteCareer(entry.id)}>
+                      <Text style={styles.careerDeleteText}>Delete</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            ))
+          )}
+        </View>
 
         {renderLabel('Skills', 'isSkillsPublic')}
         {editMode ? <TextInput style={[styles.input, styles.textArea]} multiline numberOfLines={3} value={form.skills} onChangeText={(v) => setField('skills', v)} /> : <Text style={styles.value}>{form.skills || '-'}</Text>}
@@ -830,6 +1074,162 @@ const styles = StyleSheet.create({
     color: '#b91c1c',
     fontSize: 11,
     fontWeight: '700'
+  },
+  employmentHeaderRow: {
+    gap: 8,
+    marginTop: 2
+  },
+  addEmploymentButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 2
+  },
+  addEmploymentText: {
+    color: '#1d4ed8',
+    fontWeight: '700',
+    fontSize: 12
+  },
+  careerFormCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    gap: 8
+  },
+  careerFormTitle: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  currentWorkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#dbe3f0',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  currentWorkCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  currentWorkCheckboxActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
+  },
+  currentWorkText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  careerList: {
+    gap: 8,
+    marginBottom: 6
+  },
+  emptyEmploymentText: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    color: '#64748b',
+    fontSize: 13
+  },
+  careerCard: {
+    borderWidth: 1,
+    borderColor: '#dbe3f0',
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    padding: 12,
+    gap: 7
+  },
+  careerCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8
+  },
+  careerCardMain: {
+    flex: 1,
+    minWidth: 0
+  },
+  careerTitle: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  careerCompany: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  careerDate: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '600'
+  },
+  alignmentPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    backgroundColor: '#fffbeb',
+    color: '#b45309',
+    overflow: 'hidden',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  careerDescription: {
+    color: '#334155',
+    fontSize: 13,
+    lineHeight: 18
+  },
+  careerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end'
+  },
+  careerEditButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  careerEditText: {
+    color: '#1d4ed8',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  careerDeleteButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  careerDeleteText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '800'
   },
   selectInput: {
     borderWidth: 1,

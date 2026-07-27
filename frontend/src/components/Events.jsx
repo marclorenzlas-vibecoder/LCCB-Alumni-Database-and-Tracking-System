@@ -336,7 +336,7 @@ const Events = () => {
   const sortEvents = useCallback((eventList) => [...eventList].sort((a, b) => {
     switch (sortBy) {
       case 'date':
-        return new Date(a.date || 0) - new Date(b.date || 0);
+        return new Date(b.date || 0) - new Date(a.date || 0);
       case 'name':
         return (a.name || '').localeCompare(b.name || '');
       case 'attendees':

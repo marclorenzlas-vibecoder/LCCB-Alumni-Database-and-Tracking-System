@@ -119,6 +119,35 @@ body::-webkit-scrollbar,
     animation: fadeOut 0.3s ease-in forwards;
 }
 
+.alumni-directory-card .avatar.alumni-list-avatar {
+    display: block;
+    transition: box-shadow 0.2s ease;
+}
+
+.alumni-directory-card .avatar.alumni-list-avatar.online {
+    box-shadow:
+        0 0 0 2px #ffffff,
+        0 0 0 4px #22c55e;
+}
+
+.alumni-directory-card .avatar.alumni-list-avatar.offline {
+    box-shadow:
+        0 0 0 2px #ffffff,
+        0 0 0 4px #d1d5db;
+}
+
+.alumni-directory-card:hover .avatar.alumni-list-avatar.online {
+    box-shadow:
+        0 0 0 2px #f8fafc,
+        0 0 0 4px #22c55e;
+}
+
+.alumni-directory-card:hover .avatar.alumni-list-avatar.offline {
+    box-shadow:
+        0 0 0 2px #f8fafc,
+        0 0 0 4px #d1d5db;
+}
+
 @keyframes loginSuccessPop {
     0% {
         opacity: 0;

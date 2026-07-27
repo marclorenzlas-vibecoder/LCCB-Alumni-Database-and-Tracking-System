@@ -95,8 +95,40 @@ const attachApplicationMeta = (application) => {
   };
 };
 
+const isStaffRequest = (req) => {
+  const role = String(req.user?.role || '').toUpperCase();
+  return role === 'TEACHER' || role === 'ADMIN';
+};
+
+const getAuthenticatedAlumniId = async (req) => {
+  const tokenAlumniId = Number(req.user?.alumniId || req.user?.alumni_id || 0);
+  if (Number.isFinite(tokenAlumniId) && tokenAlumniId > 0) {
+    return tokenAlumniId;
+  }
+
+  const userId = Number(req.user?.id || 0);
+  if (Number.isFinite(userId) && userId > 0) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { alumni: { select: { id: true } } }
+    });
+    if (user?.alumni?.id) return Number(user.alumni.id);
+  }
+
+  const email = typeof req.user?.email === 'string' ? req.user.email : '';
+  if (email) {
+    const alumni = await prisma.alumni.findFirst({
+      where: { email },
+      select: { id: true }
+    });
+    if (alumni?.id) return Number(alumni.id);
+  }
+
+  return null;
+};
+
 // Submit a job application (Alumni applies to a job)
-router.post('/', runResumeUpload, async (req, res) => {
+router.post('/', authenticateToken, runResumeUpload, async (req, res) => {
   try {
     const {
       job_posting_id,
@@ -125,6 +157,12 @@ router.post('/', runResumeUpload, async (req, res) => {
         error: 'Missing required fields',
         required: ['job_posting_id', 'applicant_id']
       });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    const requestedApplicantId = Number(applicant_id);
+    if (!authenticatedAlumniId || authenticatedAlumniId !== requestedApplicantId) {
+      return res.status(403).json({ error: 'You can only submit applications for your own alumni profile' });
     }
 
     if (!cover_letter || !String(cover_letter).trim()) {
@@ -322,9 +360,13 @@ router.post('/', runResumeUpload, async (req, res) => {
 });
 
 // Get all applications for a specific job posting (for employer/job poster)
-router.get('/job/:jobId', async (req, res) => {
+router.get('/job/:jobId', authenticateToken, async (req, res) => {
   try {
     const { jobId } = req.params;
+
+    if (!isStaffRequest(req)) {
+      return res.status(403).json({ error: 'Only admins or teachers can view job applications' });
+    }
 
     const applications = await prisma.job_application.findMany({
       where: { job_posting_id: Number(jobId) },
@@ -359,12 +401,18 @@ router.get('/job/:jobId', async (req, res) => {
 });
 
 // Get all applications by a specific alumni (for alumni to see their applications)
-router.get('/alumni/:alumniId', async (req, res) => {
+router.get('/alumni/:alumniId', authenticateToken, async (req, res) => {
   try {
     const { alumniId } = req.params;
+    const requestedAlumniId = Number(alumniId);
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+
+    if (!isStaffRequest(req) && authenticatedAlumniId !== requestedAlumniId) {
+      return res.status(403).json({ error: 'You can only view your own applications' });
+    }
 
     const applications = await prisma.job_application.findMany({
-      where: { applicant_id: Number(alumniId) },
+      where: { applicant_id: requestedAlumniId },
       include: {
         job_posting: {
           select: {
@@ -390,7 +438,7 @@ router.get('/alumni/:alumniId', async (req, res) => {
 });
 
 // Get resume file for a specific application
-router.get('/:id/resume', async (req, res) => {
+router.get('/:id/resume', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -398,12 +446,18 @@ router.get('/:id/resume', async (req, res) => {
       where: { id: Number(id) },
       select: {
         id: true,
+        applicant_id: true,
         resume_url: true
       }
     });
 
     if (!application) {
       return res.status(404).json({ error: 'Application not found' });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== application.applicant_id) {
+      return res.status(403).json({ error: 'You can only view your own application resume' });
     }
 
     if (!application.resume_url) {
@@ -444,7 +498,7 @@ router.get('/:id/resume', async (req, res) => {
 });
 
 // Get a specific application by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -477,6 +531,11 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Application not found' });
     }
 
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== application.applicant_id) {
+      return res.status(403).json({ error: 'You can only view your own application' });
+    }
+
     res.json(attachApplicationMeta(application));
   } catch (error) {
     console.error('Error fetching application:', error);
@@ -496,6 +555,10 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
         error: 'Invalid status',
         validStatuses 
       });
+    }
+
+    if (!isStaffRequest(req)) {
+      return res.status(403).json({ error: 'Only admins or teachers can update application status' });
     }
 
     const existingApplication = await prisma.job_application.findUnique({
@@ -779,15 +842,21 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Check if an alumni has applied to a specific job
-router.get('/check/:jobId/:alumniId', async (req, res) => {
+router.get('/check/:jobId/:alumniId', authenticateToken, async (req, res) => {
   try {
     const { jobId, alumniId } = req.params;
+    const requestedAlumniId = Number(alumniId);
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+
+    if (!isStaffRequest(req) && authenticatedAlumniId !== requestedAlumniId) {
+      return res.status(403).json({ error: 'You can only check your own application status' });
+    }
 
     const application = await prisma.job_application.findUnique({
       where: {
         job_posting_id_applicant_id: {
           job_posting_id: Number(jobId),
-          applicant_id: Number(alumniId)
+          applicant_id: requestedAlumniId
         }
       }
     });

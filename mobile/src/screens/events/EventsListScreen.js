@@ -57,7 +57,6 @@ const getStatusTone = (event) => {
 };
 
 const STATUS_FILTERS = ['upcoming', 'current', 'past'];
-const STATUS_LABELS = { upcoming: 'Upcoming', current: 'Happening Today', past: 'Past Events' };
 
 function MultiOptionPicker({ visible, title, options, selected, onToggle, onClose }) {
   return (
@@ -95,13 +94,13 @@ function MultiOptionPicker({ visible, title, options, selected, onToggle, onClos
   );
 }
 
-function FilterDropdown({ visible, locations, eventTypes, tempLocations, tempTypes, tempStatuses, toggleLocation, toggleType, toggleStatus, onApply, onClear, onClose }) {
+function FilterDropdown({ visible, locations, batches, tempLocations, tempBatches, tempStatuses, toggleLocation, toggleBatch, toggleStatus, onApply, onClear, onClose }) {
   const [pickerTarget, setPickerTarget] = useState(null);
 
   const locCount = tempLocations.length;
-  const typeCount = tempTypes.length;
+  const batchCount = tempBatches.length;
   const statusCount = tempStatuses.length;
-  const activeCount = locCount + typeCount + statusCount;
+  const activeCount = locCount + batchCount + statusCount;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -129,11 +128,11 @@ function FilterDropdown({ visible, locations, eventTypes, tempLocations, tempTyp
 
             <View style={styles.dropdownDivider} />
 
-            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('type')}>
-              <Text style={styles.dropdownFieldLabel}>Event Type</Text>
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('batch')}>
+              <Text style={styles.dropdownFieldLabel}>Event Batch</Text>
               <View style={styles.dropdownFieldValue}>
-                <Text style={[styles.dropdownFieldValueText, typeCount === 0 && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
-                  {typeCount === 0 ? 'Any type' : `${typeCount} selected`}
+                <Text style={[styles.dropdownFieldValueText, batchCount === 0 && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {batchCount === 0 ? 'All batch' : `${batchCount} selected`}
                 </Text>
                 <Ionicons name="chevron-down" size={14} color="#94a3b8" />
               </View>
@@ -175,11 +174,11 @@ function FilterDropdown({ visible, locations, eventTypes, tempLocations, tempTyp
         onClose={() => setPickerTarget(null)}
       />
       <MultiOptionPicker
-        visible={pickerTarget === 'type'}
-        title="Event Type"
-        options={eventTypes}
-        selected={tempTypes}
-        onToggle={toggleType}
+        visible={pickerTarget === 'batch'}
+        title="Event Batch"
+        options={batches}
+        selected={tempBatches}
+        onToggle={toggleBatch}
         onClose={() => setPickerTarget(null)}
       />
       <MultiOptionPicker
@@ -212,14 +211,14 @@ export default function EventsListScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [selectedLocations, setSelectedLocations] = useState([]);
-  const [selectedTypes, setSelectedTypes] = useState([]);
+  const [selectedBatches, setSelectedBatches] = useState([]);
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [sortBy, setSortBy] = useState('date');
   const [previousExpanded, setPreviousExpanded] = useState(true);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   const [tempLocations, setTempLocations] = useState([]);
-  const [tempTypes, setTempTypes] = useState([]);
+  const [tempBatches, setTempBatches] = useState([]);
   const [tempStatuses, setTempStatuses] = useState([]);
 
   const loadEvents = useCallback(async () => {
@@ -265,7 +264,7 @@ export default function EventsListScreen({ navigation, route }) {
   );
 
   const uniqueLocations = useMemo(() => [...new Set(events.map(e => e.location).filter(Boolean))].sort(), [events]);
-  const uniqueTypes = useMemo(() => [...new Set(events.map(e => String(e.type || '').trim()).filter(Boolean))].sort(), [events]);
+  const uniqueBatches = useMemo(() => [...new Set(events.map(e => String(e.target_batch || '').trim()).filter(Boolean))].sort((a, b) => Number(b) - Number(a)), [events]);
 
   const filteredEvents = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -280,7 +279,7 @@ export default function EventsListScreen({ navigation, route }) {
       });
     }
     if (selectedLocations.length > 0) result = result.filter((e) => selectedLocations.includes(e.location));
-    if (selectedTypes.length > 0) result = result.filter((e) => selectedTypes.includes(String(e.type || '').trim()));
+    if (selectedBatches.length > 0) result = result.filter((e) => selectedBatches.includes(String(e.target_batch || '').trim()));
     if (selectedStatuses.length > 0) {
       result = result.filter((e) => {
         const state = getEventDateState(e);
@@ -291,11 +290,11 @@ export default function EventsListScreen({ navigation, route }) {
     result.sort((a, b) => {
       if (sortBy === 'name') return String(a.name || '').localeCompare(String(b.name || ''));
       if (sortBy === 'attendees') return Number(b.attendees || 0) - Number(a.attendees || 0);
-      return new Date(a.date || 0) - new Date(b.date || 0);
+      return new Date(b.date || 0) - new Date(a.date || 0);
     });
 
     return result;
-  }, [events, query, selectedLocations, selectedTypes, selectedStatuses, sortBy]);
+  }, [events, query, selectedLocations, selectedBatches, selectedStatuses, sortBy]);
 
   const categorized = useMemo(() => {
     return filteredEvents.reduce((acc, event) => {
@@ -311,29 +310,29 @@ export default function EventsListScreen({ navigation, route }) {
     if (match) navigation.navigate('EventDetail', { eventId: match.id });
   }, [events, navigation, openEventId]);
 
-  const activeFilterCount = selectedLocations.length + selectedTypes.length + selectedStatuses.length;
+  const activeFilterCount = selectedLocations.length + selectedBatches.length + selectedStatuses.length;
 
   const openFilter = () => {
     setTempLocations([...selectedLocations]);
-    setTempTypes([...selectedTypes]);
+    setTempBatches([...selectedBatches]);
     setTempStatuses([...selectedStatuses]);
     setShowFilterDropdown(true);
   };
 
   const toggleTempLocation = (v) => setTempLocations(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
-  const toggleTempType = (v) => setTempTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const toggleTempBatch = (v) => setTempBatches(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   const toggleTempStatus = (v) => setTempStatuses(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
 
   const applyFilter = () => {
     setSelectedLocations([...tempLocations]);
-    setSelectedTypes([...tempTypes]);
+    setSelectedBatches([...tempBatches]);
     setSelectedStatuses([...tempStatuses]);
     setShowFilterDropdown(false);
   };
 
   const clearFilter = () => {
     setTempLocations([]);
-    setTempTypes([]);
+    setTempBatches([]);
     setTempStatuses([]);
   };
 
@@ -384,12 +383,12 @@ export default function EventsListScreen({ navigation, route }) {
         <FilterDropdown
           visible={showFilterDropdown}
           locations={uniqueLocations}
-          eventTypes={uniqueTypes}
+          batches={uniqueBatches}
           tempLocations={tempLocations}
-          tempTypes={tempTypes}
+          tempBatches={tempBatches}
           tempStatuses={tempStatuses}
           toggleLocation={toggleTempLocation}
-          toggleType={toggleTempType}
+          toggleBatch={toggleTempBatch}
           toggleStatus={toggleTempStatus}
           onApply={applyFilter}
           onClear={clearFilter}

@@ -59,13 +59,21 @@ const eventService = {
 
   // Join event (register attendance)
   joinEvent: async (eventId, alumniId) => {
-    const response = await axios.post(`${API_URL}/${eventId}/join`, { alumni_id: alumniId });
+    const response = await axios.post(
+      `${API_URL}/${eventId}/join`,
+      { alumni_id: alumniId },
+      { headers: getAuthHeaders() }
+    );
     return response.data;
   },
 
   // Leave event (unregister attendance)
   leaveEvent: async (eventId, alumniId) => {
-    const response = await axios.post(`${API_URL}/${eventId}/leave`, { alumni_id: alumniId });
+    const response = await axios.post(
+      `${API_URL}/${eventId}/leave`,
+      { alumni_id: alumniId },
+      { headers: getAuthHeaders() }
+    );
     return response.data;
   },
 
@@ -77,7 +85,9 @@ const eventService = {
 
   // Check if user is attending
   checkAttendance: async (eventId, alumniId) => {
-    const response = await axios.get(`${API_URL}/${eventId}/check-attendance/${alumniId}`);
+    const response = await axios.get(`${API_URL}/${eventId}/check-attendance/${alumniId}`, {
+      headers: getAuthHeaders()
+    });
     return response.data;
   },
 

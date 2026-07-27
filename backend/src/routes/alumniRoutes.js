@@ -72,13 +72,12 @@ const PRIVACY_FIELD_MAP = [
     dbKey: "is_phone_public",
   },
   {
-    bodyKeys: [
-      "isPositionPublic",
-      "is_position_public",
-      "isEmploymentPublic",
-      "is_employment_public",
-    ],
+    bodyKeys: ["isPositionPublic", "is_position_public"],
     dbKey: "is_position_public",
+  },
+  {
+    bodyKeys: ["isEmploymentPublic", "is_employment_public"],
+    dbKey: "is_employment_public",
   },
   {
     bodyKeys: ["isCompanyPublic", "is_company_public"],
@@ -117,12 +116,6 @@ const appendPrivacyUpdates = (body, target) => {
     if (parsed !== undefined) target[dbKey] = parsed;
   });
 
-  if (
-    target.is_position_public !== undefined &&
-    (body.isEmploymentPublic !== undefined || body.is_employment_public !== undefined)
-  ) {
-    target.is_employment_public = target.is_position_public;
-  }
 };
 
 const hasPrivacyInput = (body) =>
@@ -205,7 +198,7 @@ const sanitizeAlumniForViewer = (entry, viewer) => {
     sanitized.contact_number = null;
     sanitized.contactNumber = null;
   }
-  if (!isPublicFlag(entry, "is_position_public") || !isPublicFlag(entry, "is_employment_public")) {
+  if (!isPublicFlag(entry, "is_position_public")) {
     sanitized.current_position = null;
     sanitized.currentPosition = null;
   }

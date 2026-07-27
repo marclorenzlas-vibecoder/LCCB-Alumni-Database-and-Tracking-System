@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -87,17 +87,133 @@ function AchievementCardItem({ item, teacher, navigation, onEdit, onDelete }) {
   );
 }
 
+function MultiOptionPicker({ visible, title, options, selected, onToggle, onClose }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.pickerBackdrop} onPress={onClose}>
+        <Pressable style={styles.pickerCard} onPress={() => {}}>
+          <View style={styles.pickerHeader}>
+            <Text style={styles.pickerTitle}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={18} color="#334155" />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
+            {options.map((value) => {
+              const active = selected.includes(value);
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.pickerOption, active && styles.pickerOptionActive]}
+                  onPress={() => onToggle(value)}
+                >
+                  <View style={[styles.checkbox, active && styles.checkboxActive]}>
+                    {active ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
+                  </View>
+                  <Text style={[styles.pickerOptionText, active && styles.pickerOptionTextActive]}>{value}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function FilterDropdown({ visible, categories, years, tempCategories, tempYears, toggleCategory, toggleYear, onApply, onClear, onClose }) {
+  const [pickerTarget, setPickerTarget] = useState(null);
+
+  const categoryCount = tempCategories.length;
+  const yearCount = tempYears.length;
+  const activeCount = categoryCount + yearCount;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.dropdownBackdrop} onPress={onClose}>
+        <Pressable style={styles.dropdownPanel} onPress={() => {}}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Filters</Text>
+            {activeCount > 0 ? (
+              <View style={styles.dropdownCountBadge}>
+                <Text style={styles.dropdownCountText}>{activeCount}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.dropdownFields}>
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('category')}>
+              <Text style={styles.dropdownFieldLabel}>Category</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, categoryCount === 0 && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {categoryCount === 0 ? 'Any category' : `${categoryCount} selected`}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+
+            <View style={styles.dropdownDivider} />
+
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('year')}>
+              <Text style={styles.dropdownFieldLabel}>Year</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, yearCount === 0 && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {yearCount === 0 ? 'Any year' : `${yearCount} selected`}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+          </View>
+
+          <View style={styles.dropdownActions}>
+            {activeCount > 0 ? (
+              <Pressable style={styles.dropdownClearBtn} onPress={onClear}>
+                <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.dropdownClearText}>Clear Filter</Text>
+              </Pressable>
+            ) : <View style={{ flex: 1 }} />}
+            <Pressable style={styles.dropdownApplyBtn} onPress={onApply}>
+              <Text style={styles.dropdownApplyText}>Apply Filter</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+
+      <MultiOptionPicker
+        visible={pickerTarget === 'category'}
+        title="Category"
+        options={categories}
+        selected={tempCategories}
+        onToggle={toggleCategory}
+        onClose={() => setPickerTarget(null)}
+      />
+      <MultiOptionPicker
+        visible={pickerTarget === 'year'}
+        title="Year"
+        options={years}
+        selected={tempYears}
+        onToggle={toggleYear}
+        onClose={() => setPickerTarget(null)}
+      />
+    </Modal>
+  );
+}
+
 export default function AchievementsScreen({ user, navigation }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const teacher = useMemo(() => isTeacher(user), [user]);
-  const categories = useMemo(() => ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'], []);
+  const categories = useMemo(() => ['Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'], []);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [imageAsset, setImageAsset] = useState(null);
   const [videoAsset, setVideoAsset] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedYears, setSelectedYears] = useState([]);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [tempCategories, setTempCategories] = useState([]);
+  const [tempYears, setTempYears] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
     alumni_id: alumniId ? String(alumniId) : '',
@@ -138,10 +254,23 @@ export default function AchievementsScreen({ user, navigation }) {
     }, [loadItems])
   );
 
+  const availableYears = useMemo(() => {
+    const years = items
+      .map((item) => (item.date ? String(new Date(item.date).getFullYear()) : ''))
+      .filter((year) => year && year !== 'NaN');
+    return Array.from(new Set(years)).sort((a, b) => Number(b) - Number(a));
+  }, [items]);
+
   const filteredItems = useMemo(() => {
-    let result = selectedCategory === 'All'
-      ? items
-      : items.filter((item) => String(item.category || 'General') === selectedCategory);
+    let result = items;
+
+    if (selectedCategories.length > 0) {
+      result = result.filter((item) => selectedCategories.includes(String(item.category || 'General')));
+    }
+
+    if (selectedYears.length > 0) {
+      result = result.filter((item) => selectedYears.includes(item.date ? String(new Date(item.date).getFullYear()) : ''));
+    }
 
     const q = searchTerm.trim().toLowerCase();
     if (q) {
@@ -154,7 +283,34 @@ export default function AchievementsScreen({ user, navigation }) {
     }
 
     return result;
-  }, [items, selectedCategory, searchTerm]);
+  }, [items, selectedCategories, selectedYears, searchTerm]);
+
+  const activeFilterCount = selectedCategories.length + selectedYears.length;
+
+  const openFilter = () => {
+    setTempCategories([...selectedCategories]);
+    setTempYears([...selectedYears]);
+    setShowFilterDropdown(true);
+  };
+
+  const toggleTempCategory = (value) => {
+    setTempCategories((prev) => prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]);
+  };
+
+  const toggleTempYear = (value) => {
+    setTempYears((prev) => prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]);
+  };
+
+  const applyFilter = () => {
+    setSelectedCategories([...tempCategories]);
+    setSelectedYears([...tempYears]);
+    setShowFilterDropdown(false);
+  };
+
+  const clearFilters = () => {
+    setTempCategories([]);
+    setTempYears([]);
+  };
 
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -274,41 +430,48 @@ export default function AchievementsScreen({ user, navigation }) {
         <Text style={styles.headerSubtitle}>Celebrating the outstanding accomplishments of our LCCB alumni across various fields</Text>
       </View>
 
-      <View style={styles.searchWrap}>
-        <View style={styles.searchIcon}>
-          <Ionicons name="search-outline" size={18} color="#64748b" />
+      <View style={styles.searchRow}>
+        <View style={styles.searchWrap}>
+          <View style={styles.searchIcon}>
+            <Ionicons name="search-outline" size={18} color="#64748b" />
+          </View>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search achievements..."
+            placeholderTextColor="#94a3b8"
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            autoCorrect={false}
+          />
+          {searchTerm.length > 0 && (
+            <Pressable style={styles.clearBtn} onPress={() => setSearchTerm('')}>
+              <Ionicons name="close" size={18} color="#94a3b8" />
+            </Pressable>
+          )}
         </View>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search achievements by name, title, or category..."
-          placeholderTextColor="#94a3b8"
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-          autoCorrect={false}
-        />
-        {searchTerm.length > 0 && (
-          <Pressable style={styles.clearBtn} onPress={() => setSearchTerm('')}>
-            <Ionicons name="close" size={18} color="#94a3b8" />
-          </Pressable>
-        )}
+
+        <Pressable style={[styles.filterToggleBtn, activeFilterCount > 0 && styles.filterToggleBtnActive]} onPress={openFilter}>
+          <Ionicons name="filter-outline" size={18} color={activeFilterCount > 0 ? '#fff' : '#475569'} />
+          {activeFilterCount > 0 ? (
+            <View style={styles.filterToggleBadge}>
+              <Text style={styles.filterToggleBadgeText}>{activeFilterCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
 
-      <View style={styles.statusTabRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusTabScroll}>
-          {categories.map((category) => {
-            const active = selectedCategory === category;
-            return (
-              <Pressable
-                key={category}
-                style={[styles.statusTab, active && styles.statusTabActive]}
-                onPress={() => setSelectedCategory(selectedCategory === category ? 'All' : category)}
-              >
-                <Text style={[styles.statusTabText, active && styles.statusTabTextActive]}>{category}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+      <FilterDropdown
+        visible={showFilterDropdown}
+        categories={categories}
+        years={availableYears}
+        tempCategories={tempCategories}
+        tempYears={tempYears}
+        toggleCategory={toggleTempCategory}
+        toggleYear={toggleTempYear}
+        onApply={applyFilter}
+        onClear={clearFilters}
+        onClose={() => setShowFilterDropdown(false)}
+      />
 
       {teacher ? (
         <View style={styles.formCard}>
@@ -364,10 +527,15 @@ const styles = StyleSheet.create({
     color: '#64748b',
     lineHeight: 20
   },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12
+  },
   searchWrap: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#cbd5e1',
     backgroundColor: '#fff',
@@ -388,31 +556,38 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     padding: 4
   },
-  statusTabRow: {
-    marginBottom: 18
-  },
-  statusTabScroll: {
-    gap: 8
-  },
-  statusTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
+  filterToggleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginRight: 4
   },
-  statusTabActive: {
+  filterToggleBtnActive: {
     backgroundColor: '#1e3a8a',
     borderColor: '#1e3a8a'
   },
-  statusTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569'
+  filterToggleBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -3,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5
   },
-  statusTabTextActive: {
-    color: '#ffffff'
+  filterToggleBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700'
   },
   formCard: {
     borderRadius: 14,
@@ -541,5 +716,181 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     textDecorationLine: 'underline'
+  },
+  dropdownBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.38)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24
+  },
+  dropdownPanel: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden'
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  dropdownCountBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dropdownCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  dropdownFields: {
+    padding: 18,
+    gap: 0
+  },
+  dropdownField: {
+    paddingVertical: 14
+  },
+  dropdownFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6
+  },
+  dropdownFieldValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  dropdownFieldValueText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+    flex: 1
+  },
+  dropdownFieldValuePlaceholder: {
+    color: '#94a3b8',
+    fontWeight: '400'
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9'
+  },
+  dropdownActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingBottom: 18
+  },
+  dropdownClearBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca'
+  },
+  dropdownClearText: {
+    color: '#dc2626',
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  dropdownApplyBtn: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dropdownApplyText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.38)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24
+  },
+  pickerCard: {
+    width: '100%',
+    maxHeight: '65%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    overflow: 'hidden'
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  pickerList: {
+    padding: 10
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 2
+  },
+  pickerOptionActive: {
+    backgroundColor: '#eff6ff'
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  checkboxActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
+  },
+  pickerOptionText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#334155'
+  },
+  pickerOptionTextActive: {
+    color: '#1e3a8a',
+    fontWeight: '700'
   }
 });

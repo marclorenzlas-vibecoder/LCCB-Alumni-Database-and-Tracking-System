@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { authService } from '../services/authService';
+import careerService from '../services/careerService';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { realtimeClient } from '../services/realtimeClient';
 import { toast } from 'react-toastify';
 import UserLayout from './UserLayout';
-import backgroundImage from '../assets/homeimage.jpg';
+import ConfirmModal from './ConfirmModal';
 
 const levelLabelMap = {
   INTEGRATED_SCHOOL: 'Integrated School',
@@ -102,6 +103,7 @@ const DEFAULT_PRIVACY_SETTINGS = {
   isEmailPublic: false,
   isPhonePublic: false,
   isPositionPublic: false,
+  isEmploymentPublic: false,
   isCompanyPublic: false,
   isLocationPublic: false,
   isSocialLinksPublic: false,
@@ -121,7 +123,8 @@ const normalizePrivacySettings = (alumni = {}) => ({
   isEducationHistoryPublic: pickPrivacyFlag(alumni, 'isEducationHistoryPublic', 'is_education_history_public'),
   isEmailPublic: pickPrivacyFlag(alumni, 'isEmailPublic', 'is_email_public', DEFAULT_PRIVACY_SETTINGS.isEmailPublic),
   isPhonePublic: pickPrivacyFlag(alumni, 'isPhonePublic', 'is_phone_public', DEFAULT_PRIVACY_SETTINGS.isPhonePublic),
-  isPositionPublic: pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public', DEFAULT_PRIVACY_SETTINGS.isPositionPublic) && pickPrivacyFlag(alumni, 'isEmploymentPublic', 'is_employment_public', DEFAULT_PRIVACY_SETTINGS.isPositionPublic),
+  isPositionPublic: pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public', DEFAULT_PRIVACY_SETTINGS.isPositionPublic),
+  isEmploymentPublic: pickPrivacyFlag(alumni, 'isEmploymentPublic', 'is_employment_public', DEFAULT_PRIVACY_SETTINGS.isEmploymentPublic),
   isCompanyPublic: pickPrivacyFlag(alumni, 'isCompanyPublic', 'is_company_public', DEFAULT_PRIVACY_SETTINGS.isCompanyPublic),
   isLocationPublic: pickPrivacyFlag(alumni, 'isLocationPublic', 'is_location_public', DEFAULT_PRIVACY_SETTINGS.isLocationPublic),
   isSocialLinksPublic: pickPrivacyFlag(alumni, 'isSocialLinksPublic', 'is_social_links_public', DEFAULT_PRIVACY_SETTINGS.isSocialLinksPublic),
@@ -145,8 +148,8 @@ const privacySettingsToAlumniFields = (settings = DEFAULT_PRIVACY_SETTINGS) => (
   is_phone_public: settings.isPhonePublic,
   isPositionPublic: settings.isPositionPublic,
   is_position_public: settings.isPositionPublic,
-  isEmploymentPublic: settings.isPositionPublic,
-  is_employment_public: settings.isPositionPublic,
+  isEmploymentPublic: settings.isEmploymentPublic,
+  is_employment_public: settings.isEmploymentPublic,
   isCompanyPublic: settings.isCompanyPublic,
   is_company_public: settings.isCompanyPublic,
   isLocationPublic: settings.isLocationPublic,
@@ -195,6 +198,34 @@ const PrivacyToggle = ({ isPublic, onToggle, label, disabled = false }) => (
   </button>
 );
 
+const createCareerForm = () => ({
+  job_title: '',
+  company: '',
+  start_date: '',
+  end_date: '',
+  is_current: false,
+  description: ''
+});
+
+const getProgramMatchLabel = (value) => {
+  if (value === 'ALIGNED') return 'Related';
+  if (value === 'NOT_ALIGNED') return 'Not Related';
+  return 'Needs Checking';
+};
+
+const getProgramMatchClass = (value) => {
+  if (value === 'ALIGNED') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (value === 'NOT_ALIGNED') return 'border-rose-200 bg-rose-50 text-rose-700';
+  return 'border-amber-200 bg-amber-50 text-amber-700';
+};
+
+const formatCareerDate = (value) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+};
+
 const Profile = () => {
   const [user, setUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -226,6 +257,20 @@ const Profile = () => {
   const [newSocialLink, setNewSocialLink] = useState({ url: '' });
   const [showAddSocialLink, setShowAddSocialLink] = useState(false);
   const [educationHistory, setEducationHistory] = useState([createEducationEntry()]);
+  const [careerHistory, setCareerHistory] = useState([]);
+  const [showCareerForm, setShowCareerForm] = useState(false);
+  const [editingCareerId, setEditingCareerId] = useState(null);
+  const [careerForm, setCareerForm] = useState(createCareerForm());
+  const [careerSubmitting, setCareerSubmitting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'danger',
+    onConfirm: async () => {}
+  });
 
   const togglePrivacy = (key) => {
     if (!isEditing) return;
@@ -318,6 +363,17 @@ const Profile = () => {
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
   }, [educationHistory, formData.batch]);
 
+  const loadCareerHistory = async (alumniId) => {
+    if (!alumniId) return;
+    try {
+      const data = await careerService.getCareersByAlumni(alumniId);
+      setCareerHistory(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching employment history:', error);
+      setCareerHistory([]);
+    }
+  };
+
   useEffect(() => {
     const userData = authService.getCurrentUser();
     if (userData) {
@@ -351,6 +407,7 @@ const Profile = () => {
       // Fetch latest alumni details (including social links) from API
       if (userData.alumni?.id) {
         fetchLatestAlumniDetails(userData.alumni.id);
+        loadCareerHistory(userData.alumni.id);
       }
     }
 
@@ -382,11 +439,32 @@ const Profile = () => {
         refreshProfileFromServer(user.id);
       }
     });
+    const unsubCareerCreated = realtimeClient.subscribe('career.created', (payload) => {
+      if (!user?.alumni?.id) return;
+      if (Number(payload?.alumniId) === Number(user.alumni.id)) {
+        loadCareerHistory(user.alumni.id);
+      }
+    });
+    const unsubCareerUpdated = realtimeClient.subscribe('career.updated', (payload) => {
+      if (!user?.alumni?.id) return;
+      if (!payload?.alumniId || Number(payload.alumniId) === Number(user.alumni.id)) {
+        loadCareerHistory(user.alumni.id);
+      }
+    });
+    const unsubCareerDeleted = realtimeClient.subscribe('career.deleted', (payload) => {
+      if (!user?.alumni?.id) return;
+      if (!payload?.alumniId || Number(payload.alumniId) === Number(user.alumni.id)) {
+        loadCareerHistory(user.alumni.id);
+      }
+    });
 
     return () => {
       window.removeEventListener('focus', onFocus);
       unsubProfile();
       unsubAlumni();
+      unsubCareerCreated();
+      unsubCareerUpdated();
+      unsubCareerDeleted();
     };
   }, [user?.id, user?.alumni?.id]);
 
@@ -581,7 +659,7 @@ const Profile = () => {
       formDataToSend.append('isEmailPublic', String(privacySettings.isEmailPublic));
       formDataToSend.append('isPhonePublic', String(privacySettings.isPhonePublic));
       formDataToSend.append('isPositionPublic', String(privacySettings.isPositionPublic));
-      formDataToSend.append('isEmploymentPublic', String(privacySettings.isPositionPublic));
+      formDataToSend.append('isEmploymentPublic', String(privacySettings.isEmploymentPublic));
       formDataToSend.append('isCompanyPublic', String(privacySettings.isCompanyPublic));
       formDataToSend.append('isLocationPublic', String(privacySettings.isLocationPublic));
       formDataToSend.append('isSocialLinksPublic', String(privacySettings.isSocialLinksPublic));
@@ -673,6 +751,88 @@ const Profile = () => {
     });
   };
 
+  const handleCareerFormChange = (event) => {
+    const { name, value, checked, type } = event.target;
+    setCareerForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+      ...(name === 'is_current' && checked ? { end_date: '' } : {})
+    }));
+  };
+
+  const resetCareerForm = () => {
+    setCareerForm(createCareerForm());
+    setEditingCareerId(null);
+    setShowCareerForm(false);
+  };
+
+  const handleEditCareer = (career) => {
+    setEditingCareerId(career.id);
+    setCareerForm({
+      job_title: career.job_title || '',
+      company: career.company || '',
+      start_date: formatDateForInput(career.start_date),
+      end_date: formatDateForInput(career.end_date),
+      is_current: Boolean(career.is_current),
+      description: career.description || ''
+    });
+    setShowCareerForm(true);
+  };
+
+  const handleSaveCareer = async (event) => {
+    event?.preventDefault?.();
+    if (!user?.alumni?.id) {
+      toast.error('Alumni profile not found for this account');
+      return;
+    }
+    if (!careerForm.job_title.trim() || !careerForm.company.trim()) {
+      toast.error('Position and company are required');
+      return;
+    }
+
+    setCareerSubmitting(true);
+    try {
+      if (editingCareerId) {
+        const updated = await careerService.updateCareer(editingCareerId, careerForm);
+        setCareerHistory((prev) => prev.map((career) => (career.id === editingCareerId ? updated : career)));
+        toast.success('Employment history updated');
+      } else {
+        const created = await careerService.createCareer({
+          ...careerForm,
+          alumni_id: Number(user.alumni.id)
+        });
+        setCareerHistory((prev) => [created, ...prev]);
+        toast.success('Employment history saved');
+      }
+      resetCareerForm();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to save employment history');
+    } finally {
+      setCareerSubmitting(false);
+    }
+  };
+
+  const handleDeleteCareer = (careerId) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Employment Record',
+      message: 'This will permanently remove this employment record from your profile.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await careerService.deleteCareer(careerId);
+          setCareerHistory((prev) => prev.filter((career) => career.id !== careerId));
+          if (editingCareerId === careerId) resetCareerForm();
+          toast.success('Employment history deleted');
+        } catch (error) {
+          toast.error(error.response?.data?.error || 'Failed to delete employment history');
+        }
+      }
+    });
+  };
+
 
   if (!user) {
     return (
@@ -686,6 +846,16 @@ const Profile = () => {
 
   return (
     <UserLayout>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        type={confirmModal.type}
+      />
       <div className="bg-gray-50 py-8">
       <div className="w-full px-4 sm:px-6 lg:px-8 mx-auto">
         {/* Enhanced Header */}
@@ -1174,6 +1344,158 @@ const Profile = () => {
                   </div>
                 </div>
 
+                <div className="mt-6 border-t border-gray-200 pt-6">
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-base font-semibold text-gray-900">Employment History</h4>
+                      <PrivacyToggle
+                        label="Employment history"
+                        isPublic={privacySettings.isEmploymentPublic}
+                        onToggle={() => togglePrivacy('isEmploymentPublic')}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (showCareerForm) {
+                          resetCareerForm();
+                        } else {
+                          setShowCareerForm(true);
+                        }
+                      }}
+                      className="app-secondary-button px-3 py-1.5 text-sm"
+                    >
+                      {showCareerForm ? 'Cancel' : '+ Add Employment'}
+                    </button>
+                  </div>
+
+                  {showCareerForm && (
+                    <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+                      <h5 className="mb-3 text-sm font-semibold text-slate-900">
+                        {editingCareerId ? 'Edit Employment Record' : 'Add Employment Record'}
+                      </h5>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Position *</label>
+                          <input
+                            type="text"
+                            name="job_title"
+                            value={careerForm.job_title}
+                            onChange={handleCareerFormChange}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Company *</label>
+                          <input
+                            type="text"
+                            name="company"
+                            value={careerForm.company}
+                            onChange={handleCareerFormChange}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Start Date</label>
+                          <input
+                            type="date"
+                            name="start_date"
+                            value={careerForm.start_date}
+                            onChange={handleCareerFormChange}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">End Date</label>
+                          <input
+                            type="date"
+                            name="end_date"
+                            value={careerForm.end_date}
+                            onChange={handleCareerFormChange}
+                            disabled={careerForm.is_current}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm font-medium text-slate-700 sm:col-span-2">
+                          <input
+                            type="checkbox"
+                            name="is_current"
+                            checked={careerForm.is_current}
+                            onChange={handleCareerFormChange}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          I currently work here
+                        </label>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Description</label>
+                          <textarea
+                            name="description"
+                            value={careerForm.description}
+                            onChange={handleCareerFormChange}
+                            rows="3"
+                            className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleSaveCareer}
+                          disabled={careerSubmitting}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {careerSubmitting ? 'Saving...' : editingCareerId ? 'Update Employment' : 'Save Employment'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    {careerHistory.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">No employment history added yet.</p>
+                    ) : (
+                      careerHistory.map((career) => (
+                        <div key={career.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="font-semibold text-slate-900">{career.job_title}</p>
+                              <p className="text-sm font-medium text-blue-700">{career.company}</p>
+                            </div>
+                            <div className="flex flex-col items-start gap-2 sm:items-end">
+                              <p className="text-xs text-slate-500">
+                                {formatCareerDate(career.start_date)} - {career.is_current ? 'Present' : formatCareerDate(career.end_date)}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditCareer(career)}
+                                  className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCareer(career.id)}
+                                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramMatchClass(career.program_alignment)}`}>
+                              {getProgramMatchLabel(career.program_alignment)}
+                            </span>
+                            <span className="text-xs text-slate-500">Admin/teacher reviews this match.</span>
+                          </div>
+                          {career.description && <p className="mt-2 text-sm text-slate-600">{career.description}</p>}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
                 <div className="mt-4">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <label className="block text-sm font-medium text-gray-700">
@@ -1284,6 +1606,7 @@ const Profile = () => {
                     const resetEducationHistory = normalizeEducationHistory(user.alumni || {});
                     const primaryEducation = getPrimaryEducation(resetEducationHistory);
                     setIsEditing(false);
+                    resetCareerForm();
                     setEducationHistory(resetEducationHistory);
                     setFormData({
                       username: user.username || '',
@@ -1479,6 +1802,46 @@ const Profile = () => {
                       />
                     </div>
                     <p className="text-lg text-gray-900">{profileAlumni.location || formData.location || 'Not set'}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <label className="block text-sm font-medium text-gray-500">Employment History</label>
+                        <PrivacyToggle
+                          label="Employment history"
+                          isPublic={privacySettings.isEmploymentPublic}
+                          onToggle={() => togglePrivacy('isEmploymentPublic')}
+                          disabled
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {careerHistory.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">No employment history added yet.</p>
+                      ) : (
+                        careerHistory.map((career) => (
+                          <div key={career.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="font-semibold text-slate-900">{career.job_title}</p>
+                                <p className="text-sm font-medium text-blue-700">{career.company}</p>
+                              </div>
+                              <p className="text-xs text-slate-500">
+                                {formatCareerDate(career.start_date)} - {career.is_current ? 'Present' : formatCareerDate(career.end_date)}
+                              </p>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramMatchClass(career.program_alignment)}`}>
+                                {getProgramMatchLabel(career.program_alignment)}
+                              </span>
+                              <span className="text-xs text-slate-500">Admin/teacher reviews this match.</span>
+                            </div>
+                            {career.description && <p className="mt-2 text-sm text-slate-600">{career.description}</p>}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                   <div className="sm:col-span-2">
                     <div className="mb-1 flex items-center gap-3">

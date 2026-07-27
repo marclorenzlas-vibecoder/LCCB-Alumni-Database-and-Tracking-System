@@ -6,6 +6,38 @@ const { buildChangeSet, recordActivity } = require('../services/activityLogServi
 const prisma = new PrismaClient();
 const router = express.Router();
 
+const isStaffRequest = (req) => {
+  const role = String(req.user?.role || '').toUpperCase();
+  return role === 'TEACHER' || role === 'ADMIN';
+};
+
+const getAuthenticatedAlumniId = async (req) => {
+  const tokenAlumniId = Number(req.user?.alumniId || req.user?.alumni_id || 0);
+  if (Number.isFinite(tokenAlumniId) && tokenAlumniId > 0) {
+    return tokenAlumniId;
+  }
+
+  const userId = Number(req.user?.id || 0);
+  if (Number.isFinite(userId) && userId > 0) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { alumni: { select: { id: true } } }
+    });
+    if (user?.alumni?.id) return Number(user.alumni.id);
+  }
+
+  const email = typeof req.user?.email === 'string' ? req.user.email : '';
+  if (email) {
+    const alumni = await prisma.alumni.findFirst({
+      where: { email },
+      select: { id: true }
+    });
+    if (alumni?.id) return Number(alumni.id);
+  }
+
+  return null;
+};
+
 const normalizeJobRow = (row) => {
   if (!row) return null;
 
@@ -153,6 +185,14 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    const requestedPosterId = posted_by_alumni_id ? Number(posted_by_alumni_id) : null;
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req)) {
+      if (!requestedPosterId || authenticatedAlumniId !== requestedPosterId) {
+        return res.status(403).json({ error: 'You can only create job posts for your own alumni profile' });
+      }
+    }
+
     const job = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`
         INSERT INTO job_posting (
@@ -169,7 +209,7 @@ router.post('/', authenticateToken, async (req, res) => {
           application_url,
           application_deadline
         ) VALUES (
-          ${posted_by_alumni_id ? Number(posted_by_alumni_id) : null},
+          ${requestedPosterId},
           ${job_title},
           ${company},
           ${location || null},
@@ -217,6 +257,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     if (!oldJob) {
       return res.status(404).json({ error: 'Job posting not found' });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== oldJob.posted_by_alumni_id) {
+      return res.status(403).json({ error: 'You can only update your own job posts' });
     }
 
     const {
@@ -311,6 +356,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     if (!job) {
       return res.status(404).json({ error: 'Job posting not found' });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!isStaffRequest(req) && authenticatedAlumniId !== job.posted_by_alumni_id) {
+      return res.status(403).json({ error: 'You can only delete your own job posts' });
     }
 
     await prisma.job_posting.delete({

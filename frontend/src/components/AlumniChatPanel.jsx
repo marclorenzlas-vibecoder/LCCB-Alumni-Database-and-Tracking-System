@@ -672,7 +672,6 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
                   <div className={`lccb-chat-requests ${showMessageRequests ? 'lccb-chat-requests--open' : 'lccb-chat-requests--closed'}`}>
                     {messageRequests.map((contact) => {
                       const isSelected = selectedContactId === contact.userId;
-                      const isBusy = requestActionId === contact.chatId;
                       return (
                         <div
                           role="button"
@@ -706,36 +705,6 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
                               </span>
                               <span className="mt-0.5 block truncate text-xs text-slate-600">
                                 {contact.summary?.latestMessageText || 'New message request'}
-                              </span>
-                              <span className="mt-2 flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleAcceptRequest(contact);
-                                  }}
-                                  disabled={isBusy}
-                                  className={`inline-flex flex-1 items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${
-                                    isBusy ? 'bg-slate-300' : 'bg-blue-700 hover:bg-blue-800'
-                                  }`}
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleBlockRequest(contact);
-                                  }}
-                                  disabled={isBusy}
-                                  className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-semibold ${
-                                    isBusy
-                                      ? 'border-slate-200 bg-slate-100 text-slate-400'
-                                      : 'border-red-200 bg-white text-red-700 hover:bg-red-50'
-                                  }`}
-                                >
-                                  Block
-                                </button>
                               </span>
                             </span>
                           </span>
