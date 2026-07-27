@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import eventService from "../services/eventService";
@@ -22,6 +22,8 @@ const EventDetail = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [showAllGallery, setShowAllGallery] = useState(false);
+  const galleryFileInputRef = useRef(null);
 
   const getAvatarFallbackUrl = (alumni) => {
     const name =
@@ -72,6 +74,7 @@ const EventDetail = () => {
       }
 
       setEvent(eventData);
+      setShowAllGallery(false);
 
       const attendeesData = await eventService.getEventAttendees(id);
       setAttendees(attendeesData);
@@ -209,10 +212,30 @@ const EventDetail = () => {
   };
 
   const canUploadGallery = isEventPast() && (isTeacher || isAlumni);
+  const currentUserId = Number(user?.id || user?.userId || user?.user_id || 0);
+  const galleryPreviewLimit = 6;
+  const galleryPreviewPhotos =
+    showAllGallery || gallery.length <= galleryPreviewLimit
+      ? gallery
+      : gallery.slice(0, galleryPreviewLimit - 1);
+  const hiddenGalleryCount =
+    !showAllGallery && gallery.length > galleryPreviewLimit
+      ? gallery.length - galleryPreviewPhotos.length
+      : 0;
+  const selectedFileCountLabel =
+    selectedFiles.length === 0
+      ? "No files selected"
+      : `${selectedFiles.length} ${selectedFiles.length === 1 ? "file" : "files"} selected`;
+
+  const canDeleteGalleryPhoto = (photo) =>
+    isTeacher ||
+    (isAlumni &&
+      currentUserId > 0 &&
+      Number(photo.uploaded_by || photo.user?.id || 0) === currentUserId);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    setSelectedFiles((prev) => [...prev, ...files]);
+    setSelectedFiles(files);
   };
 
   const handleUploadPhotos = async () => {
@@ -231,6 +254,9 @@ const EventDetail = () => {
       await eventService.addGalleryPhotos(id, formData);
       toast.success("Photos uploaded successfully!");
       setSelectedFiles([]);
+      if (galleryFileInputRef.current) {
+        galleryFileInputRef.current.value = "";
+      }
       loadEventDetails();
     } catch (error) {
       console.error("Error uploading photos:", error);
@@ -916,90 +942,86 @@ const EventDetail = () => {
         {/* Gallery - Past Events Only */}
         {isEventPast() && (
           <div className="mt-8">
-            <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-6">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-sm font-semibold uppercase tracking-widest text-blue-600">
-                  Gallery
-                </h2>
-                {gallery.length > 0 && (
-                  <span className="text-xs text-gray-400 font-medium">
-                    {gallery.length} {gallery.length === 1 ? "photo" : "photos"}
-                  </span>
-                )}
-              </div>
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 md:p-6 shadow-sm">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.04em] text-blue-600">
+                Gallery
+              </h2>
 
               {/* Upload */}
               {canUploadGallery && (
-                <div className="mb-6 p-4 rounded-lg border border-dashed border-gray-300 bg-gray-50">
-                  <div className="flex items-center gap-3 mb-3">
-                    <svg
-                      className="w-5 h-5 text-blue-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                      />
-                    </svg>
-                    <span className="text-sm font-medium text-gray-700">
+                <div className="rounded-xl border border-gray-200 bg-white px-4 py-5">
+                  <div className="mb-3.5 flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.7}
+                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8"
+                        />
+                      </svg>
+                    </span>
+                    <span className="text-[15px] font-medium text-gray-900">
                       Upload photos from this event
                     </span>
                   </div>
-                  <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <input
+                      ref={galleryFileInputRef}
                       type="file"
                       multiple
                       accept="image/*"
                       onChange={handleFileSelect}
-                      className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border file:border-gray-300 file:text-sm file:font-medium file:bg-white file:text-gray-700 hover:file:bg-gray-50 file:cursor-pointer"
+                      className="sr-only"
                     />
-                    {selectedFiles.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedFiles.map((file, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium"
-                          >
-                            {file.name}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSelectedFiles((prev) =>
-                                  prev.filter((_, i) => i !== idx),
-                                )
-                              }
-                              className="hover:text-blue-900"
-                            >
-                              <svg
-                                className="w-3.5 h-3.5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
                     <button
+                      type="button"
+                      onClick={() => galleryFileInputRef.current?.click()}
+                      className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                      Choose files
+                    </button>
+                    <span className="text-[13px] font-medium text-gray-500">
+                      {selectedFileCountLabel}
+                    </span>
+                    <button
+                      type="button"
                       onClick={handleUploadPhotos}
                       disabled={uploadingPhotos || selectedFiles.length === 0}
-                      className="px-5 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      className={`ml-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-100 ${
+                        selectedFiles.length > 0 && !uploadingPhotos
+                          ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                          : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-50"
+                      }`}
                     >
-                      {uploadingPhotos
-                        ? "Uploading..."
-                        : `Upload ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ""}`}
+                      {uploadingPhotos ? (
+                        <>
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.7}
+                              d="M12 16V4m0 0l-4 4m4-4l4 4M4 16.5V18a2 2 0 002 2h12a2 2 0 002-2v-1.5"
+                            />
+                          </svg>
+                          Upload
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1007,54 +1029,107 @@ const EventDetail = () => {
 
               {/* Gallery Grid */}
               {gallery.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {gallery.map((photo, index) => (
-                    <div key={photo.id} className="relative group">
+                <div className={canUploadGallery ? "mt-4" : ""}>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <span className="text-[13px] font-medium text-gray-500">
+                      {gallery.length} {gallery.length === 1 ? "photo" : "photos"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllGallery((value) => !value)}
+                      className="text-[13px] font-semibold text-blue-600 transition hover:text-blue-700"
+                    >
+                      {showAllGallery ? "Show less" : "View all"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                    {galleryPreviewPhotos.map((photo, index) => (
                       <div
-                        className="aspect-square overflow-hidden rounded-lg cursor-pointer border border-gray-100"
-                        onClick={() => openLightbox(index)}
+                        key={photo.id}
+                        className="group relative aspect-square overflow-hidden rounded-lg border border-gray-200 bg-white"
                       >
-                        <img
-                          src={`${IMAGE_BASE_URL}${photo.image}`}
-                          alt={`Gallery ${index + 1}`}
-                          className="w-full h-full object-cover group-hover:opacity-80 transition-opacity duration-200"
-                        />
-                      </div>
-                      {(isTeacher ||
-                        (isAlumni &&
-                          Number(
-                            user?.id || user?.userId || user?.user_id || 0,
-                          ) > 0 &&
-                          Number(photo.uploaded_by || photo.user?.id || 0) ===
-                            Number(
-                              user?.id || user?.userId || user?.user_id || 0,
-                            ))) && (
-                        <button
-                          onClick={() => handleDeletePhoto(photo.id)}
-                          className="absolute top-2 right-2 w-7 h-7 bg-black/50 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/70"
+                        <div
+                          className="h-full w-full cursor-pointer"
+                          onClick={() => openLightbox(index)}
                         >
-                          <svg
-                            className="h-3.5 w-3.5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
+                          <img
+                            src={`${IMAGE_BASE_URL}${photo.image}`}
+                            alt={`Gallery ${index + 1}`}
+                            className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                          />
+                          <span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/20" />
+                        </div>
+                        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100">
+                          <a
+                            href={`${IMAGE_BASE_URL}${photo.image}`}
+                            download
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-black/55 text-white transition hover:bg-black/75"
+                            aria-label="Download photo"
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
-                            />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                            <svg
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M12 4v10m0 0l-4-4m4 4l4-4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"
+                              />
+                            </svg>
+                          </a>
+                          {canDeleteGalleryPhoto(photo) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePhoto(photo.id);
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-md bg-black/55 text-white transition hover:bg-red-600"
+                              aria-label="Delete photo"
+                            >
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={1.8}
+                                  d="M6 7h12m-9 0V5a1 1 0 011-1h4a1 1 0 011 1v2m-8 0l1 13h6l1-13"
+                                />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {hiddenGalleryCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openLightbox(galleryPreviewPhotos.length)}
+                        className="aspect-square rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        +{hiddenGalleryCount}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <div className="text-center py-12 rounded-lg border border-dashed border-gray-300 bg-gray-50">
+                <div
+                  className={
+                    canUploadGallery
+                      ? "mt-4 px-4 py-10 text-center"
+                      : "px-4 py-10 text-center"
+                  }
+                >
                   <svg
-                    className="w-10 h-10 text-blue-600 mx-auto mb-3"
+                    className="mx-auto mb-3 h-10 w-10 text-blue-600"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -1066,10 +1141,10 @@ const EventDetail = () => {
                       d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
-                  <p className="text-sm font-semibold text-gray-900 mb-1">
+                  <p className="mb-1 text-sm font-semibold text-gray-900">
                     No photos yet
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[13px] text-gray-500">
                     {canUploadGallery
                       ? "Upload photos to share with everyone."
                       : "Check back later for event photos."}
