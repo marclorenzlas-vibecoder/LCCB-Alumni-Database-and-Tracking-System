@@ -122,19 +122,32 @@ const formatBirthday = (dateStr, includeYear = false) => {
   }
 };
 
-const registerCourseSections = groupSectionDefinitions.map((section) => {
-  if (section.key !== 'SENIOR_HIGH') {
-    return section;
-  }
+const buildRegisterCourseSections = (selectedLevel = '') => groupSectionDefinitions
+  .map((section) => {
+    let items = section.items;
+    if (selectedLevel === 'INTEGRATED_SCHOOL' && section.key === 'INTEGRATED_SCHOOL') {
+      items = section.items.filter((item) => item.value !== 'Night High');
+    } else if (selectedLevel === 'NIGHT_HIGH' && section.key === 'INTEGRATED_SCHOOL') {
+      items = section.items.filter((item) => item.value === 'Night High');
+    } else if (selectedLevel && section.key !== selectedLevel) {
+      items = [];
+    }
 
-  return {
-    ...section,
-    items: section.items.map((item) => {
-      const { description, ...rest } = item;
-      return rest;
-    })
-  };
-});
+    if (section.key !== 'SENIOR_HIGH') {
+      return { ...section, items };
+    }
+
+    return {
+      ...section,
+      items: items.map((item) => {
+        const { description, ...rest } = item;
+        return rest;
+      })
+    };
+  })
+  .filter((section) => section.items.length > 0);
+
+const registerCourseSections = buildRegisterCourseSections();
 
 const PROGRAM_ALIGNMENT_OPTIONS = [
   { value: '', label: 'Auto-check' },
@@ -248,6 +261,8 @@ const AlumniDirectory = () => {
   };
   const [newAlumni, setNewAlumni] = useState(blankAlumni);
   const [educationHistory, setEducationHistory] = useState([createEducationEntry()]);
+
+  const filterCourseSections = useMemo(() => buildRegisterCourseSections(selectedLevel), [selectedLevel]);
 
   // Education history helpers
   const handleEducationHistoryChange = (index, field, value) => {
@@ -1573,7 +1588,7 @@ const AlumniDirectory = () => {
             </div>
 
             {/* Row 2: Filter Dropdowns + Actions */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 <FilterMenu
                   menuRef={levelMenuRef}
@@ -1585,7 +1600,17 @@ const AlumniDirectory = () => {
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5zm0 8l7.5-4.167V15L12 20l-7.5-5.167V6.833L12 11zm0 2.25L7.5 12v2.5L12 17l4.5-2.5V12L12 13.25z" /></svg>}
                   sections={[{ key: 'levels', title: 'Levels', items: sharedLevelOptions.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label })) }]}
                   onSelect={(value) => {
-                    setSelectedLevel((prev) => (prev === value ? '' : value));
+                    setSelectedLevel((prev) => {
+                      const nextLevel = prev === value ? '' : value;
+                      const nextSections = buildRegisterCourseSections(nextLevel);
+                      const groupStillAvailable = nextSections.some((section) =>
+                        section.items.some((item) => item.value === selectedGroup)
+                      );
+                      if (!groupStillAvailable) {
+                        setSelectedGroup('');
+                      }
+                      return nextLevel;
+                    });
                     setShowLevelMenu(false);
                   }}
                   panelTitle="All Levels"
@@ -1617,12 +1642,12 @@ const AlumniDirectory = () => {
                   selectedLabel={getGroupLabel(selectedGroup)}
                   selectedValue={selectedGroup}
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
-                  sections={registerCourseSections}
+                  sections={filterCourseSections}
                   onSelect={(value) => {
                     setSelectedGroup((prev) => (prev === value ? '' : value));
                     setShowGroupMenu(false);
                   }}
-                  panelTitle="All Program"
+                  panelTitle={selectedLevel ? `${getLevelLabel(selectedLevel)} Programs` : 'All Program'}
                   panelWidthClass="w-96"
                   alignClass="right-0"
                 />
@@ -1630,9 +1655,9 @@ const AlumniDirectory = () => {
                   <button
                     type="button"
                     onClick={() => { setSelectedLevel(''); setSelectedBatch(''); setSelectedGroup(''); setSearchTerm(''); }}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+                    className="inline-flex h-[46px] w-36 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
                   >
-                    Clear Filters
+                    <span className="truncate">Clear Filters</span>
                   </button>
                 )}
               </div>
@@ -1644,7 +1669,7 @@ const AlumniDirectory = () => {
                     setShowOfficersModal(true);
                   }}
                   disabled={!selectedBatch}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm transition ${selectedBatch
+                  className={`inline-flex h-[46px] w-44 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${selectedBatch
                       ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
                       : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
                     }`}
@@ -1652,12 +1677,12 @@ const AlumniDirectory = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                     <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
                   </svg>
-                  {selectedBatch ? `Batch ${selectedBatch} Officers (${batchOfficers.length})` : 'Batch Officers'}
+                  <span className="min-w-0 truncate">{selectedBatch ? `Batch ${selectedBatch} Officers (${batchOfficers.length})` : 'Batch Officers'}</span>
                 </button>
                 {isTeacher && (
-                  <button type="button" onClick={generateCsv} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100">
+                  <button type="button" onClick={generateCsv} className="inline-flex h-[46px] w-56 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 16v-4m0 0V8m0 4h4m-4 0H8M5 20h14a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-4.828-4.828A2 2 0 0014.172 2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                    Generate List (CSV)
+                    <span className="min-w-0 truncate">Generate List (CSV)</span>
                   </button>
                 )}
               </div>

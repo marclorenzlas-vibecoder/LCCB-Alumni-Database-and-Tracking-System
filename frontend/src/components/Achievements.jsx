@@ -8,6 +8,22 @@ import UserLayout from './UserLayout';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { Link } from 'react-router-dom';
 import AchievementVideoPreview from './AchievementVideoPreview';
+import FilterMenu from './FilterMenu';
+
+const ACHIEVEMENT_CATEGORIES = ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
+
+const getAchievementYear = (dateValue) => {
+  if (!dateValue) return null;
+
+  const dateString = String(dateValue);
+  const yearMatch = dateString.match(/^(\d{4})/);
+  if (yearMatch) return yearMatch[1];
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return String(date.getFullYear());
+};
 
 function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
   const titleRef = useRef(null);
@@ -145,6 +161,10 @@ const Achievements = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
+  const [showYearMenu, setShowYearMenu] = useState(false);
+  const categoryMenuRef = useRef(null);
+  const yearMenuRef = useRef(null);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState({
@@ -155,8 +175,54 @@ const Achievements = () => {
     type: 'danger'
   });
 
-  const categories = ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedYear, setSelectedYear] = useState('All');
+
+  const availableYears = useMemo(() => {
+    const years = achievements
+      .map((achievement) => getAchievementYear(achievement.date))
+      .filter(Boolean);
+
+    return [...new Set(years)].sort((a, b) => Number(b) - Number(a));
+  }, [achievements]);
+
+  const categoryMenuSections = useMemo(() => ([
+    {
+      key: 'ACHIEVEMENT_CATEGORIES',
+      title: '',
+      items: ACHIEVEMENT_CATEGORIES.map((category) => ({
+        value: category,
+        label: category === 'All' ? 'All Categories' : category
+      }))
+    }
+  ]), []);
+
+  const yearMenuSections = useMemo(() => ([
+    {
+      key: 'ACHIEVEMENT_YEARS',
+      title: '',
+      items: [
+        { value: 'All', label: 'All Years' },
+        ...availableYears.map((year) => ({ value: year, label: year }))
+      ]
+    }
+  ]), [availableYears]);
+
+  const setOnlyCategoryMenuOpen = (valueOrUpdater) => {
+    const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showCategoryMenu) : valueOrUpdater;
+    setShowCategoryMenu(nextIsOpen);
+    if (nextIsOpen) {
+      setShowYearMenu(false);
+    }
+  };
+
+  const setOnlyYearMenuOpen = (valueOrUpdater) => {
+    const nextIsOpen = typeof valueOrUpdater === 'function' ? valueOrUpdater(showYearMenu) : valueOrUpdater;
+    setShowYearMenu(nextIsOpen);
+    if (nextIsOpen) {
+      setShowCategoryMenu(false);
+    }
+  };
 
   // Fetch all achievements on component mount
   useEffect(() => {
@@ -180,6 +246,35 @@ const Achievements = () => {
       unsubDeleted();
     };
   }, []);
+
+  useEffect(() => {
+    if (!showCategoryMenu && !showYearMenu) return undefined;
+
+    const handlePointerDown = (event) => {
+      const clickInsideCategory = categoryMenuRef.current && categoryMenuRef.current.contains(event.target);
+      const clickInsideYear = yearMenuRef.current && yearMenuRef.current.contains(event.target);
+
+      if (!clickInsideCategory && !clickInsideYear) {
+        setShowCategoryMenu(false);
+        setShowYearMenu(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowCategoryMenu(false);
+        setShowYearMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showCategoryMenu, showYearMenu]);
 
   const fetchAllAchievements = async () => {
     try {
@@ -321,6 +416,10 @@ const Achievements = () => {
       ? achievements
       : achievements.filter(a => a.category === selectedCategory);
 
+    if (selectedYear !== 'All') {
+      result = result.filter(a => getAchievementYear(a.date) === selectedYear);
+    }
+
     const q = searchTerm.trim().toLowerCase();
     if (q) {
       result = result.filter(a => {
@@ -332,7 +431,14 @@ const Achievements = () => {
     }
 
     return result;
-  }, [achievements, selectedCategory, searchTerm]);
+  }, [achievements, selectedCategory, selectedYear, searchTerm]);
+
+  const clearFilters = () => {
+    setSelectedCategory('All');
+    setSelectedYear('All');
+    setShowCategoryMenu(false);
+    setShowYearMenu(false);
+  };
 
   return (
     <UserLayout>
@@ -420,26 +526,62 @@ const Achievements = () => {
             </div>
           </div>
 
-          {/* Categories Filter */}
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
+          {/* Filter Dropdowns */}
+          <div className="flex flex-wrap items-center gap-3">
+            <FilterMenu
+              menuRef={categoryMenuRef}
+              isOpen={showCategoryMenu}
+              setIsOpen={setOnlyCategoryMenuOpen}
+              buttonLabel="Category"
+              selectedLabel={selectedCategory === 'All' ? 'All Categories' : selectedCategory}
+              selectedValue={selectedCategory}
+              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
+              sections={categoryMenuSections}
+              onSelect={(value) => {
+                setSelectedCategory(value);
+                setShowCategoryMenu(false);
+              }}
+              panelTitle="Categories"
+              panelWidthClass="w-64"
+              alignClass="left-0"
+            />
+
+            <FilterMenu
+              menuRef={yearMenuRef}
+              isOpen={showYearMenu}
+              setIsOpen={setOnlyYearMenuOpen}
+              buttonLabel="Year"
+              selectedLabel={selectedYear === 'All' ? 'All Years' : selectedYear}
+              selectedValue={selectedYear}
+              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+              sections={yearMenuSections}
+              onSelect={(value) => {
+                setSelectedYear(value);
+                setShowYearMenu(false);
+              }}
+              panelTitle="Years"
+              panelWidthClass="w-48"
+              alignClass="left-0"
+            />
+
+            {(selectedCategory !== 'All' || selectedYear !== 'All') && (
               <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                  selectedCategory === category
-                    ? 'bg-blue-900 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
-                } border border-gray-200`}
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
               >
-                {category}
+                Clear Filters
               </button>
-            ))}
+            )}
           </div>
         </div>
 
+        <div className="mb-8 text-sm text-gray-600">
+          Showing {filteredAchievements.length} of {achievements.length} achievements
+        </div>
+
         {/* Achievements Grid */}
-        <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
+        <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
           {loading && <div className="col-span-full text-center">Loading...</div>}
           {error && <div className="col-span-full text-center text-red-600">{error}</div>}
           {!loading && filteredAchievements.length === 0 && (

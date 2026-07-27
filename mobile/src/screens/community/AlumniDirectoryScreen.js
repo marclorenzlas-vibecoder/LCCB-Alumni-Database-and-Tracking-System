@@ -138,6 +138,29 @@ const getLevelDisplayLabel = (value) => {
   return map[normalized] || value || 'Level not provided';
 };
 
+const getProgramSectionsForLevel = (sections = [], selectedLevel = 'ALL') => {
+  if (!selectedLevel || selectedLevel === 'ALL') return sections;
+
+  const normalizedLevel = normalizeLevel(selectedLevel);
+
+  return sections
+    .map((section) => {
+      const sectionLevel = normalizeLevel(section.key || section.title);
+      let items = section.items || [];
+
+      if (normalizedLevel === 'integrated school' && sectionLevel === 'integrated school') {
+        items = items.filter((item) => normalizeLevel(item.value) !== 'night high');
+      } else if (normalizedLevel === 'night high' && sectionLevel === 'integrated school') {
+        items = items.filter((item) => normalizeLevel(item.value) === 'night high');
+      } else if (normalizedLevel !== sectionLevel) {
+        items = [];
+      }
+
+      return { ...section, items };
+    })
+    .filter((section) => section.items.length > 0);
+};
+
 const getEducationHistory = (item = {}) => {
   const explicit = item.education_history || item.educationHistory || [];
   if (Array.isArray(explicit) && explicit.length > 0) {
@@ -257,7 +280,7 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
           if (cached.levelOptions) setLevelOptionsState(['ALL', ...cached.levelOptions.filter(lo => (lo.label || lo).toLowerCase() !== 'all levels').map(lo => (lo.label || lo))]);
           if (cached.groupSectionDefinitions) setGroupSectionsState(mapBackendToGroupSections(cached));
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
 
@@ -308,7 +331,19 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
 
   const groupSections = useMemo(() => groupSectionsState.map((section) => ({ ...section })), [groupSectionsState]);
 
-  const groupOptions = useMemo(() => ['ALL', ...groupSections.flatMap((section) => section.items.map((item) => item.value))], [groupSections]);
+  const filteredGroupSections = useMemo(() => getProgramSectionsForLevel(groupSections, selectedLevel), [groupSections, selectedLevel]);
+
+  useEffect(() => {
+    if (selectedGroup === 'ALL') return;
+
+    const groupStillAvailable = filteredGroupSections.some((section) =>
+      section.items.some((item) => item.value === selectedGroup)
+    );
+
+    if (!groupStillAvailable) {
+      setSelectedGroup('ALL');
+    }
+  }, [filteredGroupSections, selectedGroup]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -412,6 +447,24 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
               <Text style={[styles.filterButtonText, selectedBatch === 'ALL' && styles.filterTextDisabled]} numberOfLines={1} ellipsizeMode="tail">Batch Officers</Text>
             </View>
           </Pressable>
+          {(query || selectedLevel !== 'ALL' || selectedBatch !== 'ALL' || selectedGroup !== 'ALL') ? (
+            <Pressable
+              style={[styles.filterButton, styles.clearFilterButton]}
+              onPress={() => {
+                setQuery('');
+                setSelectedLevel('ALL');
+                setSelectedBatch('ALL');
+                setSelectedGroup('ALL');
+              }}
+            >
+              <View style={styles.filterButtonInner}>
+                <View style={styles.clearFilterIconPill}>
+                  <Ionicons name="close-outline" size={14} color="#b91c1c" />
+                </View>
+                <Text style={[styles.filterButtonText, styles.clearFilterText]} numberOfLines={1} ellipsizeMode="tail">Clear Filters</Text>
+              </View>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.summaryRow}>
@@ -470,7 +523,15 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
         options={levelOptions}
         selected={selectedLevel}
         onSelect={(value) => {
-          setSelectedLevel((prev) => (prev === value ? 'ALL' : value));
+          const nextLevel = selectedLevel === value ? 'ALL' : value;
+          const nextSections = getProgramSectionsForLevel(groupSections, nextLevel);
+          const groupStillAvailable = selectedGroup === 'ALL' || nextSections.some((section) =>
+            section.items.some((item) => item.value === selectedGroup)
+          );
+          setSelectedLevel(nextLevel);
+          if (!groupStillAvailable) {
+            setSelectedGroup('ALL');
+          }
           setLevelPickerOpen(false);
         }}
         onClose={() => setLevelPickerOpen(false)}
@@ -492,8 +553,8 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
 
       <OptionPicker
         visible={groupPickerOpen}
-        title="All Program"
-        sections={groupSections}
+        title={selectedLevel === 'ALL' ? 'All Program' : `${levelLabel} Programs`}
+        sections={filteredGroupSections}
         selected={selectedGroup}
         onSelect={(value) => {
           setSelectedGroup((prev) => (prev === value ? 'ALL' : value));
@@ -799,6 +860,24 @@ const styles = StyleSheet.create({
   officersButtonDisabled: {
     opacity: 0.6,
     backgroundColor: '#fff'
+  },
+  clearFilterButton: {
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2'
+  },
+  clearFilterIconPill: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  clearFilterText: {
+    color: '#b91c1c',
+    fontWeight: '700'
   },
   filterTextDisabled: {
     color: '#94a3b8'
