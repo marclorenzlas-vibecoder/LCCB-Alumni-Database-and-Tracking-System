@@ -243,30 +243,32 @@ const ActivityLogs = () => {
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="min-w-[190px] flex-1 sm:flex-none">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Action</span>
-                  <FilterMenu
-                    menuRef={actionMenuRef}
-                    isOpen={showActionMenu}
-                    setIsOpen={setShowActionMenu}
-                    buttonLabel="All actions"
-                    selectedLabel={actionFilterOptions.find((option) => option.value === actionFilter)?.label || 'All actions'}
-                    selectedValue={actionFilter}
-                    icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M7 12h10m-7 6h4" /></svg>}
-                    sections={[{ key: 'actions', title: 'Actions', items: actionFilterOptions }]}
-                    onSelect={(value) => {
-                      setActionFilter(value);
-                      setShowActionMenu(false);
-                    }}
-                    panelTitle="All actions"
-                    panelWidthClass="w-full"
-                    alignClass="left-0"
-                  />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex min-w-[260px] flex-1 items-center gap-2 sm:flex-none">
+                  <span className="w-14 shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Action</span>
+                  <div className="min-w-0 flex-1">
+                    <FilterMenu
+                      menuRef={actionMenuRef}
+                      isOpen={showActionMenu}
+                      setIsOpen={setShowActionMenu}
+                      buttonLabel="All actions"
+                      selectedLabel={actionFilterOptions.find((option) => option.value === actionFilter)?.label || 'All actions'}
+                      selectedValue={actionFilter}
+                      icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M7 12h10m-7 6h4" /></svg>}
+                      sections={[{ key: 'actions', title: 'Actions', items: actionFilterOptions }]}
+                      onSelect={(value) => {
+                        setActionFilter(value);
+                        setShowActionMenu(false);
+                      }}
+                      panelTitle="All actions"
+                      panelWidthClass="w-full"
+                      alignClass="left-0"
+                    />
+                  </div>
                 </div>
-                <label className="min-w-[180px] flex-1 sm:flex-none">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">From</span>
-                  <span className="relative block">
+                <label className="flex min-w-[210px] flex-1 items-center gap-2 sm:flex-none">
+                  <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">From</span>
+                  <span className="relative block min-w-0 flex-1">
                     <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600">
                       <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3M5 11h14M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -281,9 +283,9 @@ const ActivityLogs = () => {
                     />
                   </span>
                 </label>
-                <label className="min-w-[180px] flex-1 sm:flex-none">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">To</span>
-                  <span className="relative block">
+                <label className="flex min-w-[210px] flex-1 items-center gap-2 sm:flex-none">
+                  <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">To</span>
+                  <span className="relative block min-w-0 flex-1">
                     <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600">
                       <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3M5 11h14M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />

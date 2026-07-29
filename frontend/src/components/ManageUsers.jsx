@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import UserLayout from './UserLayout';
+import FilterMenu from './FilterMenu';
+
+const userFilterOptions = [
+  { value: 'ALL', label: 'All Users' },
+  { value: 'ACTIVE', label: 'Active Users' },
+  { value: 'BLOCKED', label: 'Blocked Users' },
+];
 
 const ManageUsers = () => {
   const [users, setUsers] = useState([]);
@@ -9,12 +16,36 @@ const ManageUsers = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const statusMenuRef = useRef(null);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target)) {
+        setShowStatusMenu(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowStatusMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, []);
 
   const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -221,15 +252,23 @@ const ManageUsers = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full sm:w-64 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
                 />
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
-                >
-                  <option value="ALL">All Users</option>
-                  <option value="ACTIVE">Active Users</option>
-                  <option value="BLOCKED">Blocked Users</option>
-                </select>
+                <FilterMenu
+                  menuRef={statusMenuRef}
+                  isOpen={showStatusMenu}
+                  setIsOpen={setShowStatusMenu}
+                  buttonLabel="All Users"
+                  selectedLabel={userFilterOptions.find((option) => option.value === filterStatus)?.label || 'All Users'}
+                  selectedValue={filterStatus}
+                  icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a4 4 0 100 8 4 4 0 000-8zM3 17a7 7 0 0114 0 1 1 0 01-1 1H4a1 1 0 01-1-1z" /></svg>}
+                  sections={[{ key: 'users', title: 'Users', items: userFilterOptions }]}
+                  onSelect={(value) => {
+                    setFilterStatus(value);
+                    setShowStatusMenu(false);
+                  }}
+                  panelTitle="User Status"
+                  panelWidthClass="w-full sm:w-44"
+                  alignClass="right-0"
+                />
               </div>
             </div>
           </div>
