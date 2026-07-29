@@ -478,8 +478,22 @@ router.get("/birthdays/today", authMiddleware, async (req, res) => {
     const currentMonth = today.getUTCMonth() + 1;
     const currentDay = today.getUTCDate();
 
+    const normalizeBirthdayNotificationVisibility = (value) => {
+      const normalized = String(value || "PUBLIC").trim().toUpperCase();
+      if (["PRIVATE", "OFF"].includes(normalized)) return "OFF";
+      return "PUBLIC";
+    };
+
     const birthdays = await prisma.$queryRaw`
-      SELECT a.id, a.first_name, a.last_name, a.profile_image, a.date_of_birth, a.email, u.email as user_email
+      SELECT
+        a.id,
+        a.first_name,
+        a.last_name,
+        a.profile_image,
+        a.date_of_birth,
+        a.email,
+        u.email as user_email,
+        COALESCE(u.birthday_notification_visibility, 'PUBLIC') AS birthday_notification_visibility
       FROM alumni a
       LEFT JOIN user u ON a.user_id = u.id
       WHERE a.date_of_birth IS NOT NULL
@@ -488,25 +502,37 @@ router.get("/birthdays/today", authMiddleware, async (req, res) => {
         AND DAY(a.date_of_birth) = ${currentDay}
     `;
 
-    const birthdayList = birthdays.map((entry) => ({
-      id: entry.id,
-      firstName: entry.first_name,
-      lastName: entry.last_name,
-      profileImage: entry.profile_image,
-      dateOfBirth: entry.date_of_birth,
-      email: entry.email || entry.user_email || null,
-    }));
+    const birthdayList = birthdays
+      .filter((entry) => normalizeBirthdayNotificationVisibility(entry.birthday_notification_visibility) === "PUBLIC")
+      .map((entry) => ({
+        id: entry.id,
+        firstName: entry.first_name,
+        lastName: entry.last_name,
+        profileImage: entry.profile_image,
+        dateOfBirth: entry.date_of_birth,
+        email: entry.email || entry.user_email || null,
+      }));
 
-    const currentAlumni = await prisma.alumni.findFirst({
-      where: {
-        OR: [{ user_id: req.user.id }, { email: req.user.email }],
-      },
-    });
+    const currentAlumniRows = await prisma.$queryRaw`
+      SELECT
+        a.id,
+        a.date_of_birth,
+        COALESCE(u.birthday_notification_visibility, 'PUBLIC') AS birthday_notification_visibility
+      FROM alumni a
+      LEFT JOIN user u ON a.user_id = u.id
+      WHERE a.user_id = ${req.user.id} OR a.email = ${req.user.email}
+      LIMIT 1
+    `;
+    const currentAlumni = currentAlumniRows?.[0] || null;
+    const currentBirthdayVisibility = normalizeBirthdayNotificationVisibility(
+      currentAlumni?.birthday_notification_visibility
+    );
     const isYourBirthday =
       currentAlumni && currentAlumni.date_of_birth
         ? (() => {
             const dob = new Date(currentAlumni.date_of_birth);
             return (
+              currentBirthdayVisibility !== "OFF" &&
               !Number.isNaN(dob.getTime()) &&
               dob.getUTCDate() === today.getUTCDate() &&
               dob.getUTCMonth() === today.getUTCMonth()

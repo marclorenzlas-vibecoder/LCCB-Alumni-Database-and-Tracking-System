@@ -1296,6 +1296,36 @@ body::-webkit-scrollbar,
     background-position: -12px 0;
 }
 
+@media (min-width: 768px) {
+    .money-receipt-proof-grid {
+        --money-receipt-proof-height: min(38rem, calc(100vh - 2rem));
+        align-items: start;
+    }
+
+    .money-receipt-proof-panel {
+        align-self: start;
+        height: var(--money-receipt-proof-height);
+        max-height: calc(100vh - 2rem);
+        margin-top: 0;
+    }
+
+    .money-receipt-paper-panel {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .money-receipt-paper-panel .receipt-paper {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    .money-receipt-screenshot-panel,
+    .money-receipt-screenshot-frame {
+        min-height: 0;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .neon-text,
     .neon-text-pink,

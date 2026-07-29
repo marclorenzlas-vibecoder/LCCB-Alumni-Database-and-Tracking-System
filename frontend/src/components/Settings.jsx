@@ -5,6 +5,8 @@ import UserLayout from "./UserLayout";
 import { authService } from "../services/authService";
 import { API_BASE_URL } from "../config/apiBaseUrl";
 import {
+  getBirthdayNotificationVisibility,
+  normalizeBirthdayNotificationVisibility,
   setPreferences,
 } from "../utils/notificationPreferences";
 
@@ -147,23 +149,7 @@ const SaveButton = ({ onClick, disabled, saveStatus }) => {
           Saving...
         </>
       ) : isSuccess ? (
-        <>
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-          Saved
-        </>
+        "Saved"
       ) : (
         "Save Changes"
       )}
@@ -188,6 +174,7 @@ const Settings = () => {
   const [prefNotifyDonations, setPrefNotifyDonations] = useState(true);
   const [prefNotifyJobs, setPrefNotifyJobs] = useState(true);
   const [prefShowDonationToasts, setPrefShowDonationToasts] = useState(true);
+  const [prefBirthdayNotificationsEnabled, setPrefBirthdayNotificationsEnabled] = useState(true);
   // Admin-only
   const [prefNotifyPendingRegistrations, setPrefNotifyPendingRegistrations] = useState(true);
   const [prefNotifyJobApplications, setPrefNotifyJobApplications] = useState(true);
@@ -227,6 +214,9 @@ const Settings = () => {
             setPrefNotifyDonations(data.notify_donations ?? true);
             setPrefNotifyJobs(data.notify_jobs ?? true);
             setPrefShowDonationToasts(data.show_donation_toasts ?? true);
+            setPrefBirthdayNotificationsEnabled(
+              normalizeBirthdayNotificationVisibility(data.birthday_notification_visibility) !== "OFF"
+            );
             setPrefNotifyPendingRegistrations(data.notify_pending_registrations ?? true);
             setPrefNotifyJobApplications(data.notify_job_applications ?? true);
 
@@ -237,7 +227,8 @@ const Settings = () => {
               notifyAchievements: data.notify_achievements ?? true,
               notifyDonations: data.notify_donations ?? true,
               notifyJobs: data.notify_jobs ?? true,
-              showDonationToasts: data.show_donation_toasts ?? true
+              showDonationToasts: data.show_donation_toasts ?? true,
+              birthdayNotificationVisibility: data.birthday_notification_visibility
             });
           }
         } else {
@@ -249,6 +240,7 @@ const Settings = () => {
             setPrefNotifyDonations(localStorage.getItem(`notify_donations_${userId}`) !== 'false');
             setPrefNotifyJobs(localStorage.getItem(`notify_jobs_${userId}`) !== 'false');
             setPrefShowDonationToasts(localStorage.getItem(`show_donation_toasts_${userId}`) !== 'false');
+            setPrefBirthdayNotificationsEnabled(getBirthdayNotificationVisibility(userId) !== "OFF");
           }
         }
       } catch (err) {
@@ -313,6 +305,7 @@ const Settings = () => {
           notifyDonations: prefNotifyDonations,
           notifyJobs: prefNotifyJobs,
           showDonationToasts: prefShowDonationToasts,
+          birthdayNotificationVisibility: prefBirthdayNotificationsEnabled ? "PUBLIC" : "OFF",
           ...(isAdmin && {
             notifyPendingRegistrations: prefNotifyPendingRegistrations,
             notifyJobApplications: prefNotifyJobApplications
@@ -337,6 +330,7 @@ const Settings = () => {
       notifyDonations: prefNotifyDonations,
       notifyJobs: prefNotifyJobs,
       showDonationToasts: prefShowDonationToasts,
+      birthdayNotificationVisibility: prefBirthdayNotificationsEnabled ? "PUBLIC" : "OFF",
       ...(isAdmin && {
         notifyPendingRegistrations: prefNotifyPendingRegistrations,
         notifyJobApplications: prefNotifyJobApplications
@@ -605,6 +599,14 @@ const Settings = () => {
               onChange={setPrefNotifyEvents}
               label="Event Updates"
               description="Get notified about new events, schedule changes, and reminders."
+            />
+
+            <ToggleSwitch
+              id="birthday-notifications-toggle"
+              label="My Birthday Notification"
+              description="Allow alumni to receive your birthday announcement and send you birthday greetings."
+              enabled={prefNotificationsEnabled && prefBirthdayNotificationsEnabled}
+              onChange={setPrefBirthdayNotificationsEnabled}
             />
 
             <ToggleSwitch

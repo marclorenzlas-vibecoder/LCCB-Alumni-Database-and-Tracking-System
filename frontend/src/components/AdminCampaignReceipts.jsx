@@ -105,10 +105,10 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
       onClick={onClose}
     >
       <div
-        className="grid w-full max-w-4xl items-start gap-5 md:grid-cols-2"
+        className="money-receipt-proof-grid grid w-full max-w-4xl items-start gap-5 md:grid-cols-2"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="w-full max-w-sm justify-self-center md:justify-self-end">
+        <div className="money-receipt-proof-panel money-receipt-paper-panel w-full max-w-sm justify-self-center md:justify-self-end">
           {/* Torn edge top */}
           <div className="receipt-tear-top" />
 
@@ -210,7 +210,7 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
           <div className="receipt-tear-bottom" />
         </div>
 
-        <div className="flex h-full w-full max-w-sm flex-col self-stretch justify-self-center rounded-2xl border border-slate-200 bg-white p-4 shadow-lg md:justify-self-start">
+        <div className="money-receipt-proof-panel money-receipt-screenshot-panel flex w-full max-w-sm flex-col justify-self-center rounded-2xl border border-slate-200 bg-white p-4 shadow-lg md:justify-self-start">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h4 className="text-sm font-black text-slate-950">Payment Screenshot</h4>
@@ -227,16 +227,16 @@ function MoneyReceiptModal({ entry, campaign, onClose }) {
               href={paymentScreenshotSrc}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 flex min-h-[30rem] flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2"
+              className="money-receipt-screenshot-frame mt-3 flex flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2"
             >
               <img
                 src={paymentScreenshotSrc}
                 alt="Uploaded payment screenshot"
-                className="h-full max-h-[calc(100vh-13rem)] w-full object-contain"
+                className="h-full max-h-full w-full object-contain"
               />
             </a>
           ) : (
-            <div className="mt-3 flex min-h-[30rem] flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-400">
+            <div className="money-receipt-screenshot-frame mt-3 flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-400">
               No payment screenshot uploaded.
             </div>
           )}

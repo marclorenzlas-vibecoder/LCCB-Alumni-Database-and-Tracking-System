@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 import ConfirmModal from './ConfirmModal';
 import UserLayout from './UserLayout';
 
@@ -8,6 +9,7 @@ const PendingApproval = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(authService.getCurrentUser());
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [dots, setDots] = useState('');
 
   useEffect(() => {
@@ -46,8 +48,30 @@ const PendingApproval = () => {
   }, []);
 
   const handleLogout = () => {
-    authService.logout();
-    navigate('/login');
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    const currentUser = authService.getCurrentUser();
+    const token = localStorage.getItem('token');
+
+    authService.clearLocalSession();
+    setUser(null);
+    window.dispatchEvent(new Event('logout'));
+    navigate('/login', { replace: true });
+
+    if (token) {
+      fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        keepalive: true
+      }).catch(() => {});
+    }
+
+    if (currentUser?.approval_status === 'REJECTED' && currentUser?.email) {
+      authService.deleteRejectedAccount(currentUser.email);
+    }
   };
 
   const isRejected = user?.approval_status === 'REJECTED';
@@ -152,9 +176,10 @@ const PendingApproval = () => {
                 <button
                   type="button"
                   onClick={() => setConfirmLogoutOpen(true)}
+                  disabled={isLoggingOut}
                   className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
                 >
-                  Log out
+                  {isLoggingOut ? 'Logging out...' : 'Log out'}
                 </button>
               </div>
             </div>
@@ -194,9 +219,10 @@ const PendingApproval = () => {
                 <button
                   type="button"
                   onClick={() => setConfirmLogoutOpen(true)}
+                  disabled={isLoggingOut}
                   className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
                 >
-                  Back to Login
+                  {isLoggingOut ? 'Logging out...' : 'Back to Login'}
                 </button>
               </div>
             </div>

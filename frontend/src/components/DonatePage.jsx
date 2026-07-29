@@ -359,7 +359,10 @@ const DonatePage = () => {
   const canDonate = currentRole === 'alumni' || currentRole === 'admin' || currentRole === 'teacher';
 
   const isMoneyPath = formData.donationType === 'money';
-  const receiptRequiredMessage = 'Please submit your receipt first. Your receipt is your proof of donation.';
+  const isWalletPaymentMethod = formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya';
+  const receiptRequiredMessage = isMoneyPath && isWalletPaymentMethod
+    ? 'Please submit your receipt and payment screenshot first. Your receipt and screenshot are your proof of donation.'
+    : 'Please submit your receipt first. Your receipt is your proof of donation.';
   const hasPendingReceipt = Boolean(successState) && !receiptSubmitted;
   const donationSteps = isMoneyPath ? [
     { number: '1', title: 'Amount', description: 'Enter donation amount' },
@@ -592,7 +595,6 @@ const DonatePage = () => {
     : formData.paymentMethod === 'gcash'
       ? gcashNumber
       : paymentNumber;
-  const isWalletPaymentMethod = formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya';
 
   const paymentProviders = {
     paymaya: { label: 'PayMaya' },

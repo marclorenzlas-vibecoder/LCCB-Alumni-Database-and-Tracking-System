@@ -6,6 +6,13 @@ const achievementsKey = (userId) => `notify_achievements_${userId}`;
 const donationsKey = (userId) => `notify_donations_${userId}`;
 const jobsKey = (userId) => `notify_jobs_${userId}`;
 const toastsKey = (userId) => `show_donation_toasts_${userId}`;
+const birthdayVisibilityKey = (userId) => `birthday_notification_visibility_${userId}`;
+
+export const normalizeBirthdayNotificationVisibility = (value) => {
+  const normalized = String(value || 'PUBLIC').trim().toUpperCase();
+  if (['PRIVATE', 'OFF'].includes(normalized)) return 'OFF';
+  return 'PUBLIC';
+};
 
 export const areNotificationsEnabled = (userId) => {
   if (!userId) return true;
@@ -48,6 +55,12 @@ export const isShowDonationToastsEnabled = (userId) => {
   return stored === null ? true : stored === 'true';
 };
 
+export const getBirthdayNotificationVisibility = (userId) => {
+  if (!userId) return 'PUBLIC';
+  const stored = localStorage.getItem(birthdayVisibilityKey(userId));
+  return normalizeBirthdayNotificationVisibility(stored);
+};
+
 export const setNotificationEnabled = (userId, enabled) => {
   if (!userId) return;
   localStorage.setItem(masterKey(userId), String(enabled));
@@ -73,6 +86,12 @@ export const setPreferences = (userId, prefs) => {
   }
   if (typeof prefs.showDonationToasts !== 'undefined') {
     localStorage.setItem(toastsKey(userId), String(prefs.showDonationToasts));
+  }
+  if (typeof prefs.birthdayNotificationVisibility !== 'undefined') {
+    localStorage.setItem(
+      birthdayVisibilityKey(userId),
+      normalizeBirthdayNotificationVisibility(prefs.birthdayNotificationVisibility)
+    );
   }
   triggerPreferenceChange(userId);
 };

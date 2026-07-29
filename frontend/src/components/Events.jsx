@@ -693,7 +693,7 @@ const Events = () => {
                 </div>
                 <div
                   ref={pastContentRef}
-                  style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease' }}
+                  style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease, opacity 250ms linear', opacity: 0 }}
                   aria-hidden={!isPastEventsExpanded}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

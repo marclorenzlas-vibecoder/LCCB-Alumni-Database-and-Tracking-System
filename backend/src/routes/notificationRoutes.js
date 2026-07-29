@@ -7,6 +7,12 @@ const { broadcastUpdate } = require('../services/realtimeService');
 
 const prisma = new PrismaClient();
 
+const normalizeBirthdayNotificationVisibility = (value) => {
+  const normalized = String(value || 'PUBLIC').trim().toUpperCase();
+  if (['PRIVATE', 'OFF'].includes(normalized)) return 'OFF';
+  return 'PUBLIC';
+};
+
 const isAdminRole = (role) => String(role || '').toUpperCase() === 'ADMIN';
 
 /** Donation alerts use the live toast for alumni/teachers; bell list is admin-only. */
@@ -201,6 +207,7 @@ router.post('/birthday-greetings', authenticateToken, async (req, res) => {
 
     // Resolve the sender's display name (works for both teacher and alumni JWTs).
     const senderName = await getSenderName(req.user);
+    const senderUserTableId = await resolveSenderUserTableId(req.user);
 
     if (!recipientUser) {
       console.log(`⚠️ Recipient user record not found for alumni ${birthdayAlumniId} (email: ${birthdayAlumni.email}) — will record sender confirmation instead.`);
@@ -208,7 +215,6 @@ router.post('/birthday-greetings', authenticateToken, async (req, res) => {
       // Try to create a confirmation notification for the sender.
       // This requires a valid user-table ID; teachers may only exist in the
       // teacher table, so we resolve via email lookup.
-      const senderUserTableId = await resolveSenderUserTableId(req.user);
 
       if (senderUserTableId) {
         const confirmTitle = `Greeting queued for ${birthdayAlumni.first_name} ${birthdayAlumni.last_name}`;
@@ -230,6 +236,25 @@ router.post('/birthday-greetings', authenticateToken, async (req, res) => {
         birthdayAlumniName: `${birthdayAlumni.first_name} ${birthdayAlumni.last_name}`.trim(),
         senderName
       });
+    }
+
+    let recipientBirthdayVisibility = 'PUBLIC';
+    try {
+      const visibilityRows = await prisma.$queryRaw`
+        SELECT birthday_notification_visibility
+        FROM user
+        WHERE id = ${recipientUser.id}
+        LIMIT 1
+      `;
+      recipientBirthdayVisibility = normalizeBirthdayNotificationVisibility(
+        visibilityRows?.[0]?.birthday_notification_visibility
+      );
+    } catch (visibilityError) {
+      console.warn('Birthday notification visibility column not available yet:', visibilityError.message);
+    }
+
+    if (recipientBirthdayVisibility === 'OFF') {
+      return res.status(403).json({ error: 'This alumnus has disabled birthday greetings.' });
     }
 
     if (!recipientUser.notification_enabled) {

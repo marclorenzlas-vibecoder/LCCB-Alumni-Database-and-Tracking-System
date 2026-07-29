@@ -1294,7 +1294,7 @@ const Profile = () => {
                       onClick={addEducationHistoryEntry}
                       className="app-secondary-button px-3 py-1.5 text-sm"
                     >
-                      + Add Level & Batch
+                      Add Level & Batch
                     </button>
                   </div>
                   <div className="space-y-3">
@@ -1365,7 +1365,7 @@ const Profile = () => {
                       }}
                       className="app-secondary-button px-3 py-1.5 text-sm"
                     >
-                      {showCareerForm ? 'Cancel' : '+ Add Employment'}
+                      {showCareerForm ? 'Cancel' : 'Add Employment'}
                     </button>
                   </div>
 
@@ -1497,7 +1497,7 @@ const Profile = () => {
                 </div>
 
                 <div className="mt-4">
-                  <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="mb-2 flex items-center gap-3">
                     <label className="block text-sm font-medium text-gray-700">
                       Skills
                     </label>
@@ -1535,7 +1535,7 @@ const Profile = () => {
                       onClick={() => setShowAddSocialLink(!showAddSocialLink)}
                       className="app-secondary-button px-3 py-1.5 text-sm"
                     >
-                      {showAddSocialLink ? 'Cancel' : '+ Add Link'}
+                      {showAddSocialLink ? 'Cancel' : 'Add Link'}
                     </button>
                   </div>
 

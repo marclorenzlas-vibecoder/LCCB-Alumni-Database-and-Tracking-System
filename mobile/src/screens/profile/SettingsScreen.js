@@ -14,11 +14,13 @@ import { Ionicons } from "@expo/vector-icons";
 import PrimaryButton from "../../components/PrimaryButton";
 import ScreenContainer from "../../components/ScreenContainer";
 import { authService } from "../../services/authService";
-import { communityService } from "../../services/communityService";
 import apiClient from "../../services/apiClient";
 import { theme } from "../../theme";
 import {
   areNotificationsEnabled,
+  getBirthdayNotificationVisibility,
+  normalizeBirthdayNotificationVisibility,
+  setBirthdayNotificationVisibility,
   setNotificationEnabled,
 } from "../../utils/notificationPreferences";
 
@@ -153,6 +155,7 @@ export default function SettingsScreen({ navigation, user, setUser }) {
   const [prefNotifyDonations, setPrefNotifyDonations] = useState(true);
   const [prefNotifyJobs, setPrefNotifyJobs] = useState(true);
   const [prefShowDonationToasts, setPrefShowDonationToasts] = useState(true);
+  const [prefBirthdayNotificationsEnabled, setPrefBirthdayNotificationsEnabled] = useState(true);
   // Admin-only
   const [prefNotifyPendingRegistrations, setPrefNotifyPendingRegistrations] = useState(true);
 
@@ -205,13 +208,20 @@ export default function SettingsScreen({ navigation, user, setUser }) {
           setPrefNotifyDonations(data.notify_donations ?? true);
           setPrefNotifyJobs(data.notify_jobs ?? true);
           setPrefShowDonationToasts(data.show_donation_toasts ?? true);
+          setPrefBirthdayNotificationsEnabled(
+            normalizeBirthdayNotificationVisibility(data.birthday_notification_visibility) !== "OFF"
+          );
           setPrefNotifyPendingRegistrations(data.notify_pending_registrations ?? true);
         }
       } catch (error) {
         // Fallback: read master switch from local storage
         try {
           const fallback = await areNotificationsEnabled(userId);
-          if (mounted) setNotificationsEnabledState(Boolean(fallback));
+          const birthdayVisibility = await getBirthdayNotificationVisibility(userId);
+          if (mounted) {
+            setNotificationsEnabledState(Boolean(fallback));
+            setPrefBirthdayNotificationsEnabled(birthdayVisibility !== "OFF");
+          }
         } catch (_) {}
         console.error(
           "Failed to load mobile settings preferences:",
@@ -250,11 +260,16 @@ export default function SettingsScreen({ navigation, user, setUser }) {
         notifyDonations: prefNotifyDonations,
         notifyJobs: prefNotifyJobs,
         showDonationToasts: prefShowDonationToasts,
+        birthdayNotificationVisibility: prefBirthdayNotificationsEnabled ? "PUBLIC" : "OFF",
         ...(isAdmin && {
           notifyPendingRegistrations: prefNotifyPendingRegistrations,
         }),
       });
       await setNotificationEnabled(userId, notificationsEnabled);
+      await setBirthdayNotificationVisibility(
+        userId,
+        prefBirthdayNotificationsEnabled ? "PUBLIC" : "OFF"
+      );
 
       const nextUser = {
         ...user,
@@ -262,6 +277,8 @@ export default function SettingsScreen({ navigation, user, setUser }) {
         notificationEnabled: notificationsEnabled,
         notification_prompt_shown: true,
         notificationPromptShown: true,
+        birthday_notification_visibility: prefBirthdayNotificationsEnabled ? "PUBLIC" : "OFF",
+        birthdayNotificationVisibility: prefBirthdayNotificationsEnabled ? "PUBLIC" : "OFF",
       };
       await persistUser(nextUser);
       Alert.alert("Saved", "Notification preferences updated successfully.");
@@ -408,6 +425,13 @@ export default function SettingsScreen({ navigation, user, setUser }) {
                       description="Get notified about new events, schedule changes, and reminders."
                       enabled={notificationsEnabled && prefNotifyEvents}
                       onToggle={() => setPrefNotifyEvents((p) => !p)}
+                      disabled={savingNotifications || !notificationsEnabled}
+                    />
+                    <PreferenceRow
+                      title="My Birthday Notification"
+                      description="Allow alumni to receive your birthday announcement and send you birthday greetings."
+                      enabled={notificationsEnabled && prefBirthdayNotificationsEnabled}
+                      onToggle={() => setPrefBirthdayNotificationsEnabled((p) => !p)}
                       disabled={savingNotifications || !notificationsEnabled}
                     />
                     <PreferenceRow

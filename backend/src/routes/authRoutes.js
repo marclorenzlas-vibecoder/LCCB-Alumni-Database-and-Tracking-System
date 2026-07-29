@@ -78,6 +78,17 @@ const parseBooleanFlag = (value) => {
   return undefined;
 };
 
+const BIRTHDAY_NOTIFICATION_VISIBILITY = new Set(['PUBLIC', 'OFF']);
+
+const normalizeBirthdayNotificationVisibility = (value) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (value === true || value === 1 || value === '1') return 'PUBLIC';
+  if (value === false || value === 0 || value === '0') return 'OFF';
+  const normalized = String(value).trim().toUpperCase();
+  if (['DISABLED', 'DISABLE', 'NONE', 'PRIVATE'].includes(normalized)) return 'OFF';
+  return BIRTHDAY_NOTIFICATION_VISIBILITY.has(normalized) ? normalized : null;
+};
+
 const parseRequiredConsent = (value) =>
   value === true || value === 1 || value === '1' || (typeof value === 'string' && value.toLowerCase() === 'true');
 
@@ -1606,7 +1617,24 @@ router.get('/notification-preference/:userId', authMiddleware, async (req, res) 
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    let birthdayNotificationVisibility = 'PUBLIC';
+    try {
+      const birthdayRows = await prisma.$queryRaw`
+        SELECT birthday_notification_visibility
+        FROM user
+        WHERE id = ${userId}
+        LIMIT 1
+      `;
+      birthdayNotificationVisibility =
+        normalizeBirthdayNotificationVisibility(birthdayRows?.[0]?.birthday_notification_visibility) || 'PUBLIC';
+    } catch (visibilityError) {
+      console.warn('Birthday notification visibility column not available yet:', visibilityError.message);
+    }
+
+    res.json({
+      ...user,
+      birthday_notification_visibility: birthdayNotificationVisibility
+    });
   } catch (error) {
     console.error('Error fetching notification preference:', error);
     res.status(500).json({ error: 'Failed to fetch notification preference' });
@@ -1625,6 +1653,8 @@ router.put('/notification-preference', authMiddleware, async (req, res) => {
       notifyDonations,
       notifyJobs,
       showDonationToasts,
+      birthdayNotificationVisibility,
+      birthday_notification_visibility,
       notifyPendingRegistrations,
       notifyJobApplications
     } = req.body;
@@ -1640,6 +1670,15 @@ router.put('/notification-preference', authMiddleware, async (req, res) => {
 
     if (!isStaff && requesterId !== parsedUserId) {
       return res.status(403).json({ error: 'You can only update your own notification preferences' });
+    }
+
+    const normalizedBirthdayVisibility = normalizeBirthdayNotificationVisibility(
+      birthdayNotificationVisibility !== undefined
+        ? birthdayNotificationVisibility
+        : birthday_notification_visibility
+    );
+    if (normalizedBirthdayVisibility === null) {
+      return res.status(400).json({ error: 'Birthday notification must be On or Off' });
     }
 
     const updateData = {};
@@ -1685,9 +1724,43 @@ router.put('/notification-preference', authMiddleware, async (req, res) => {
       data: updateData
     });
 
+    if (normalizedBirthdayVisibility !== undefined) {
+      try {
+        await prisma.$executeRaw`
+          UPDATE user
+          SET birthday_notification_visibility = ${normalizedBirthdayVisibility}
+          WHERE id = ${parsedUserId}
+        `;
+      } catch (visibilityError) {
+        console.error('Error updating birthday notification visibility:', visibilityError);
+        return res.status(500).json({
+          error: 'Failed to update birthday notification visibility. Please run backend/prisma/add_birthday_notification_visibility.sql first.'
+        });
+      }
+    }
+
+    let savedBirthdayNotificationVisibility = normalizedBirthdayVisibility;
+    if (savedBirthdayNotificationVisibility === undefined) {
+      try {
+        const savedRows = await prisma.$queryRaw`
+          SELECT birthday_notification_visibility
+          FROM user
+          WHERE id = ${parsedUserId}
+          LIMIT 1
+        `;
+        savedBirthdayNotificationVisibility =
+          normalizeBirthdayNotificationVisibility(savedRows?.[0]?.birthday_notification_visibility) || 'PUBLIC';
+      } catch {
+        savedBirthdayNotificationVisibility = 'PUBLIC';
+      }
+    }
+
     res.json({
       message: 'Notification preference updated successfully',
-      user: updatedUser
+      user: {
+        ...updatedUser,
+        birthday_notification_visibility: savedBirthdayNotificationVisibility || 'PUBLIC'
+      }
     });
   } catch (error) {
     console.error('Error updating notification preference:', error);

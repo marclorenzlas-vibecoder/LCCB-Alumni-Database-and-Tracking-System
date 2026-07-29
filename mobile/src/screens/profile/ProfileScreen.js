@@ -694,7 +694,7 @@ export default function ProfileScreen({ navigation, user, setUser }) {
 
           {editMode ? (
             <Pressable style={styles.addButton} onPress={addEducationEntry}>
-              <Text style={styles.addButtonText}>+ Add Level & Batch</Text>
+              <Text style={styles.addButtonText}>Add Level & Batch</Text>
             </Pressable>
           ) : null}
         </View>
@@ -721,7 +721,7 @@ export default function ProfileScreen({ navigation, user, setUser }) {
                 }
               }}
             >
-              <Text style={styles.addEmploymentText}>{showCareerForm ? 'Cancel' : '+ Add Employment'}</Text>
+              <Text style={styles.addEmploymentText}>{showCareerForm ? 'Cancel' : 'Add Employment'}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -806,7 +806,10 @@ export default function ProfileScreen({ navigation, user, setUser }) {
           )}
         </View>
 
-        {renderLabel('Skills', 'isSkillsPublic')}
+        <View style={[styles.labelRow, styles.labelRowCompact]}>
+          <Text style={styles.label}>Skills</Text>
+          {renderVisibilityToggle('isSkillsPublic', 'Skills')}
+        </View>
         {editMode ? <TextInput style={[styles.input, styles.textArea]} multiline numberOfLines={3} value={form.skills} onChangeText={(v) => setField('skills', v)} /> : <Text style={styles.value}>{form.skills || '-'}</Text>}
 
         {editMode ? <PrimaryButton label={saving ? 'Saving...' : 'Save Profile'} onPress={onSave} disabled={saving} /> : null}
@@ -963,6 +966,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10
+  },
+  labelRowCompact: {
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start'
   },
   visibilityButton: {
     flexDirection: 'row',

@@ -190,6 +190,142 @@ const getDisplayName = (item = {}) => {
   return full || 'Unknown Alumni';
 };
 
+function AlumniFilterDropdown({
+  visible,
+  levelOptions,
+  batchOptions,
+  groupSections,
+  groupLabelMap,
+  tempLevel,
+  tempBatch,
+  tempGroup,
+  setTempLevel,
+  setTempBatch,
+  setTempGroup,
+  onApply,
+  onClear,
+  onClose
+}) {
+  const [pickerTarget, setPickerTarget] = useState(null);
+  const activeCount = (tempLevel !== 'ALL' ? 1 : 0) + (tempBatch !== 'ALL' ? 1 : 0) + (tempGroup !== 'ALL' ? 1 : 0);
+  const levelLabel = tempLevel === 'ALL' ? 'All Levels' : tempLevel;
+  const batchLabel = tempBatch === 'ALL' ? 'All Batches' : tempBatch;
+  const groupLabel = tempGroup === 'ALL' ? 'All Program' : (groupLabelMap[tempGroup] || tempGroup);
+  const filteredGroupSections = getProgramSectionsForLevel(groupSections, tempLevel);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.dropdownBackdrop} onPress={onClose}>
+        <Pressable style={styles.dropdownPanel} onPress={() => {}}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Filters</Text>
+            {activeCount > 0 ? (
+              <View style={styles.dropdownCountBadge}>
+                <Text style={styles.dropdownCountText}>{activeCount}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.dropdownFields}>
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('level')}>
+              <Text style={styles.dropdownFieldLabel}>Level</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, tempLevel === 'ALL' && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {levelLabel}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+
+            <View style={styles.dropdownDivider} />
+
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('batch')}>
+              <Text style={styles.dropdownFieldLabel}>Batch</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, tempBatch === 'ALL' && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {batchLabel}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+
+            <View style={styles.dropdownDivider} />
+
+            <Pressable style={styles.dropdownField} onPress={() => setPickerTarget('program')}>
+              <Text style={styles.dropdownFieldLabel}>Program</Text>
+              <View style={styles.dropdownFieldValue}>
+                <Text style={[styles.dropdownFieldValueText, tempGroup === 'ALL' && styles.dropdownFieldValuePlaceholder]} numberOfLines={1}>
+                  {groupLabel}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94a3b8" />
+              </View>
+            </Pressable>
+          </View>
+
+          <View style={styles.dropdownActions}>
+            {activeCount > 0 ? (
+              <Pressable style={styles.dropdownClearBtn} onPress={onClear}>
+                <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                <Text style={styles.dropdownClearText}>Clear Filter</Text>
+              </Pressable>
+            ) : <View style={{ flex: 1 }} />}
+            <Pressable style={styles.dropdownApplyBtn} onPress={onApply}>
+              <Text style={styles.dropdownApplyText}>Apply Filter</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+
+      <OptionPicker
+        visible={pickerTarget === 'level'}
+        title="Select Level"
+        options={levelOptions}
+        selected={tempLevel}
+        onSelect={(value) => {
+          const nextLevel = tempLevel === value ? 'ALL' : value;
+          const nextSections = getProgramSectionsForLevel(groupSections, nextLevel);
+          const groupStillAvailable = tempGroup === 'ALL' || nextSections.some((section) =>
+            section.items.some((item) => item.value === tempGroup)
+          );
+          setTempLevel(nextLevel);
+          if (!groupStillAvailable) {
+            setTempGroup('ALL');
+          }
+          setPickerTarget(null);
+        }}
+        onClose={() => setPickerTarget(null)}
+        displayValue={(value) => (value === 'ALL' ? 'All Levels' : value)}
+      />
+
+      <OptionPicker
+        visible={pickerTarget === 'batch'}
+        title="Select Batch"
+        options={batchOptions}
+        selected={tempBatch}
+        onSelect={(value) => {
+          setTempBatch(tempBatch === value ? 'ALL' : value);
+          setPickerTarget(null);
+        }}
+        onClose={() => setPickerTarget(null)}
+        displayValue={(value) => (value === 'ALL' ? 'All Batches' : value)}
+      />
+
+      <OptionPicker
+        visible={pickerTarget === 'program'}
+        title={tempLevel === 'ALL' ? 'All Program' : `${levelLabel} Programs`}
+        sections={filteredGroupSections}
+        selected={tempGroup}
+        onSelect={(value) => {
+          setTempGroup(tempGroup === value ? 'ALL' : value);
+          setPickerTarget(null);
+        }}
+        onClose={() => setPickerTarget(null)}
+        displayValue={(value) => (value === 'ALL' ? 'All Program' : value)}
+      />
+    </Modal>
+  );
+}
+
 export default function AlumniDirectoryScreen({ navigation, user }) {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -200,9 +336,10 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
   const [selectedLevel, setSelectedLevel] = useState('ALL');
   const [selectedBatch, setSelectedBatch] = useState('ALL');
   const [selectedGroup, setSelectedGroup] = useState('ALL');
-  const [levelPickerOpen, setLevelPickerOpen] = useState(false);
-  const [batchPickerOpen, setBatchPickerOpen] = useState(false);
-  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [tempLevel, setTempLevel] = useState('ALL');
+  const [tempBatch, setTempBatch] = useState('ALL');
+  const [tempGroup, setTempGroup] = useState('ALL');
   const [batchOfficers, setBatchOfficers] = useState([]);
   const [officersLoading, setOfficersLoading] = useState(false);
   const [showOfficersModal, setShowOfficersModal] = useState(false);
@@ -383,8 +520,6 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
     });
   }, [list, query, selectedBatch, selectedLevel, selectedGroup]);
 
-  const levelLabel = selectedLevel === 'ALL' ? 'All Levels' : selectedLevel;
-  const batchLabel = selectedBatch === 'ALL' ? 'All Batches' : selectedBatch;
   const groupLabelMap = useMemo(() => {
     const map = {};
     groupSections.forEach((section) => {
@@ -392,7 +527,27 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
     });
     return map;
   }, [groupSections]);
-  const groupLabel = selectedGroup === 'ALL' ? 'All Program' : (groupLabelMap[selectedGroup] || selectedGroup);
+  const activeFilterCount = (selectedLevel !== 'ALL' ? 1 : 0) + (selectedBatch !== 'ALL' ? 1 : 0) + (selectedGroup !== 'ALL' ? 1 : 0);
+
+  const openFilter = () => {
+    setTempLevel(selectedLevel);
+    setTempBatch(selectedBatch);
+    setTempGroup(selectedGroup);
+    setShowFilterDropdown(true);
+  };
+
+  const applyFilter = () => {
+    setSelectedLevel(tempLevel);
+    setSelectedBatch(tempBatch);
+    setSelectedGroup(tempGroup);
+    setShowFilterDropdown(false);
+  };
+
+  const clearFilter = () => {
+    setTempLevel('ALL');
+    setTempBatch('ALL');
+    setTempGroup('ALL');
+  };
 
   return (
     <View style={styles.screenRoot}>
@@ -405,78 +560,59 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
       <View style={styles.filterPanel}>
         <Text style={styles.filterPanelTitle}>Search and Filters</Text>
 
-        <View style={styles.searchShell}>
-          <Ionicons name="search-outline" size={18} color="#64748b" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name, course, email, company, location"
-            value={query}
-            onChangeText={setQuery}
-            placeholderTextColor="#94a3b8"
-          />
-          {query ? (
-            <Pressable style={styles.searchClearButton} onPress={() => setQuery('')} hitSlop={10}>
-              <Ionicons name="close-circle" size={18} color="#94a3b8" />
-            </Pressable>
-          ) : null}
+        <View style={styles.searchRow}>
+          <View style={styles.searchShell}>
+            <Ionicons name="search-outline" size={18} color="#64748b" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search alumni..."
+              value={query}
+              onChangeText={setQuery}
+              placeholderTextColor="#94a3b8"
+            />
+            {query ? (
+              <Pressable style={styles.searchClearButton} onPress={() => setQuery('')} hitSlop={10}>
+                <Ionicons name="close-circle" size={18} color="#94a3b8" />
+              </Pressable>
+            ) : null}
+          </View>
+
+          <Pressable style={[styles.filterToggleBtn, activeFilterCount > 0 && styles.filterToggleBtnActive]} onPress={openFilter}>
+            <Ionicons name="filter-outline" size={18} color={activeFilterCount > 0 ? '#fff' : '#475569'} />
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterToggleBadge}>
+                <Text style={styles.filterToggleBadgeText}>{activeFilterCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
 
-        <View style={styles.filterGrid}>
-          <Pressable style={styles.filterButton} onPress={() => setLevelPickerOpen(true)}>
-            <View style={styles.filterButtonInner}>
-              <View style={styles.filterIconPill}>
-                <Ionicons name="school-outline" size={13} color="#1d4ed8" />
-              </View>
-              <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{levelLabel}</Text>
-            </View>
-          </Pressable>
-          <Pressable style={styles.filterButton} onPress={() => setBatchPickerOpen(true)}>
-            <View style={styles.filterButtonInner}>
-              <View style={styles.filterIconPill}>
-                <Ionicons name="calendar-outline" size={13} color="#1d4ed8" />
-              </View>
-              <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{batchLabel}</Text>
-            </View>
-          </Pressable>
-          <Pressable style={styles.filterButton} onPress={() => setGroupPickerOpen(true)}>
-            <View style={styles.filterButtonInner}>
-              <View style={styles.filterIconPill}>
-                <Ionicons name="people-outline" size={13} color="#1d4ed8" />
-              </View>
-              <Text style={styles.filterButtonText} numberOfLines={1} ellipsizeMode="tail">{groupLabel}</Text>
-            </View>
-          </Pressable>
+        {selectedBatch !== 'ALL' ? (
           <Pressable
-            style={[styles.filterButton, selectedBatch === 'ALL' ? styles.officersButtonDisabled : styles.officersButtonActive]}
+            style={styles.officersActionButton}
             onPress={() => setShowOfficersModal(true)}
-            disabled={selectedBatch === 'ALL'}
           >
-            <View style={styles.filterButtonInner}>
-              <View style={styles.filterIconPill}>
-                <Ionicons name="people-outline" size={13} color="#1d4ed8" />
-              </View>
-              <Text style={[styles.filterButtonText, selectedBatch === 'ALL' && styles.filterTextDisabled]} numberOfLines={1} ellipsizeMode="tail">Batch Officers</Text>
-            </View>
+            <Ionicons name="people-outline" size={15} color="#1d4ed8" />
+            <Text style={styles.officersActionText} numberOfLines={1} ellipsizeMode="tail">Batch {selectedBatch} Officers</Text>
           </Pressable>
-          {(query || selectedLevel !== 'ALL' || selectedBatch !== 'ALL' || selectedGroup !== 'ALL') ? (
-            <Pressable
-              style={[styles.filterButton, styles.clearFilterButton]}
-              onPress={() => {
-                setQuery('');
-                setSelectedLevel('ALL');
-                setSelectedBatch('ALL');
-                setSelectedGroup('ALL');
-              }}
-            >
-              <View style={styles.filterButtonInner}>
-                <View style={styles.clearFilterIconPill}>
-                  <Ionicons name="close-outline" size={14} color="#b91c1c" />
-                </View>
-                <Text style={[styles.filterButtonText, styles.clearFilterText]} numberOfLines={1} ellipsizeMode="tail">Clear Filters</Text>
-              </View>
-            </Pressable>
-          ) : null}
-        </View>
+        ) : null}
+
+        <AlumniFilterDropdown
+          visible={showFilterDropdown}
+          levelOptions={levelOptions}
+          batchOptions={batchOptions}
+          groupSections={groupSections}
+          groupLabelMap={groupLabelMap}
+          tempLevel={tempLevel}
+          tempBatch={tempBatch}
+          tempGroup={tempGroup}
+          setTempLevel={setTempLevel}
+          setTempBatch={setTempBatch}
+          setTempGroup={setTempGroup}
+          onApply={applyFilter}
+          onClear={clearFilter}
+          onClose={() => setShowFilterDropdown(false)}
+        />
 
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>Showing {filtered.length} of {list.length} alumni</Text>
@@ -527,53 +663,6 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
           );
         })}
       </View>
-
-      <OptionPicker
-        visible={levelPickerOpen}
-        title="Select Level"
-        options={levelOptions}
-        selected={selectedLevel}
-        onSelect={(value) => {
-          const nextLevel = selectedLevel === value ? 'ALL' : value;
-          const nextSections = getProgramSectionsForLevel(groupSections, nextLevel);
-          const groupStillAvailable = selectedGroup === 'ALL' || nextSections.some((section) =>
-            section.items.some((item) => item.value === selectedGroup)
-          );
-          setSelectedLevel(nextLevel);
-          if (!groupStillAvailable) {
-            setSelectedGroup('ALL');
-          }
-          setLevelPickerOpen(false);
-        }}
-        onClose={() => setLevelPickerOpen(false)}
-        displayValue={(value) => (value === 'ALL' ? 'All Levels' : value)}
-      />
-
-      <OptionPicker
-        visible={batchPickerOpen}
-        title="Select Batch"
-        options={batchOptions}
-        selected={selectedBatch}
-        onSelect={(value) => {
-          setSelectedBatch((prev) => (prev === value ? 'ALL' : value));
-          setBatchPickerOpen(false);
-        }}
-        onClose={() => setBatchPickerOpen(false)}
-        displayValue={(value) => (value === 'ALL' ? 'All Batches' : value)}
-      />
-
-      <OptionPicker
-        visible={groupPickerOpen}
-        title={selectedLevel === 'ALL' ? 'All Program' : `${levelLabel} Programs`}
-        sections={filteredGroupSections}
-        selected={selectedGroup}
-        onSelect={(value) => {
-          setSelectedGroup((prev) => (prev === value ? 'ALL' : value));
-          setGroupPickerOpen(false);
-        }}
-        onClose={() => setGroupPickerOpen(false)}
-        displayValue={(value) => (value === 'ALL' ? 'All Program' : value)}
-      />
 
       <Modal visible={showOfficersModal} transparent animationType="fade" onRequestClose={() => setShowOfficersModal(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowOfficersModal(false)}>
@@ -792,7 +881,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.6
   },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 8
+  },
   searchShell: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -819,79 +913,167 @@ const styles = StyleSheet.create({
   searchClearButton: {
     marginLeft: 8
   },
-  filterGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10
-  },
-  filterButton: {
-    width: '48%',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
+  filterToggleBtn: {
+    width: 48,
+    height: 48,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     backgroundColor: '#fff',
-    minHeight: 48,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginRight: 4
   },
-  filterButtonInner: {
-    flexDirection: 'row',
+  filterToggleBtnActive: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a'
+  },
+  filterToggleBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -3,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
     alignItems: 'center',
-    gap: 7,
-    flex: 1,
-    minWidth: 0
+    justifyContent: 'center',
+    paddingHorizontal: 5
   },
-  filterIconPill: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  filterButtonText: {
+  filterToggleBadgeText: {
+    color: '#fff',
     fontSize: 12,
-    color: '#475569',
-    fontWeight: '500',
-    flexShrink: 1
-  },
-  officersButtonActive: {
-    borderColor: '#93c5fd',
-    backgroundColor: '#eff6ff'
-  },
-  officersButtonDisabled: {
-    opacity: 0.6,
-    backgroundColor: '#fff'
-  },
-  clearFilterButton: {
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2'
-  },
-  clearFilterIconPill: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: '#fee2e2',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  clearFilterText: {
-    color: '#b91c1c',
     fontWeight: '700'
   },
-  filterTextDisabled: {
-    color: '#94a3b8'
+  officersActionButton: {
+    alignSelf: 'flex-start',
+    minHeight: 38,
+    maxWidth: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7
+  },
+  officersActionText: {
+    color: '#1d4ed8',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  dropdownBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.38)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24
+  },
+  dropdownPanel: {
+    width: '100%',
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    overflow: 'hidden'
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  dropdownCountBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dropdownCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  dropdownFields: {
+    padding: 18,
+    gap: 0
+  },
+  dropdownField: {
+    paddingVertical: 14
+  },
+  dropdownFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6
+  },
+  dropdownFieldValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  dropdownFieldValueText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+    flex: 1
+  },
+  dropdownFieldValuePlaceholder: {
+    color: '#94a3b8',
+    fontWeight: '400'
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9'
+  },
+  dropdownActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingBottom: 18
+  },
+  dropdownClearBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca'
+  },
+  dropdownClearText: {
+    color: '#dc2626',
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  dropdownApplyBtn: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dropdownApplyText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700'
   },
   summaryRow: {
     marginTop: 4,

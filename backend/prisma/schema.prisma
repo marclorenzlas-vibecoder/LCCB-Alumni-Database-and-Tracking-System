@@ -315,6 +315,7 @@ model user {
   notify_donations        Boolean?         @default(true)
   notify_jobs             Boolean?         @default(true)
   show_donation_toasts    Boolean?         @default(true)
+  birthday_notification_visibility String? @default("PUBLIC") @db.VarChar(16)
   notify_pending_registrations Boolean?    @default(true)
   notify_job_applications Boolean?        @default(true)
   consent_core           Boolean?         @default(false)

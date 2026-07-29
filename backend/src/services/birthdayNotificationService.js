@@ -4,6 +4,12 @@ const { broadcastUpdate } = require('./realtimeService');
 
 const prisma = new PrismaClient();
 
+const normalizeBirthdayNotificationVisibility = (value) => {
+  const normalized = String(value || 'PUBLIC').trim().toUpperCase();
+  if (['PRIVATE', 'OFF'].includes(normalized)) return 'OFF';
+  return 'PUBLIC';
+};
+
 const isBirthdayToday = (dateValue, today = new Date()) => {
   if (!dateValue) return false;
   const dob = new Date(dateValue);
@@ -30,12 +36,21 @@ async function sendBirthdayNotifications() {
   const currentDay = today.getUTCDate();
 
   const todaysBirthdays = await prisma.$queryRaw`
-    SELECT id, user_id, first_name, last_name, email, date_of_birth
-    FROM alumni
-    WHERE date_of_birth IS NOT NULL
-      AND (status IS NULL OR status != 'DECEASED')
-      AND MONTH(date_of_birth) = ${currentMonth}
-      AND DAY(date_of_birth) = ${currentDay}
+    SELECT
+      a.id,
+      a.user_id,
+      a.first_name,
+      a.last_name,
+      a.email,
+      a.date_of_birth,
+      COALESCE(u.birthday_notification_visibility, 'PUBLIC') AS birthday_notification_visibility
+    FROM alumni a
+    LEFT JOIN user u ON a.user_id = u.id
+    WHERE a.date_of_birth IS NOT NULL
+      AND (a.status IS NULL OR a.status != 'DECEASED')
+      AND MONTH(a.date_of_birth) = ${currentMonth}
+      AND DAY(a.date_of_birth) = ${currentDay}
+      AND COALESCE(u.birthday_notification_visibility, 'PUBLIC') NOT IN ('OFF', 'PRIVATE')
   `;
   const eligibleRecipients = await prisma.user.findMany({
     where: {
@@ -60,6 +75,11 @@ async function sendBirthdayNotifications() {
   let createdCount = 0;
 
   for (const alumni of todaysBirthdays) {
+    const birthdayVisibility = normalizeBirthdayNotificationVisibility(alumni.birthday_notification_visibility);
+    if (birthdayVisibility === 'OFF') {
+      continue;
+    }
+
     const link = `/alumni/profile/${alumni.id}`;
 
     const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
