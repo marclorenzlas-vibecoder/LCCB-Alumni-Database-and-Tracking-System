@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient, event_status } = require('@prisma/client');
 const { getLimiterStatus } = require('../services/activeUserLimiter');
+const { groupSectionDefinitions } = require('../config/groupSections.json');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -51,6 +52,97 @@ const buildMonthlyActivity = (submittedRows, approvedRows, monthsBack = 6) => {
   addRowsToBuckets(approvedRows, 'approved');
 
   return buckets;
+};
+
+const normalizeProgramName = (value) => {
+  const text = String(value || '').trim();
+  return text || 'Not specified';
+};
+
+const normalizeProgramUsageProgram = (value) => {
+  const program = normalizeProgramName(value);
+  return program === 'SBIT' ? 'BSIT' : program;
+};
+
+const PROGRAM_USAGE_LEVELS = new Set(['COLLEGE', 'ETEEAP', 'GRAD_SCHOOL']);
+const seenProgramUsagePrograms = new Set();
+const PROGRAM_USAGE_PROGRAM_ROWS = groupSectionDefinitions
+  .filter((section) => PROGRAM_USAGE_LEVELS.has(section.key))
+  .flatMap((section) => section.items)
+  .reduce((rows, item) => {
+    const program = normalizeProgramUsageProgram(item.value);
+    if (seenProgramUsagePrograms.has(program)) return rows;
+
+    seenProgramUsagePrograms.add(program);
+    rows.push(program);
+    return rows;
+  }, []);
+const PROGRAM_USAGE_PROGRAMS = new Set(PROGRAM_USAGE_PROGRAM_ROWS);
+
+const getAlumniDisplayName = (alumni = {}) => (
+  [alumni.first_name, alumni.last_name].filter(Boolean).join(' ').trim() || 'Unnamed Alumni'
+);
+
+const shouldIncludeProgramUsageAlumni = (alumni = {}) => {
+  return PROGRAM_USAGE_PROGRAMS.has(normalizeProgramUsageProgram(alumni.course));
+};
+
+const buildProgramUsageInCareer = (careers = []) => {
+  const latestCareerByAlumni = new Map();
+
+  careers.forEach((career) => {
+    const alumniId = career.alumni_id;
+    if (!alumniId || latestCareerByAlumni.has(alumniId)) return;
+    latestCareerByAlumni.set(alumniId, career);
+  });
+
+  const programs = new Map(
+    PROGRAM_USAGE_PROGRAM_ROWS.map((program) => [program, {
+      program,
+      using: [],
+      notUsing: []
+    }])
+  );
+
+  latestCareerByAlumni.forEach((career) => {
+    const alignment = String(career.program_alignment || '').toUpperCase();
+    if (alignment !== 'ALIGNED' && alignment !== 'NOT_ALIGNED') return;
+    if (!shouldIncludeProgramUsageAlumni(career.alumni)) return;
+
+    const program = normalizeProgramUsageProgram(career.alumni?.course);
+
+    const row = programs.get(program);
+    const alumnus = {
+      id: career.alumni?.id || career.alumni_id,
+      name: getAlumniDisplayName(career.alumni),
+      program,
+      jobPosition: career.job_title || career.alumni?.current_position || 'Not provided',
+      company: career.company || career.alumni?.company || 'Not provided',
+      profileImage: career.alumni?.profile_image || null
+    };
+
+    if (alignment === 'ALIGNED') {
+      row.using.push(alumnus);
+    } else {
+      row.notUsing.push(alumnus);
+    }
+  });
+
+  return Array.from(programs.values())
+    .map((row) => {
+      const usingCount = row.using.length;
+      const notUsingCount = row.notUsing.length;
+      const total = usingCount + notUsingCount;
+      const usageRate = total > 0 ? Math.round((usingCount / total) * 100) : 0;
+
+      return {
+        ...row,
+        usingCount,
+        notUsingCount,
+        total,
+        usageRate
+      };
+    });
 };
 
 router.get('/home', async (req, res) => {
@@ -234,7 +326,8 @@ router.get('/admin', async (req, res) => {
       openJobs,
       pendingDeceasedReports,
       submittedRows,
-      approvedRows
+      approvedRows,
+      careerRows
     ] = await Promise.all([
       prisma.alumni.count({ where: alumniDirectoryWhere }),
       prisma.pending_registration.count({ where: { status: 'PENDING' } }),
@@ -271,10 +364,43 @@ router.get('/admin', async (req, res) => {
         select: {
           created_at: true
         }
+      }),
+      prisma.career_entry.findMany({
+        where: {
+          alumni: {
+            is: alumniDirectoryWhere
+          }
+        },
+        include: {
+          alumni: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              course: true,
+              current_position: true,
+              company: true,
+              profile_image: true,
+              email: true,
+              user: {
+                select: {
+                  email: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: [
+          { is_current: 'desc' },
+          { start_date: 'desc' },
+          { end_date: 'desc' },
+          { id: 'desc' }
+        ]
       })
     ]);
 
     const monthlyActivity = buildMonthlyActivity(submittedRows, approvedRows);
+    const programUsageInCareer = buildProgramUsageInCareer(careerRows);
     const activeMembers = getLimiterStatus().activeAlumniUsers;
 
     res.json({
@@ -286,7 +412,8 @@ router.get('/admin', async (req, res) => {
       upcomingEvents,
       openJobs,
       pendingDeceasedReports,
-      monthlyActivity
+      monthlyActivity,
+      programUsageInCareer
     });
   } catch (error) {
     console.error('Error loading admin stats:', error);

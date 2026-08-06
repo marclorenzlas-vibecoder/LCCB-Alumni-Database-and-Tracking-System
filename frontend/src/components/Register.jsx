@@ -54,11 +54,7 @@ const Register = () => {
   const buildRegisterCourseSections = (selectedLevel) => groupSectionDefinitions
     .map((section) => {
       let items = section.items;
-      if (selectedLevel === 'INTEGRATED_SCHOOL' && section.key === 'INTEGRATED_SCHOOL') {
-        items = section.items.filter((item) => item.value !== 'Night High');
-      } else if (selectedLevel === 'NIGHT_HIGH' && section.key === 'INTEGRATED_SCHOOL') {
-        items = section.items.filter((item) => item.value === 'Night High');
-      } else if (selectedLevel && section.key !== selectedLevel) {
+      if (selectedLevel && section.key !== selectedLevel) {
         items = [];
       }
 

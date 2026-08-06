@@ -15,7 +15,7 @@ import { imageUrl } from '../../utils/formatters';
 import { dataEmitter } from '../../utils/EventEmitter';
 import { getGroups, getCachedGroups } from '../../services/configService';
 
-const DEFAULT_LEVEL_OPTIONS = ['ALL', 'Integrated School', 'Night High', 'Senior High', 'College', 'ETEEAP', 'Grad School'];
+const DEFAULT_LEVEL_OPTIONS = ['ALL', 'Integrated School', 'Senior High', 'College', 'ETEEAP', 'Grad School'];
 
 const DEFAULT_GROUP_SECTIONS = [
   {
@@ -23,13 +23,7 @@ const DEFAULT_GROUP_SECTIONS = [
     title: 'Integrated School',
     items: [
       { value: 'Integrated School - Elementary', label: 'Elementary' },
-      { value: 'Integrated School - Junior High', label: 'Junior High' }
-    ]
-  },
-  {
-    key: 'night-high',
-    title: 'Night High',
-    items: [
+      { value: 'Integrated School - Junior High', label: 'Junior High' },
       { value: 'Night High', label: 'Night High' }
     ]
   },
@@ -77,13 +71,56 @@ const DEFAULT_GROUP_SECTIONS = [
   }
 ];
 
+const normalizeSectionText = (value) => String(value || '').trim().toLowerCase().replace(/[_\s-]+/g, ' ');
+const isNightHighOption = (item = {}) => normalizeSectionText(item.value || item.label) === 'night high';
+const isNightHighLevelOption = (option) => {
+  const text = normalizeSectionText(option?.label || option);
+  const value = normalizeSectionText(option?.value || option);
+  return text === 'night high' || value === 'night high';
+};
+
+const ensureNightHighInIntegratedSchool = (sections = []) => {
+  const nightHighItems = [];
+  const nextSections = [];
+
+  sections.forEach((section) => {
+    const sectionLevel = normalizeSectionText(section.key || section.title);
+    if (sectionLevel === 'night high') {
+      (section.items || []).forEach((item) => {
+        if (isNightHighOption(item)) nightHighItems.push(item);
+      });
+      return;
+    }
+    nextSections.push({ ...section, items: [...(section.items || [])] });
+  });
+
+  const integratedSection = nextSections.find((section) =>
+    normalizeSectionText(section.key || section.title) === 'integrated school'
+  );
+  const nightHighItem = nightHighItems[0] || { value: 'Night High', label: 'Night High' };
+
+  if (integratedSection && !integratedSection.items.some(isNightHighOption)) {
+    integratedSection.items.push(nightHighItem);
+  }
+
+  return nextSections;
+};
+
+const toDirectoryLevelOptions = (options = []) => [
+  'ALL',
+  ...options
+    .filter((option) => normalizeSectionText(option?.label || option) !== 'all levels')
+    .filter((option) => !isNightHighLevelOption(option))
+    .map((option) => option?.label || option)
+];
+
 const mapBackendToGroupSections = (backend) => {
   if (!backend || !backend.groupSectionDefinitions) return DEFAULT_GROUP_SECTIONS;
-  return backend.groupSectionDefinitions.map((sec) => ({
+  return ensureNightHighInIntegratedSchool(backend.groupSectionDefinitions.map((sec) => ({
     key: sec.key || (sec.title || '').toLowerCase().replace(/\s+/g, '-'),
     title: sec.title || sec.key,
     items: (sec.items || []).map((it) => ({ value: it.value, label: it.label, description: it.description }))
-  }));
+  })));
 };
 
 const groupMatcherMap = {
@@ -111,7 +148,7 @@ const groupMatcherMap = {
 };
 
 const normalizeLevel = (value) => {
-  const key = String(value || '').trim().toLowerCase().replace(/[_\s]+/g, ' ');
+  const key = String(value || '').trim().toLowerCase().replace(/[_\s-]+/g, ' ');
   const map = {
     integrated_school: 'integrated school',
     night_high: 'night high',
@@ -138,6 +175,18 @@ const getLevelDisplayLabel = (value) => {
   return map[normalized] || value || 'Level not provided';
 };
 
+const matchesSelectedLevel = (level, selectedLevel) => {
+  if (!selectedLevel || selectedLevel === 'ALL') return true;
+
+  const normalizedLevel = normalizeLevel(level);
+  const normalizedSelected = normalizeLevel(selectedLevel);
+  if (normalizedSelected === 'integrated school' && normalizedLevel === 'night high') {
+    return true;
+  }
+
+  return normalizedLevel === normalizedSelected;
+};
+
 const getProgramSectionsForLevel = (sections = [], selectedLevel = 'ALL') => {
   if (!selectedLevel || selectedLevel === 'ALL') return sections;
 
@@ -148,11 +197,7 @@ const getProgramSectionsForLevel = (sections = [], selectedLevel = 'ALL') => {
       const sectionLevel = normalizeLevel(section.key || section.title);
       let items = section.items || [];
 
-      if (normalizedLevel === 'integrated school' && sectionLevel === 'integrated school') {
-        items = items.filter((item) => normalizeLevel(item.value) !== 'night high');
-      } else if (normalizedLevel === 'night high' && sectionLevel === 'integrated school') {
-        items = items.filter((item) => normalizeLevel(item.value) === 'night high');
-      } else if (normalizedLevel !== sectionLevel) {
+      if (normalizedLevel !== sectionLevel) {
         items = [];
       }
 
@@ -425,7 +470,7 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
       try {
         const cached = await getCachedGroups();
         if (mounted && cached) {
-          if (cached.levelOptions) setLevelOptionsState(['ALL', ...cached.levelOptions.filter(lo => (lo.label || lo).toLowerCase() !== 'all levels').map(lo => (lo.label || lo))]);
+          if (cached.levelOptions) setLevelOptionsState(toDirectoryLevelOptions(cached.levelOptions));
           if (cached.groupSectionDefinitions) setGroupSectionsState(mapBackendToGroupSections(cached));
         }
       } catch (_e) {
@@ -435,7 +480,7 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
       const fetched = await getGroups();
       if (!mounted) return;
       if (fetched) {
-        if (fetched.levelOptions) setLevelOptionsState(['ALL', ...fetched.levelOptions.filter(lo => (lo.label || lo).toLowerCase() !== 'all levels').map(lo => (lo.label || lo))]);
+        if (fetched.levelOptions) setLevelOptionsState(toDirectoryLevelOptions(fetched.levelOptions));
         if (fetched.groupSectionDefinitions) setGroupSectionsState(mapBackendToGroupSections(fetched));
       }
     })();
@@ -508,7 +553,7 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
       const location = String(item.location || '').toLowerCase();
 
       const matchesQuery = !q || name.includes(q) || course.includes(q) || email.includes(q) || company.includes(q) || location.includes(q);
-      const matchesLevel = selectedLevel === 'ALL' || levels.includes(normalizeLevel(selectedLevel));
+      const matchesLevel = selectedLevel === 'ALL' || levels.some((level) => matchesSelectedLevel(level, selectedLevel));
       const matchesBatch = selectedBatch === 'ALL' || batches.includes(selectedBatch);
       const matchers = groupMatcherMap[selectedGroup] || [selectedGroup];
       const matchesGroup = selectedGroup === 'ALL' || matchers.some((value) => {
@@ -552,165 +597,165 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
   return (
     <View style={styles.screenRoot}>
     <ScreenContainer>
-      <View style={styles.heroWrap}>
-        <Text style={styles.heroTitle}>Alumni Directory</Text>
-        <Text style={styles.heroSubtitle}>Browse and connect with fellow LCCB alumni across all batches and programs.</Text>
-      </View>
+      <View style={styles.contentStack}>
+        <View style={styles.heroWrap}>
+          <Text style={styles.heroTitle} numberOfLines={1}>Alumni Directory</Text>
+          <Text style={styles.heroSubtitle} numberOfLines={1}>Browse and connect with fellow LCCB alumni.</Text>
+        </View>
 
-      <View style={styles.filterPanel}>
-        <Text style={styles.filterPanelTitle}>Search and Filters</Text>
+        <View style={styles.filtersWrap}>
+          <View style={styles.searchRow}>
+            <View style={styles.searchShell}>
+              <Ionicons name="search-outline" size={18} color="#64748b" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search alumni..."
+                value={query}
+                onChangeText={setQuery}
+                placeholderTextColor="#94a3b8"
+              />
+              {query ? (
+                <Pressable style={styles.searchClearButton} onPress={() => setQuery('')} hitSlop={10}>
+                  <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                </Pressable>
+              ) : null}
+            </View>
 
-        <View style={styles.searchRow}>
-          <View style={styles.searchShell}>
-            <Ionicons name="search-outline" size={18} color="#64748b" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search alumni..."
-              value={query}
-              onChangeText={setQuery}
-              placeholderTextColor="#94a3b8"
-            />
-            {query ? (
-              <Pressable style={styles.searchClearButton} onPress={() => setQuery('')} hitSlop={10}>
-                <Ionicons name="close-circle" size={18} color="#94a3b8" />
-              </Pressable>
-            ) : null}
+            <Pressable style={[styles.filterToggleBtn, activeFilterCount > 0 && styles.filterToggleBtnActive]} onPress={openFilter}>
+              <Ionicons name="filter-outline" size={18} color={activeFilterCount > 0 ? '#fff' : '#475569'} />
+              {activeFilterCount > 0 ? (
+                <View style={styles.filterToggleBadge}>
+                  <Text style={styles.filterToggleBadgeText}>{activeFilterCount}</Text>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
 
-          <Pressable style={[styles.filterToggleBtn, activeFilterCount > 0 && styles.filterToggleBtnActive]} onPress={openFilter}>
-            <Ionicons name="filter-outline" size={18} color={activeFilterCount > 0 ? '#fff' : '#475569'} />
-            {activeFilterCount > 0 ? (
-              <View style={styles.filterToggleBadge}>
-                <Text style={styles.filterToggleBadgeText}>{activeFilterCount}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        </View>
-
-        {selectedBatch !== 'ALL' ? (
-          <Pressable
-            style={styles.officersActionButton}
-            onPress={() => setShowOfficersModal(true)}
-          >
-            <Ionicons name="people-outline" size={15} color="#1d4ed8" />
-            <Text style={styles.officersActionText} numberOfLines={1} ellipsizeMode="tail">Batch {selectedBatch} Officers</Text>
-          </Pressable>
-        ) : null}
-
-        <AlumniFilterDropdown
-          visible={showFilterDropdown}
-          levelOptions={levelOptions}
-          batchOptions={batchOptions}
-          groupSections={groupSections}
-          groupLabelMap={groupLabelMap}
-          tempLevel={tempLevel}
-          tempBatch={tempBatch}
-          tempGroup={tempGroup}
-          setTempLevel={setTempLevel}
-          setTempBatch={setTempBatch}
-          setTempGroup={setTempGroup}
-          onApply={applyFilter}
-          onClear={clearFilter}
-          onClose={() => setShowFilterDropdown(false)}
-        />
-
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryText}>Showing {filtered.length} of {list.length} alumni</Text>
-        </View>
-      </View>
-
-      <View style={styles.listWrap}>
-        <View style={styles.tableHeader}>
-          <Text style={styles.tableHeadLeft}>PROFILE</Text>
-        </View>
-
-        {loading ? <LoadingState label="Loading alumni directory" /> : null}
-        {!loading && filtered.length === 0 ? <EmptyState title="No alumni found" /> : null}
-
-        {!loading && filtered.map((item) => {
-          const img = imageUrl(item.profile_image || item.profileImage, API_ORIGIN);
-          const fullName = getDisplayName(item);
-          const primaryEducation = getPrimaryEducation(item);
-          const course = item.course || 'Course not provided';
-          const level = getLevelDisplayLabel(primaryEducation.level || item.level);
-          const educationSummary = [course, level].filter(Boolean).join(' \u00b7 ');
-          const userStatus = userStatuses[getAlumniChatUserId(item)];
-          const avatarStatusStyle = userStatus?.online ? styles.avatarOnline : styles.avatarOffline;
-          const hasErrored = erroredImages.has(item.id);
-
-          return (
-            <Pressable key={item.id} style={styles.rowWrap} onPress={() => navigation.navigate('AlumniDetail', { alumniId: item.id, alumni: item })}>
-              <View style={styles.rowContent}>
-                {img && !hasErrored ? (
-                  <Image
-                    source={{ uri: img }}
-                    style={[styles.avatar, avatarStatusStyle]}
-                    resizeMode="cover"
-                    onError={() => setErroredImages((prev) => new Set(prev).add(item.id))}
-                  />
-                ) : (
-                  <View style={[styles.avatarFallback, avatarStatusStyle]}>
-                    <Text style={styles.avatarInitial}>{fullName.slice(0, 1).toUpperCase()}</Text>
-                  </View>
-                )}
-
-                <View style={styles.infoBlock}>
-                  <Text style={styles.name}>{fullName}</Text>
-                  <Text style={styles.metaLine} numberOfLines={1} ellipsizeMode="tail">{educationSummary}</Text>
-                </View>
-              </View>
+          {selectedBatch !== 'ALL' ? (
+            <Pressable
+              style={styles.officersActionButton}
+              onPress={() => setShowOfficersModal(true)}
+            >
+              <Ionicons name="people-outline" size={15} color="#1d4ed8" />
+              <Text style={styles.officersActionText} numberOfLines={1} ellipsizeMode="tail">Batch {selectedBatch} Officers</Text>
             </Pressable>
-          );
-        })}
-      </View>
+          ) : null}
 
-      <Modal visible={showOfficersModal} transparent animationType="fade" onRequestClose={() => setShowOfficersModal(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setShowOfficersModal(false)}>
-          <Pressable style={[styles.modalCard, { width: '96%' }]} onPress={() => {}}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalEyebrow}>Batch Officers</Text>
-                <Text style={styles.modalTitle}>{selectedBatch === 'ALL' ? 'No batch selected' : `Batch ${selectedBatch}`}</Text>
-              </View>
-              <Pressable style={styles.modalCloseBtn} onPress={() => setShowOfficersModal(false)} hitSlop={10}>
-                <Ionicons name="close" size={18} color="#334155" />
-              </Pressable>
-            </View>
-            <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent} showsVerticalScrollIndicator={false}>
-              {officersLoading ? <LoadingState label="Loading officers" /> : null}
-              {!officersLoading && (!batchOfficers || batchOfficers.length === 0) ? (
-                <EmptyState title={selectedBatch === 'ALL' ? 'Select a batch to view officers' : 'No officers found for this batch'} />
-              ) : null}
+          <AlumniFilterDropdown
+            visible={showFilterDropdown}
+            levelOptions={levelOptions}
+            batchOptions={batchOptions}
+            groupSections={groupSections}
+            groupLabelMap={groupLabelMap}
+            tempLevel={tempLevel}
+            tempBatch={tempBatch}
+            tempGroup={tempGroup}
+            setTempLevel={setTempLevel}
+            setTempBatch={setTempBatch}
+            setTempGroup={setTempGroup}
+            onApply={applyFilter}
+            onClear={clearFilter}
+            onClose={() => setShowFilterDropdown(false)}
+          />
 
-              {!officersLoading && batchOfficers.map((off) => {
-                const officerImg = imageUrl(off.profile_image, API_ORIGIN);
-                const officerName = `${off.first_name || off.firstName || ''} ${off.last_name || off.lastName || ''}`.trim() || off.username || 'Officer';
-                const officerErrored = erroredImages.has(`off-${off.id}`);
-                return (
-                <View key={off.id} style={[styles.rowContent, { paddingVertical: 12 }]}>
-                  {officerImg && !officerErrored ? (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryText}>Showing {filtered.length} of {list.length} alumni</Text>
+          </View>
+        </View>
+
+        <View style={styles.listWrap}>
+          <View style={styles.tableHeader}>
+            <Text style={styles.tableHeadLeft}>PROFILE</Text>
+          </View>
+
+          {loading ? <LoadingState label="Loading alumni directory" /> : null}
+          {!loading && filtered.length === 0 ? <EmptyState title="No alumni found" /> : null}
+
+          {!loading && filtered.map((item) => {
+            const img = imageUrl(item.profile_image || item.profileImage, API_ORIGIN);
+            const fullName = getDisplayName(item);
+            const primaryEducation = getPrimaryEducation(item);
+            const course = item.course || 'Course not provided';
+            const level = getLevelDisplayLabel(primaryEducation.level || item.level);
+            const educationSummary = [course, level].filter(Boolean).join(' \u00b7 ');
+            const userStatus = userStatuses[getAlumniChatUserId(item)];
+            const avatarStatusStyle = userStatus?.online ? styles.avatarOnline : styles.avatarOffline;
+            const hasErrored = erroredImages.has(item.id);
+
+            return (
+              <Pressable key={item.id} style={styles.rowWrap} onPress={() => navigation.navigate('AlumniDetail', { alumniId: item.id, alumni: item })}>
+                <View style={styles.rowContent}>
+                  {img && !hasErrored ? (
                     <Image
-                      source={{ uri: officerImg }}
-                      style={styles.avatar}
+                      source={{ uri: img }}
+                      style={[styles.avatar, avatarStatusStyle]}
                       resizeMode="cover"
-                      onError={() => setErroredImages((prev) => new Set(prev).add(`off-${off.id}`))}
+                      onError={() => setErroredImages((prev) => new Set(prev).add(item.id))}
                     />
                   ) : (
-                    <View style={styles.avatarFallback}>
-                      <Text style={styles.avatarInitial}>{officerName.slice(0, 1).toUpperCase()}</Text>
+                    <View style={[styles.avatarFallback, avatarStatusStyle]}>
+                      <Text style={styles.avatarInitial}>{fullName.slice(0, 1).toUpperCase()}</Text>
                     </View>
                   )}
+
                   <View style={styles.infoBlock}>
-                    <Text style={styles.name}>{officerName}</Text>
-                    <Text style={styles.metaLine}>{off.position || off.role || 'Officer'}</Text>
+                    <Text style={styles.name}>{fullName}</Text>
+                    <Text style={styles.metaLine} numberOfLines={1} ellipsizeMode="tail">{educationSummary}</Text>
                   </View>
                 </View>
-                );
-              })}
-            </ScrollView>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Modal visible={showOfficersModal} transparent animationType="fade" onRequestClose={() => setShowOfficersModal(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowOfficersModal(false)}>
+            <Pressable style={[styles.modalCard, { width: '96%' }]} onPress={() => {}}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalEyebrow}>Batch Officers</Text>
+                  <Text style={styles.modalTitle}>{selectedBatch === 'ALL' ? 'No batch selected' : `Batch ${selectedBatch}`}</Text>
+                </View>
+                <Pressable style={styles.modalCloseBtn} onPress={() => setShowOfficersModal(false)} hitSlop={10}>
+                  <Ionicons name="close" size={18} color="#334155" />
+                </Pressable>
+              </View>
+              <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent} showsVerticalScrollIndicator={false}>
+                {officersLoading ? <LoadingState label="Loading officers" /> : null}
+                {!officersLoading && (!batchOfficers || batchOfficers.length === 0) ? (
+                  <EmptyState title={selectedBatch === 'ALL' ? 'Select a batch to view officers' : 'No officers found for this batch'} />
+                ) : null}
+
+                {!officersLoading && batchOfficers.map((off) => {
+                  const officerImg = imageUrl(off.profile_image, API_ORIGIN);
+                  const officerName = `${off.first_name || off.firstName || ''} ${off.last_name || off.lastName || ''}`.trim() || off.username || 'Officer';
+                  const officerErrored = erroredImages.has(`off-${off.id}`);
+                  return (
+                  <View key={off.id} style={[styles.rowContent, { paddingVertical: 12 }]}>
+                    {officerImg && !officerErrored ? (
+                      <Image
+                        source={{ uri: officerImg }}
+                        style={styles.avatar}
+                        resizeMode="cover"
+                        onError={() => setErroredImages((prev) => new Set(prev).add(`off-${off.id}`))}
+                      />
+                    ) : (
+                      <View style={styles.avatarFallback}>
+                        <Text style={styles.avatarInitial}>{officerName.slice(0, 1).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <View style={styles.infoBlock}>
+                      <Text style={styles.name}>{officerName}</Text>
+                      <Text style={styles.metaLine}>{off.position || off.role || 'Officer'}</Text>
+                    </View>
+                  </View>
+                  );
+                })}
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      </View>
     </ScreenContainer>
       <Pressable
         style={[styles.floatingMessageButton, { bottom: Math.max(22, insets.bottom + 16) }]}
@@ -803,21 +848,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff'
   },
+  contentStack: {
+    width: '100%'
+  },
   heroWrap: {
     alignItems: 'flex-start',
-    paddingHorizontal: 14,
-    paddingBottom: 12
+    marginBottom: 12
   },
   heroTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0f172a'
+    color: '#0f172a',
+    lineHeight: 28
   },
   heroSubtitle: {
     marginTop: 4,
     fontSize: 13,
     color: '#64748b',
-    lineHeight: 20
+    lineHeight: 21
   },
   floatingMessageButton: {
     position: 'absolute',
@@ -861,29 +909,13 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     textAlign: 'center'
   },
-  filterPanel: {
-    borderWidth: 1,
-    borderColor: '#dbe3f0',
-    backgroundColor: '#f8fbff',
-    borderRadius: 16,
-    padding: 16,
-    gap: 10,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1
-  },
-  filterPanelTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6
+  filtersWrap: {
+    marginBottom: 10
   },
   searchRow: {
     flexDirection: 'row',
-    gap: 8
+    gap: 8,
+    marginBottom: 6
   },
   searchShell: {
     flex: 1,
@@ -958,7 +990,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7
+    gap: 7,
+    marginBottom: 12
   },
   officersActionText: {
     color: '#1d4ed8',
@@ -1076,7 +1109,8 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   summaryRow: {
-    marginTop: 4,
+    marginTop: 0,
+    marginBottom: 10,
     flexDirection: 'column',
     alignItems: 'flex-start',
     gap: 8

@@ -335,6 +335,8 @@ const EventDetail = () => {
     return "To be announced";
   };
 
+  const isEventTimeMissing = !(event?.start_time || event?.time || event?.end_time);
+
   const formatRegistrationLabel = () => {
     const fee = event?.registration_fee ?? event?.fee ?? event?.price;
 
@@ -383,7 +385,7 @@ const EventDetail = () => {
           <p className="text-gray-600">Event not found</p>
           <button
             onClick={() => navigate("/events")}
-            className="mt-4 text-sm font-medium text-gray-900 underline underline-offset-4 hover:no-underline"
+            className="mx-auto mt-4 inline-flex items-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-semibold text-blue-950 shadow-sm transition-all duration-200 hover:-translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/25"
           >
             Back to Events
           </button>
@@ -434,22 +436,9 @@ const EventDetail = () => {
           {/* Back Button */}
           <button
             onClick={() => navigate("/events")}
-            className="absolute top-4 left-4 md:top-6 md:left-6 inline-flex items-center gap-2 rounded-xl bg-gray-100 border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-all"
+            className="absolute left-4 top-4 inline-flex items-center rounded-full border border-white/70 bg-white/95 px-4 py-2 text-sm font-semibold text-blue-950 shadow-lg shadow-slate-950/10 backdrop-blur transition-all duration-200 hover:-translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-white/80 md:left-6 md:top-6"
           >
-            <svg
-              className="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            Events
+            Back to Events
           </button>
 
           {/* Title at bottom of image */}
@@ -523,21 +512,8 @@ const EventDetail = () => {
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <button
               onClick={() => navigate("/events")}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-4"
+              className="mb-4 inline-flex items-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-semibold text-blue-950 shadow-sm transition-all duration-200 hover:-translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/25"
             >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
               Back to Events
             </button>
             <div className="flex items-center gap-2 mb-2">
@@ -711,7 +687,7 @@ const EventDetail = () => {
                     <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
                       Time
                     </p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                    <p className={`mt-1 text-sm ${isEventTimeMissing ? "font-medium italic text-gray-400" : "font-semibold text-gray-900"}`}>
                       {formatEventTimeRange()}
                     </p>
                   </div>

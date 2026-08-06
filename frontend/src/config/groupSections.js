@@ -2,7 +2,6 @@
 export const levelOptions = [
   { value: '', label: 'All Levels' },
   { value: 'INTEGRATED_SCHOOL', label: 'Integrated School' },
-  { value: 'NIGHT_HIGH', label: 'Night High' },
   { value: 'SENIOR_HIGH', label: 'Senior High' },
   { value: 'COLLEGE', label: 'College' },
   { value: 'ETEEAP', label: 'ETEEAP' },

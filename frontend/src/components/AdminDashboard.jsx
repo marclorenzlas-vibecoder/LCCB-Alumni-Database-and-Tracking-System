@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { API_BASE_URL } from '../config/apiBaseUrl';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import UserLayout from './UserLayout';
 import statsService from '../services/statsService';
 import { authService } from '../services/authService';
@@ -30,6 +30,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   const [verificationStatus, setVerificationStatus] = useState({});
   const [recentDonations, setRecentDonations] = useState([]);
   const [recentDonationsLoading, setRecentDonationsLoading] = useState(true);
+  const [expandedProgramUsageKey, setExpandedProgramUsageKey] = useState('');
 
   useEffect(() => {
     fetchPendingUsers();
@@ -66,6 +67,24 @@ const AdminDashboard = ({ pendingOnly = false }) => {
     const unsubscribe = realtimeClient.subscribe('notification.created', handleDonationActivity);
     return () => {
       try { unsubscribe(); } catch {}
+    };
+  }, [pendingOnly]);
+
+  useEffect(() => {
+    if (pendingOnly) return undefined;
+
+    const refreshProgramUsage = () => {
+      fetchAdminStats();
+    };
+
+    const unsubCreated = realtimeClient.subscribe('career.created', refreshProgramUsage);
+    const unsubUpdated = realtimeClient.subscribe('career.updated', refreshProgramUsage);
+    const unsubDeleted = realtimeClient.subscribe('career.deleted', refreshProgramUsage);
+
+    return () => {
+      try { unsubCreated(); } catch {}
+      try { unsubUpdated(); } catch {}
+      try { unsubDeleted(); } catch {}
     };
   }, [pendingOnly]);
   // Prepare chart data based on adminStats
@@ -275,6 +294,54 @@ const AdminDashboard = ({ pendingOnly = false }) => {
     .slice(0, 2)
     .join('')
     .toUpperCase() || 'A';
+
+  const getImageSrc = (imagePath) => {
+    if (!imagePath) return '';
+    if (/^https?:\/\//i.test(imagePath)) return imagePath;
+    return `${IMAGE_BASE_URL}${imagePath}`;
+  };
+
+  const renderProgramUsageAlumni = (alumni = [], tone = 'using') => {
+    const isUsing = tone === 'using';
+
+    if (!alumni.length) {
+      return <p className="text-sm text-slate-500">None</p>;
+    }
+
+    return (
+      <div className="space-y-2">
+        {alumni.map((entry) => {
+          const profileImage = getImageSrc(entry.profileImage);
+          const name = entry.name || 'Unnamed Alumni';
+          return (
+            <div
+              key={`${tone}-${entry.id}-${entry.jobPosition}-${entry.company}`}
+              className={`flex min-w-0 items-center gap-3 rounded-xl border bg-white px-3 py-3 ${
+                isUsing ? 'border-emerald-100' : 'border-rose-100'
+              }`}
+            >
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-blue-600 text-xs font-bold text-white ring-1 ring-slate-200">
+                {profileImage ? (
+                  <img src={profileImage} alt={name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">{getInitials(name)}</div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-950">{name}</p>
+                <p className="truncate text-xs text-slate-500">{entry.program || 'Program not provided'}</p>
+                <p className="mt-1 truncate text-xs text-slate-700">
+                  <span className="font-semibold">{entry.jobPosition || 'Position not provided'}</span>
+                  {' at '}
+                  {entry.company || 'Company not provided'}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
   const overviewCards = [
     { label: 'Total Alumni', value: formatCount(adminStats?.totalAlumni), note: 'Verified alumni directory entries', tone: 'sky' },
     { label: 'Pending Requests', value: formatCount(adminStats?.pendingRegistrations), note: 'Waiting for admin review', tone: 'amber' },
@@ -288,6 +355,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   const monthlyActivity = Array.isArray(adminStats?.monthlyActivity) ? adminStats.monthlyActivity : [];
   const maxMonthlyValue = Math.max(1, ...monthlyActivity.flatMap((entry) => [entry.submitted || 0, entry.approved || 0]));
   const monthBarHeight = (value) => Math.max(18, Math.round(((value || 0) / maxMonthlyValue) * 180));
+  const programUsageInCareer = Array.isArray(adminStats?.programUsageInCareer) ? adminStats.programUsageInCareer : [];
 
   const Layout = UserLayout;
 
@@ -584,6 +652,130 @@ const AdminDashboard = ({ pendingOnly = false }) => {
               })}
             </div>
           </div>
+        </section>
+        )}
+
+        {!pendingOnly && (
+        <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-4 py-5 sm:px-5">
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Employability Tracking</p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Program Usage in Career</h2>
+            <p className="mt-2 text-sm text-slate-500">Tracks whether current or latest employment is related to each alumnus&apos;s academic program.</p>
+          </div>
+
+          {statsLoading ? (
+            <div className="space-y-3 p-4 sm:p-5">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />
+              ))}
+            </div>
+          ) : programUsageInCareer.length > 0 ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-[880px] w-full text-left">
+                  <thead className="bg-slate-50 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <tr>
+                      <th className="px-5 py-4">Program</th>
+                      <th className="px-5 py-4 text-center">Using ✓</th>
+                      <th className="px-5 py-4 text-center">Not Using ✕</th>
+                      <th className="px-5 py-4 text-center">Total</th>
+                      <th className="px-5 py-4">Usage Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-transparent text-sm">
+                    {programUsageInCareer.map((row) => {
+                      const isExpanded = expandedProgramUsageKey === row.program;
+                      const usageRate = Number(row.usageRate || 0);
+                      return (
+                        <React.Fragment key={row.program}>
+                          <tr className={isExpanded ? 'bg-slate-50/70' : 'bg-white'}>
+                            <td className="px-5 py-4">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedProgramUsageKey((current) => (current === row.program ? '' : row.program))}
+                                className="inline-flex max-w-[260px] items-center gap-2 text-left text-sm font-bold text-blue-950 hover:text-blue-700"
+                                aria-expanded={isExpanded}
+                              >
+                                <span className="truncate">{row.program}</span>
+                                <svg
+                                  className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                  viewBox="0 0 20 20"
+                                  fill="currentColor"
+                                  aria-hidden="true"
+                                >
+                                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              <span className="inline-flex items-center justify-center gap-1.5 font-bold text-emerald-600">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                {formatCount(row.usingCount)}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              <span className="inline-flex items-center justify-center gap-1.5 font-bold text-rose-500">
+                                <span className="h-2 w-2 rounded-full bg-rose-400" />
+                                {formatCount(row.notUsingCount)}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-center font-bold text-blue-950">{formatCount(row.total)}</td>
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                                  <div
+                                    className={`h-full rounded-full ${usageRate > 0 ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                                    style={{ width: `${Math.max(0, Math.min(100, usageRate))}%` }}
+                                  />
+                                </div>
+                                <span className="w-12 text-right text-sm font-bold text-blue-950">{usageRate}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-slate-50/70">
+                              <td colSpan={5} className="px-5 pb-5">
+                                <div className="grid gap-3 lg:grid-cols-2">
+                                  <div>
+                                    <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-bold text-emerald-600">
+                                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                      Using in Work
+                                    </div>
+                                    {renderProgramUsageAlumni(row.using, 'using')}
+                                  </div>
+                                  <div>
+                                    <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-bold text-rose-500">
+                                      <span className="h-2 w-2 rounded-full bg-rose-400" />
+                                      Not Using in Work
+                                    </div>
+                                    {renderProgramUsageAlumni(row.notUsing, 'not-using')}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center gap-5 border-t border-slate-200 px-4 py-4 text-sm text-slate-500 sm:px-5">
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-emerald-500" />
+                  Currently working in related field
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-rose-400" />
+                  Working in unrelated field
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="px-4 py-10 text-center text-sm text-slate-500 sm:px-5">
+              No reviewed employment classifications yet.
+            </div>
+          )}
         </section>
         )}
         {!pendingOnly && courseData.length > 0 && (

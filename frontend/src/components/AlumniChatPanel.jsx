@@ -10,7 +10,6 @@ import {
   markConversationRead,
   normalizeChatUser,
   sendChatMessage,
-  setupPresence,
   unblockChatUser
 } from '../services/firebaseChatService';
 import { API_BASE_URL } from '../config/apiBaseUrl';
@@ -416,15 +415,6 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   );
 
   useEffect(() => {
-    if (!currentUserId) return undefined;
-    return setupPresence({
-      ...currentUser,
-      id: currentUserId,
-      username: currentUser?.username || currentChatUser.displayName
-    });
-  }, [currentChatUser.displayName, currentUser, currentUserId]);
-
-  useEffect(() => {
     let isMounted = true;
 
     const loadStaffContacts = async () => {
@@ -629,7 +619,6 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-bold text-slate-950">Alumni Chat</h3>
-                  <p className="text-xs text-slate-500">Realtime conversations</p>
                 </div>
                 <button
                   type="button"

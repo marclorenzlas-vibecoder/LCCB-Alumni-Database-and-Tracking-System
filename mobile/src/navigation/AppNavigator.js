@@ -143,14 +143,21 @@ export default function AppNavigator() {
         </Stack.Screen>
       ) : (
         <>
-          <Stack.Screen name="Login" options={{ title: 'Sign In' }}>
+          <Stack.Screen
+            name="Login"
+            options={{
+              title: 'Login',
+              headerBackVisible: false,
+              headerLeft: () => null
+            }}
+          >
             {(props) => <LoginScreen {...props} setUser={setUser} />}
           </Stack.Screen>
           <Stack.Screen
             name="Register"
             component={RegisterScreen}
             options={{
-              title: 'Create Alumni Account',
+              title: 'Register',
               headerBackVisible: false,
               headerLeft: () => null
             }}

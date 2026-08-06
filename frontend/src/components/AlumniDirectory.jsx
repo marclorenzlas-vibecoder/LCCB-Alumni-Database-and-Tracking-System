@@ -25,6 +25,26 @@ const createEducationEntry = (entry = {}) => ({
   batch: entry.batch ?? ''
 });
 
+const ALUMNI_PAGE_SIZE = 30;
+
+const getPaginationItems = (currentPage, totalPages) => {
+  if (totalPages <= 6) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const nearbyPages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+  if (currentPage <= 3) {
+    [2, 3, 4, 5].forEach((page) => nearbyPages.add(page));
+  }
+  if (currentPage >= totalPages - 2) {
+    [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1].forEach((page) => nearbyPages.add(page));
+  }
+
+  return Array.from(nearbyPages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((left, right) => left - right);
+};
+
 const DEFAULT_BATCH_OPTIONS = Array.from({ length: 60 }, (_, index) => String(new Date().getFullYear() - index));
 
 const getGroupLabel = (value) => {
@@ -124,11 +144,7 @@ const formatBirthday = (dateStr, includeYear = false) => {
 const buildRegisterCourseSections = (selectedLevel = '') => groupSectionDefinitions
   .map((section) => {
     let items = section.items;
-    if (selectedLevel === 'INTEGRATED_SCHOOL' && section.key === 'INTEGRATED_SCHOOL') {
-      items = section.items.filter((item) => item.value !== 'Night High');
-    } else if (selectedLevel === 'NIGHT_HIGH' && section.key === 'INTEGRATED_SCHOOL') {
-      items = section.items.filter((item) => item.value === 'Night High');
-    } else if (selectedLevel && section.key !== selectedLevel) {
+    if (selectedLevel && section.key !== selectedLevel) {
       items = [];
     }
 
@@ -165,6 +181,55 @@ const getProgramAlignmentClass = (value) => {
   return 'bg-amber-50 text-amber-700 border-amber-200';
 };
 
+const getProgramAlignmentReviewClass = (value) => {
+  if (value === 'ALIGNED') return 'border-l-emerald-500 bg-emerald-50/80 text-emerald-800 ring-emerald-100';
+  if (value === 'NOT_ALIGNED') return 'border-l-rose-500 bg-rose-50/80 text-rose-800 ring-rose-100';
+  return 'border-l-amber-500 bg-amber-50/80 text-amber-800 ring-amber-100';
+};
+
+const ProgramAlignmentIcon = ({ value }) => {
+  if (value === 'NOT_ALIGNED') {
+    return (
+      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+      </svg>
+    );
+  }
+
+  if (value === 'ALIGNED') {
+    return (
+      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fillRule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zm3.53 6.47a.75.75 0 00-1.06-1.06L9 10.88 7.53 9.41a.75.75 0 00-1.06 1.06l2 2a.75.75 0 001.06 0l4-4z" clipRule="evenodd" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 8.94a.75.75 0 01-1.06-1.06A3 3 0 1110.75 13a.75.75 0 01-1.5 0v-.5c0-.67.43-1.18.96-1.49.57-.34 1.04-.66 1.04-1.51a1.5 1.5 0 00-2.31-1.26zm1.06 6.56a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+    </svg>
+  );
+};
+
+const ProgramAlignmentReview = ({ value, notes }) => (
+  <div className={`mt-3 w-full max-w-xs rounded-lg border border-slate-200 border-l-4 px-3 py-2.5 text-sm ring-1 ${getProgramAlignmentReviewClass(value)}`}>
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramAlignmentClass(value)}`}>
+          {getProgramAlignmentLabel(value)}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-current">
+          Program match
+          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm">
+            <ProgramAlignmentIcon value={value} />
+          </span>
+        </span>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-slate-600">{notes || 'Admin/teacher reviews this match.'}</p>
+    </div>
+  </div>
+);
+
 const AlumniDirectory = () => {
   // Role
   const isTeacher = authService.isTeacher();
@@ -191,6 +256,7 @@ const AlumniDirectory = () => {
   const [selectedBatch, setSelectedBatch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(''); // Placeholder for future grouping logic
   const [sortOrder] = useState({ field: 'id', direction: 'desc' });
+  const [currentPage, setCurrentPage] = useState(1);
   const [showLevelMenu, setShowLevelMenu] = useState(false);
   const [showBatchMenu, setShowBatchMenu] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
@@ -201,6 +267,8 @@ const AlumniDirectory = () => {
   const groupMenuRef = useRef(null);
   const addLevelMenuRef = useRef(null);
   const addCourseMenuRef = useRef(null);
+  const alumniListRef = useRef(null);
+  const paginationRef = useRef(null);
 
   // Viewing / editing / adding
   const [showViewModal, setShowViewModal] = useState(false);
@@ -428,6 +496,41 @@ const AlumniDirectory = () => {
     });
     return data;
   }, [baseFilteredAlumni, selectedBatch, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAlumni.length / ALUMNI_PAGE_SIZE));
+  const paginationItems = useMemo(() => getPaginationItems(currentPage, totalPages), [currentPage, totalPages]);
+  const paginatedAlumni = useMemo(() => {
+    const pageStart = (currentPage - 1) * ALUMNI_PAGE_SIZE;
+    return filteredAlumni.slice(pageStart, pageStart + ALUMNI_PAGE_SIZE);
+  }, [currentPage, filteredAlumni]);
+  const pageStartItem = filteredAlumni.length === 0 ? 0 : (currentPage - 1) * ALUMNI_PAGE_SIZE + 1;
+  const pageEndItem = Math.min(currentPage * ALUMNI_PAGE_SIZE, filteredAlumni.length);
+  const usesAlumniPagination = filteredAlumni.length > ALUMNI_PAGE_SIZE;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedLevel, selectedBatch, selectedGroup]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const changeAlumniPage = (nextPageOrUpdater) => {
+    const nextPage = typeof nextPageOrUpdater === 'function'
+      ? nextPageOrUpdater(currentPage)
+      : nextPageOrUpdater;
+    const normalizedPage = Math.min(totalPages, Math.max(1, nextPage));
+
+    if (normalizedPage === currentPage) return;
+
+    setCurrentPage(normalizedPage);
+
+    requestAnimationFrame(() => {
+      alumniListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   // Load batch officers when a batch is selected
   useEffect(() => {
@@ -759,7 +862,7 @@ const AlumniDirectory = () => {
     <button
       type="button"
       onClick={() => { setSelectedLevel(''); setSelectedBatch(''); setSelectedGroup(''); setSearchTerm(''); }}
-      className="inline-flex h-[46px] w-36 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+      className="alumni-admin-clear-filters-btn inline-flex h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
     >
       <span className="truncate">Clear Filters</span>
     </button>
@@ -772,7 +875,7 @@ const AlumniDirectory = () => {
         setShowOfficersModal(true);
       }}
       disabled={!selectedBatch}
-      className={`inline-flex h-[46px] w-52 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${selectedBatch
+      className={`alumni-admin-batch-officers-btn inline-flex h-[46px] shrink-0 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${selectedBatch
           ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
           : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
         }`}
@@ -819,12 +922,11 @@ const AlumniDirectory = () => {
             {/* ── Profile Header (no blue background) ── */}
             <div className="relative bg-white" style={{minHeight: '0'}}>
               {/* Top bar */}
-              <div className="relative flex items-center justify-between px-5 pt-5 pb-2">
+              <div className="relative flex items-center justify-between px-5 pt-5 pb-2 sm:px-8">
                 <button
                   onClick={() => { setShowViewModal(false); setViewingAlumni(null); }}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gray-100 border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-all"
+                  className="inline-flex items-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-semibold text-blue-950 shadow-sm transition-all duration-200 hover:-translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                   Back to Directory
                 </button>
               </div>
@@ -1005,12 +1107,7 @@ const AlumniDirectory = () => {
                                 </p>
                               </div>
                               <p className="text-sm text-blue-600 font-medium">{c.company}</p>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramAlignmentClass(c.program_alignment)}`}>
-                                  {getProgramAlignmentLabel(c.program_alignment)}
-                                </span>
-                                {c.alignment_notes && <span className="text-xs text-gray-500">{c.alignment_notes}</span>}
-                              </div>
+                              <ProgramAlignmentReview value={c.program_alignment} notes={c.alignment_notes} />
                               {isTeacher && (
                                 <div className="mt-3 flex flex-wrap items-center gap-2">
                                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Program Match</label>
@@ -1451,13 +1548,13 @@ const AlumniDirectory = () => {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto scrollbar-hide p-6 bg-slate-50/60">
+              <div className="flex-1 overflow-y-auto scrollbar-hide p-5 bg-slate-50/60">
                 {batchOfficers.length === 0 ? (
-                  <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-blue-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="text-center py-10 bg-white rounded-2xl border border-blue-100 shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-11 w-11 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    <p className="mt-4 text-slate-600 font-medium">No officers assigned for this batch yet.</p>
+                    <p className="mt-3 text-slate-600 font-medium">No officers assigned for this batch yet.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1518,14 +1615,6 @@ const AlumniDirectory = () => {
                 )}
               </div>
 
-              <div className="px-6 py-4 border-t border-blue-100 bg-white flex justify-end">
-                <button
-                  onClick={() => setShowOfficersModal(false)}
-                  className="px-5 py-2.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  Close
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -1568,8 +1657,8 @@ const AlumniDirectory = () => {
             </div>
 
             {/* Row 2: Filter Dropdowns + Actions */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="alumni-admin-filter-row flex w-full flex-wrap items-center gap-2 xl:flex-nowrap">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
                 <FilterMenu
                   menuRef={levelMenuRef}
                   isOpen={showLevelMenu}
@@ -1594,7 +1683,7 @@ const AlumniDirectory = () => {
                     setShowLevelMenu(false);
                   }}
                   panelTitle="All Levels"
-                  panelWidthClass="w-56"
+                  panelWidthClass="alumni-admin-level-filter"
                   alignClass="right-0"
                 />
                 <FilterMenu
@@ -1611,7 +1700,7 @@ const AlumniDirectory = () => {
                     setShowBatchMenu(false);
                   }}
                   panelTitle="All Batches"
-                  panelWidthClass="w-56"
+                  panelWidthClass="alumni-admin-batch-filter"
                   alignClass="right-0"
                 />
                 <FilterMenu
@@ -1628,15 +1717,15 @@ const AlumniDirectory = () => {
                     setShowGroupMenu(false);
                   }}
                   panelTitle={selectedLevel ? `${getLevelLabel(selectedLevel)} Programs` : 'All Program'}
-                  panelWidthClass="w-96"
+                  panelWidthClass="alumni-admin-program-filter"
                   alignClass="right-0"
                 />
                 {isTeacher && batchOfficersButton}
               </div>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex shrink-0 flex-wrap items-center gap-2 xl:flex-nowrap">
                 {!isTeacher && batchOfficersButton}
                 {isTeacher && (
-                  <button type="button" onClick={generateCsv} className="inline-flex h-[46px] w-56 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100">
+                  <button type="button" onClick={generateCsv} className="alumni-admin-generate-csv-btn inline-flex h-[46px] shrink-0 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 16v-4m0 0V8m0 4h4m-4 0H8M5 20h14a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-4.828-4.828A2 2 0 0014.172 2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                     <span className="min-w-0 truncate">Generate List (CSV)</span>
                   </button>
@@ -1648,7 +1737,15 @@ const AlumniDirectory = () => {
         </div>
 
         {/* Alumni list */}
-        <div className="grid auto-rows-fr items-stretch gap-3 px-4 py-4 sm:px-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+        <div ref={alumniListRef}>
+        {!loading && !error && usesAlumniPagination && (
+          <div className="border-b border-gray-100 bg-white px-4 py-3 sm:px-6">
+            <p className="text-sm font-medium text-slate-500">
+              Showing {pageStartItem}-{pageEndItem} of {filteredAlumni.length} alumni
+            </p>
+          </div>
+        )}
+        <div className="grid auto-rows-[104px] content-start items-stretch gap-3 px-4 py-4 sm:px-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           {loading && (
             <div className="col-span-full rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">Loading...</div>
           )}
@@ -1658,7 +1755,7 @@ const AlumniDirectory = () => {
           {!loading && !error && filteredAlumni.length === 0 && (
             <div className="col-span-full rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">No alumni found.</div>
           )}
-          {!loading && !error && filteredAlumni.map(a => {
+          {!loading && !error && paginatedAlumni.map(a => {
             const fullName = `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'Unnamed Alumni';
             const courseText = fieldIsPublic(a, 'isCoursePublic', 'is_course_public')
               ? (a.course || 'Course not provided')
@@ -1675,7 +1772,7 @@ const AlumniDirectory = () => {
                 key={a.id}
                 role="button"
                 tabIndex={0}
-                className="alumni-directory-card group flex h-full min-h-[120px] w-full cursor-pointer items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-3 text-left shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/80 hover:bg-slate-50 hover:shadow-[0_16px_34px_-22px_rgba(15,23,42,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+                className="alumni-directory-card group flex h-full min-h-[104px] w-full cursor-pointer items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-2.5 text-left shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/80 hover:bg-slate-50 hover:shadow-[0_16px_34px_-22px_rgba(15,23,42,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
                 onClick={() => openViewModal(a)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1703,6 +1800,45 @@ const AlumniDirectory = () => {
             );
           })}
         </div>
+        </div>
+
+        {!loading && !error && usesAlumniPagination && (
+          <div ref={paginationRef} className="border-t border-gray-100 bg-white px-4 py-5 sm:px-6">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => changeAlumniPage((page) => page - 1)}
+                disabled={currentPage === 1}
+                className="inline-flex h-11 min-w-[88px] items-center justify-center rounded-lg border border-blue-200 bg-white px-4 text-sm font-bold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-blue-100 disabled:bg-blue-50 disabled:text-blue-300 disabled:shadow-none"
+              >
+                Prev
+              </button>
+              {paginationItems.map((page) => (
+                <button
+                  key={`alumni-page-${page}`}
+                  type="button"
+                  onClick={() => changeAlumniPage(page)}
+                  aria-current={currentPage === page ? 'page' : undefined}
+                  className={`inline-flex h-11 min-w-[52px] items-center justify-center rounded-lg border px-4 text-sm font-bold shadow-sm transition ${
+                    currentPage === page
+                      ? 'border-blue-600 bg-blue-600 text-white'
+                      : 'border-blue-200 bg-white text-blue-700 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => changeAlumniPage((page) => page + 1)}
+                disabled={currentPage === totalPages}
+                className="inline-flex h-11 min-w-[88px] items-center justify-center rounded-lg border border-blue-600 bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:border-blue-100 disabled:bg-blue-50 disabled:text-blue-300 disabled:shadow-none"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Assign Officer Modal */}
         {showAssignOfficerModal && (

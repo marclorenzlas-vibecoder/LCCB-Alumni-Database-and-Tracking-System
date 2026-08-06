@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, ImageBackground, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Image, ImageBackground, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenContainer from '../components/ScreenContainer';
 import { authService } from '../services/authService';
@@ -79,88 +79,96 @@ export default function LoginScreen({ navigation, setUser }) {
   };
 
   return (
-    <ScreenContainer noTopPadding>
-      <View style={styles.screen}>
-        <ImageBackground source={homeImage} style={styles.hero} imageStyle={styles.heroImage}>
-          <View style={styles.heroOverlay} />
-          <View style={styles.brandRow}>
-            <Image source={alumniLogo} style={styles.logo} />
-            <View>
-              <Text style={styles.brandTitle}>LCCB ALUMNI</Text>
-              <Text style={styles.brandSubtitle}>CONNECTING EXCELLENCE</Text>
+    <>
+      <ScreenContainer noTopPadding>
+        <View style={styles.screen}>
+          <ImageBackground source={homeImage} style={styles.hero} imageStyle={styles.heroImage}>
+            <View style={styles.heroOverlay} />
+            <View style={styles.brandRow}>
+              <Image source={alumniLogo} style={styles.logo} />
+              <View>
+                <Text style={styles.brandTitle}>LCCB ALUMNI</Text>
+                <Text style={styles.brandSubtitle}>CONNECTING EXCELLENCE</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroTitle}>Connect with Your{'\n'}LCCB Community</Text>
-            <Text style={styles.heroText}>Access your alumni profile, track achievements, and stay connected with fellow graduates.</Text>
-          </View>
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroTitle}>Connect with Your{'\n'}LCCB Community</Text>
+              <Text style={styles.heroText}>Access your alumni profile, track achievements, and stay connected with fellow graduates.</Text>
+            </View>
 
-          <View style={styles.featureStack}>
-            <FeatureRow icon="people" title="Alumni Network" subtitle="Connect with fellow graduates" />
-            <FeatureRow icon="star" title="Track Achievements" subtitle="Showcase your milestones" />
-          </View>
-        </ImageBackground>
+            <View style={styles.featureStack}>
+              <FeatureRow icon="people" title="Alumni Network" subtitle="Connect with fellow graduates" />
+              <FeatureRow icon="star" title="Track Achievements" subtitle="Showcase your milestones" />
+            </View>
+          </ImageBackground>
 
-        <View style={styles.card}>
-          <View style={styles.headingBlock}>
-            <Text style={styles.title}>Welcome to</Text>
-            <Text style={styles.titleAccent}>LCCB Alumni</Text>
-            <Text style={styles.subtitle}>Sign in to reconnect with your community, manage your profile, and stay updated with alumni opportunities.</Text>
-          </View>
+          <View style={styles.card}>
+            <View style={styles.headingBlock}>
+              <Text style={styles.title}>Welcome to</Text>
+              <Text style={styles.titleAccent}>LCCB Alumni</Text>
+              <Text style={styles.subtitle}>Sign in to reconnect with your community, manage your profile, and stay updated with alumni opportunities.</Text>
+            </View>
 
-          <Text style={styles.label}>Email/Username</Text>
-          <View style={styles.inputWrap}>
-            <Ionicons name="mail-outline" size={18} color="#64748b" />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-              placeholderTextColor="#94a3b8"
-            />
-          </View>
+            <Text style={styles.label}>Email/Username</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="mail-outline" size={18} color="#64748b" />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
 
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.inputWrap}>
-            <Ionicons name="lock-closed-outline" size={18} color="#64748b" />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              placeholderTextColor="#94a3b8"
-            />
-            <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#64748b" />
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="lock-closed-outline" size={18} color="#64748b" />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                placeholderTextColor="#94a3b8"
+              />
+              <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#64748b" />
+              </Pressable>
+            </View>
+
+            <Pressable style={[styles.button, submitting && styles.buttonDisabled]} onPress={onLogin} disabled={submitting}>
+              <Text style={styles.buttonText}>{submitting ? 'Signing in...' : 'Sign In'}</Text>
+            </Pressable>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Pressable style={styles.googleButton}>
+              <GoogleIcon />
+              <Text style={styles.googleButtonText}>Signup with Google</Text>
+            </Pressable>
+
+            <Pressable onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.link}>Do not have an account? <Text style={styles.linkBold}>Register</Text></Text>
             </Pressable>
           </View>
-
-          <Pressable style={[styles.button, submitting && styles.buttonDisabled]} onPress={onLogin} disabled={submitting}>
-            <Text style={styles.buttonText}>{submitting ? 'Signing in...' : 'Sign In'}</Text>
-          </Pressable>
-
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.orText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <Pressable style={styles.googleButton}>
-            <GoogleIcon />
-            <Text style={styles.googleButtonText}>Signup with Google</Text>
-          </Pressable>
-
-          <Pressable onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.link}>Do not have an account? <Text style={styles.linkBold}>Register</Text></Text>
-          </Pressable>
         </View>
-      </View>
+      </ScreenContainer>
 
-      {submitting && (
+      <Modal
+        visible={submitting}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {}}
+      >
         <View style={styles.statusBackdrop}>
           <Animated.View style={[styles.statusCard, { transform: [{ scale: overlayScale }] }]}>
             {loginStatus === 'success' ? (
@@ -174,8 +182,8 @@ export default function LoginScreen({ navigation, setUser }) {
             <Text style={styles.statusText}>{loginStatus === 'success' ? 'Logging in...' : 'Please wait while we connect you to the dashboard.'}</Text>
           </Animated.View>
         </View>
-      )}
-    </ScreenContainer>
+      </Modal>
+    </>
   );
 }
 

@@ -519,7 +519,10 @@ const UserLayout = ({ children }) => {
           >
             {sidebarContent}
           </aside>
-          <div className="app-sidebar-main h-full overflow-y-auto overflow-x-hidden bg-white">
+          <div
+            className="app-sidebar-main h-full overflow-y-auto overflow-x-hidden bg-white"
+            data-sidebar-collapsed={isDesktopCollapsed ? "true" : "false"}
+          >
             <main className="px-4 py-3 sm:px-5 lg:px-6 lg:py-4">
               {children}
             </main>

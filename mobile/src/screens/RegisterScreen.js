@@ -9,7 +9,6 @@ import { getGroups, getCachedGroups } from '../services/configService';
 
 const DEFAULT_LEVEL_OPTIONS = [
   { value: 'INTEGRATED_SCHOOL', label: 'Integrated School' },
-  { value: 'NIGHT_HIGH', label: 'Night High' },
   { value: 'SENIOR_HIGH', label: 'Senior High' },
   { value: 'COLLEGE', label: 'College' },
   { value: 'ETEEAP', label: 'ETEEAP' },
@@ -96,11 +95,7 @@ const mapBackendToCourseGroups = (backend) => {
 const getProgramGroupsForLevel = (groups = [], selectedLevel = '') => groups
   .map((group) => {
     let options = group.options || [];
-    if (selectedLevel === 'INTEGRATED_SCHOOL' && group.key === 'INTEGRATED_SCHOOL') {
-      options = options.filter((option) => option.value !== 'Night High');
-    } else if (selectedLevel === 'NIGHT_HIGH' && group.key === 'INTEGRATED_SCHOOL') {
-      options = options.filter((option) => option.value === 'Night High');
-    } else if (selectedLevel && group.key !== selectedLevel) {
+    if (selectedLevel && group.key !== selectedLevel) {
       options = [];
     }
 
@@ -109,6 +104,13 @@ const getProgramGroupsForLevel = (groups = [], selectedLevel = '') => groups
   .filter((group) => group.options.length > 0);
 
 const isBlankLevelOption = (option) => !option?.value || String(option.label || '').toLowerCase() === 'all levels';
+const isNightHighLevelOption = (option) => {
+  const value = String(option?.value || '').trim().toLowerCase();
+  const label = String(option?.label || '').trim().toLowerCase();
+  return value === 'night_high' || label === 'night high';
+};
+const getRegisterLevelOptions = (options = []) => options
+  .filter((option) => !isBlankLevelOption(option) && !isNightHighLevelOption(option));
 
 
 export default function RegisterScreen({ navigation }) {
@@ -155,7 +157,7 @@ export default function RegisterScreen({ navigation }) {
   };
 
   const filteredCourseGroups = getProgramGroupsForLevel(courseGroups, form.level);
-  const registerLevelOptions = levelOptions.filter((option) => !isBlankLevelOption(option));
+  const registerLevelOptions = getRegisterLevelOptions(levelOptions);
   const COURSE_OPTIONS = courseGroups.flatMap((group) => group.options);
   const hasProgramOptions = filteredCourseGroups.some((group) => group.options.length > 0);
   const selectedLevelLabel = registerLevelOptions.find((option) => option.value === form.level)?.label || '';
@@ -168,7 +170,7 @@ export default function RegisterScreen({ navigation }) {
       try {
         const cached = await getCachedGroups();
         if (mounted && cached) {
-          if (cached.levelOptions) setLevelOptions(cached.levelOptions);
+          if (cached.levelOptions) setLevelOptions(getRegisterLevelOptions(cached.levelOptions));
           if (cached.groupSectionDefinitions) setCourseGroups(mapBackendToCourseGroups(cached));
         }
       } catch (_e) {
@@ -178,7 +180,7 @@ export default function RegisterScreen({ navigation }) {
       const fetched = await getGroups();
       if (!mounted) return;
       if (fetched) {
-        if (fetched.levelOptions) setLevelOptions(fetched.levelOptions);
+        if (fetched.levelOptions) setLevelOptions(getRegisterLevelOptions(fetched.levelOptions));
         if (fetched.groupSectionDefinitions) setCourseGroups(mapBackendToCourseGroups(fetched));
       }
     })();

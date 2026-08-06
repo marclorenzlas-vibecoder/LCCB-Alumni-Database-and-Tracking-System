@@ -65,6 +65,14 @@ const AchievementDetail = () => {
 
   const alumni = achievement?.alumni || {};
   const alumniName = `${alumni.first_name || ''} ${alumni.last_name || ''}`.trim() || 'Anonymous Alumni';
+  const renderBackToAchievementsButton = (className = '') => (
+    <button
+      onClick={() => navigate('/achievements')}
+      className={`inline-flex items-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-semibold text-blue-950 shadow-sm transition-all duration-200 hover:-translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/25 ${className}`}
+    >
+      Back to Achievements
+    </button>
+  );
 
   if (loading) {
     return (
@@ -86,12 +94,7 @@ const AchievementDetail = () => {
           <div className="text-center">
             <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
             <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={() => navigate('/achievements')}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
-            >
-              Back to Achievements
-            </button>
+            {renderBackToAchievementsButton()}
           </div>
         </div>
       </div>
@@ -105,12 +108,7 @@ const AchievementDetail = () => {
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">Achievement Not Found</h1>
             <p className="text-gray-600 mb-4">The requested achievement could not be found.</p>
-            <button
-              onClick={() => navigate('/achievements')}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
-            >
-              Back to Achievements
-            </button>
+            {renderBackToAchievementsButton()}
           </div>
         </div>
       </div>
@@ -121,6 +119,7 @@ const AchievementDetail = () => {
     <div className="min-h-screen bg-gray-50 py-6">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8 pt-2">
+            {renderBackToAchievementsButton('mb-5')}
             <div className="flex flex-wrap items-baseline gap-3 mb-4">
               <h1 className="text-4xl font-bold text-blue-900">
                 {alumniName}

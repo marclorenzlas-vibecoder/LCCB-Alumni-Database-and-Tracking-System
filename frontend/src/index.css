@@ -148,6 +148,71 @@ body::-webkit-scrollbar,
         0 0 0 4px #d1d5db;
 }
 
+.alumni-admin-level-filter,
+.alumni-admin-batch-filter {
+    width: 12rem;
+}
+
+.alumni-admin-level-filter,
+.alumni-admin-batch-filter,
+.alumni-admin-program-filter,
+.alumni-admin-batch-officers-btn,
+.alumni-admin-generate-csv-btn,
+.alumni-admin-clear-filters-btn {
+    transition:
+        width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+        max-width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+        flex-basis 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.alumni-admin-program-filter {
+    width: 18rem;
+}
+
+.alumni-admin-batch-officers-btn {
+    width: 14rem;
+}
+
+.alumni-admin-generate-csv-btn {
+    width: 11rem;
+}
+
+.alumni-admin-clear-filters-btn {
+    width: 7rem;
+}
+
+.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-level-filter,
+.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-batch-filter {
+    width: 14rem;
+}
+
+.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-program-filter {
+    width: 24rem;
+}
+
+.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-batch-officers-btn {
+    width: 15rem;
+}
+
+.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-generate-csv-btn {
+    width: 14rem;
+}
+
+.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-clear-filters-btn {
+    width: 9rem;
+}
+
+@media (max-width: 1279px) {
+    .alumni-admin-level-filter,
+    .alumni-admin-batch-filter,
+    .alumni-admin-program-filter,
+    .alumni-admin-batch-officers-btn,
+    .alumni-admin-generate-csv-btn,
+    .alumni-admin-clear-filters-btn {
+        width: 100%;
+    }
+}
+
 @keyframes loginSuccessPop {
     0% {
         opacity: 0;

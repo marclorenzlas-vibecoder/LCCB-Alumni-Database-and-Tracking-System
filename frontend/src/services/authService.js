@@ -9,7 +9,6 @@ console.log('Auth Service API URL:', API_URL);
 // Create an axios instance with default config
 const axiosInstance = axios.create({
   baseURL: API_URL,
-  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -165,6 +164,7 @@ export const authService = {
   clearLocalSession: () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    notifyAuthUserUpdated(null);
   },
 
   getCurrentUser: () => {

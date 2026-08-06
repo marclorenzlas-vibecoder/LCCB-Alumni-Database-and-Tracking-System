@@ -73,6 +73,42 @@ const getPrimaryEducation = (history = []) => {
   return validEntries.length > 0 ? validEntries[validEntries.length - 1] : createEducationEntry();
 };
 
+const getDisplayClassYear = (alumni = {}, fallback = '') => (
+  alumni.graduationYear || alumni.graduation_year || fallback || alumni.batch || ''
+);
+
+const syncPrimaryEducationWithGraduationYear = (history = [], graduationYear = '', fallbackLevel = '') => {
+  if (!graduationYear) return history;
+
+  const nextHistory = history.length > 0 ? history.map((entry) => createEducationEntry(entry)) : [createEducationEntry()];
+  let primaryIndex = -1;
+
+  nextHistory.forEach((entry, index) => {
+    if (entry.level) primaryIndex = index;
+  });
+
+  if (primaryIndex === -1) {
+    primaryIndex = 0;
+    nextHistory[0] = {
+      ...nextHistory[0],
+      level: fallbackLevel || nextHistory[0]?.level || ''
+    };
+  }
+
+  nextHistory[primaryIndex] = {
+    ...nextHistory[primaryIndex],
+    batch: String(graduationYear),
+    graduationYear: String(graduationYear)
+  };
+
+  return nextHistory;
+};
+
+const formatEducationHistoryLine = (entry, fallbackClassYear = '') => {
+  const classYear = entry.graduationYear || entry.graduation_year || fallbackClassYear || entry.batch;
+  return `${formatLevelLabel(entry.level)}${classYear ? `, Class ${classYear}` : entry.batch ? `, Batch ${entry.batch}` : ''}`;
+};
+
 const readResponseBody = async (response) => {
   const contentType = response.headers.get('content-type') || '';
 
@@ -219,6 +255,55 @@ const getProgramMatchClass = (value) => {
   return 'border-amber-200 bg-amber-50 text-amber-700';
 };
 
+const getProgramMatchReviewClass = (value) => {
+  if (value === 'ALIGNED') return 'border-l-emerald-500 bg-emerald-50/80 text-emerald-800 ring-emerald-100';
+  if (value === 'NOT_ALIGNED') return 'border-l-rose-500 bg-rose-50/80 text-rose-800 ring-rose-100';
+  return 'border-l-amber-500 bg-amber-50/80 text-amber-800 ring-amber-100';
+};
+
+const ProgramMatchIcon = ({ value }) => {
+  if (value === 'NOT_ALIGNED') {
+    return (
+      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+      </svg>
+    );
+  }
+
+  if (value === 'ALIGNED') {
+    return (
+      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fillRule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zm3.53 6.47a.75.75 0 00-1.06-1.06L9 10.88 7.53 9.41a.75.75 0 00-1.06 1.06l2 2a.75.75 0 001.06 0l4-4z" clipRule="evenodd" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 8.94a.75.75 0 01-1.06-1.06A3 3 0 1110.75 13a.75.75 0 01-1.5 0v-.5c0-.67.43-1.18.96-1.49.57-.34 1.04-.66 1.04-1.51a1.5 1.5 0 00-2.31-1.26zm1.06 6.56a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+    </svg>
+  );
+};
+
+const ProgramMatchReview = ({ value }) => (
+  <div className={`mt-3 w-full max-w-xs rounded-lg border border-slate-200 border-l-4 px-3 py-2.5 text-sm ring-1 ${getProgramMatchReviewClass(value)}`}>
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramMatchClass(value)}`}>
+          {getProgramMatchLabel(value)}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-current">
+          Program match
+          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm">
+            <ProgramMatchIcon value={value} />
+          </span>
+        </span>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-slate-600">Admin/teacher reviews this match.</p>
+    </div>
+  </div>
+);
+
 const formatCareerDate = (value) => {
   if (!value) return 'N/A';
   const date = new Date(value);
@@ -308,7 +393,12 @@ const Profile = () => {
           }
         : null;
       const normalizedHistory = normalizeEducationHistory(normalizedAlumni || {});
-      const primaryEducation = getPrimaryEducation(normalizedHistory);
+      const syncedHistory = syncPrimaryEducationWithGraduationYear(
+        normalizedHistory,
+        normalizedAlumni?.graduationYear || '',
+        normalizedAlumni?.level || ''
+      );
+      const primaryEducation = getPrimaryEducation(syncedHistory);
 
       const updatedUser = {
         ...serverUser,
@@ -339,7 +429,7 @@ const Profile = () => {
         skills: normalizedAlumni?.skills || ''
       }));
       setPrivacySettings(normalizePrivacySettings(normalizedAlumni || {}));
-      setEducationHistory(normalizedHistory);
+      setEducationHistory(syncedHistory);
 
       if (updatedUser.profile_image) {
         setProfileImagePreview(`${IMAGE_BASE_URL}${updatedUser.profile_image}`);
@@ -378,7 +468,12 @@ const Profile = () => {
     const userData = authService.getCurrentUser();
     if (userData) {
       const userEducationHistory = normalizeEducationHistory(userData.alumni || {});
-      const primaryEducation = getPrimaryEducation(userEducationHistory);
+      const syncedEducationHistory = syncPrimaryEducationWithGraduationYear(
+        userEducationHistory,
+        userData.alumni?.graduationYear || userData.alumni?.graduation_year || '',
+        userData.alumni?.level || ''
+      );
+      const primaryEducation = getPrimaryEducation(syncedEducationHistory);
       setUser(userData);
       setFormData({
         username: userData.username || '',
@@ -400,7 +495,7 @@ const Profile = () => {
         skills: userData.alumni?.skills || ''
       });
       setPrivacySettings(normalizePrivacySettings(userData.alumni || {}));
-      setEducationHistory(userEducationHistory);
+      setEducationHistory(syncedEducationHistory);
       if (userData.profile_image) {
         setProfileImagePreview(`${IMAGE_BASE_URL}${userData.profile_image}`);
       }
@@ -494,7 +589,12 @@ const Profile = () => {
           contactNumber: data.contactNumber || data.contact_number || ''
         };
         const normalizedHistory = normalizeEducationHistory(normalizedAlumni);
-        const primaryEducation = getPrimaryEducation(normalizedHistory);
+        const syncedHistory = syncPrimaryEducationWithGraduationYear(
+          normalizedHistory,
+          normalizedAlumni.graduationYear || '',
+          normalizedAlumni.level || ''
+        );
+        const primaryEducation = getPrimaryEducation(syncedHistory);
 
         setUser((prev) => {
           if (!prev) return prev;
@@ -521,7 +621,7 @@ const Profile = () => {
           skills: normalizedAlumni.skills || ''
         }));
         setPrivacySettings(normalizePrivacySettings(normalizedAlumni));
-        setEducationHistory(normalizedHistory);
+        setEducationHistory(syncedHistory);
       }
     } catch (error) {
       console.error('Error fetching alumni details:', error);
@@ -530,6 +630,10 @@ const Profile = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'graduationYear') {
+      setEducationHistory((prev) => syncPrimaryEducationWithGraduationYear(prev, value, formData.level));
+    }
+
     setFormData(prev => {
       if (name !== 'username') {
         return {
@@ -628,7 +732,12 @@ const Profile = () => {
     try {
       const token = localStorage.getItem('token');
       const formDataToSend = new FormData();
-      const cleanedEducationHistory = educationHistory
+      const syncedEducationHistory = syncPrimaryEducationWithGraduationYear(
+        educationHistory,
+        formData.graduationYear,
+        formData.level
+      );
+      const cleanedEducationHistory = syncedEducationHistory
         .map((entry) => createEducationEntry(entry))
         .filter((entry) => entry.level);
       const primaryEducation = getPrimaryEducation(cleanedEducationHistory);
@@ -698,8 +807,13 @@ const Profile = () => {
           }
         : { ...(user.alumni || {}), ...privacySettingsToAlumniFields(privacySettings) };
       const normalizedHistory = normalizeEducationHistory(normalizedAlumni || {});
-      const hasReturnedHistory = normalizedHistory.some((entry) => entry.level);
-      const finalEducationHistory = hasReturnedHistory ? normalizedHistory : cleanedEducationHistory;
+      const syncedReturnedHistory = syncPrimaryEducationWithGraduationYear(
+        normalizedHistory,
+        normalizedAlumni?.graduationYear || normalizedAlumni?.graduation_year || formData.graduationYear || '',
+        normalizedAlumni?.level || formData.level || ''
+      );
+      const hasReturnedHistory = syncedReturnedHistory.some((entry) => entry.level);
+      const finalEducationHistory = hasReturnedHistory ? syncedReturnedHistory : cleanedEducationHistory;
 
       const updatedUser = {
         ...user,
@@ -731,11 +845,26 @@ const Profile = () => {
   };
 
   const handleEducationHistoryChange = (index, field, value) => {
+    const currentPrimaryIndex = educationHistory.reduce(
+      (primaryIndex, entry, entryIndex) => (entry.level ? entryIndex : primaryIndex),
+      -1
+    );
+    const isPrimaryEntry = index === (currentPrimaryIndex === -1 ? 0 : currentPrimaryIndex);
+
+    if (field === 'batch' && isPrimaryEntry) {
+      setFormData((prev) => ({
+        ...prev,
+        batch: value,
+        graduationYear: value || prev.graduationYear
+      }));
+    }
+
     setEducationHistory((prev) => prev.map((entry, i) => {
       if (i !== index) return entry;
       return {
         ...entry,
-        [field]: value
+        [field]: value,
+        ...(field === 'batch' && isPrimaryEntry ? { graduationYear: value } : {})
       };
     }));
   };
@@ -843,6 +972,12 @@ const Profile = () => {
   }
 
   const profileAlumni = user.alumni || {};
+  const displayClassYear = getDisplayClassYear(profileAlumni, formData.graduationYear);
+  const displayEducationHistory = syncPrimaryEducationWithGraduationYear(
+    normalizeEducationHistory(profileAlumni),
+    displayClassYear,
+    profileAlumni.level || formData.level
+  ).filter((entry) => entry.level);
 
   return (
     <UserLayout>
@@ -958,7 +1093,7 @@ const Profile = () => {
                     <div className="flex-shrink-0">
                       <span className="text-[9px] text-blue-300 uppercase font-semibold tracking-wider">Class</span>
                       <p className="text-sm font-semibold text-white">
-                        {user.alumni?.graduationYear || user.alumni?.graduation_year || user.alumni?.batch || '—'}
+                        {displayClassYear || '-'}
                       </p>
                     </div>
 
@@ -1330,7 +1465,7 @@ const Profile = () => {
                           </select>
                         </div>
                         <div className="flex items-end justify-between gap-3">
-                          <div className="text-xs text-gray-500">Select the level and matching batch for this entry.</div>
+                          <div className="text-xs text-gray-500">The primary entry follows your graduation year for a consistent class year.</div>
                           <button
                             type="button"
                             onClick={() => removeEducationHistoryEntry(index)}
@@ -1483,12 +1618,7 @@ const Profile = () => {
                               </div>
                             </div>
                           </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramMatchClass(career.program_alignment)}`}>
-                              {getProgramMatchLabel(career.program_alignment)}
-                            </span>
-                            <span className="text-xs text-slate-500">Admin/teacher reviews this match.</span>
-                          </div>
+                          <ProgramMatchReview value={career.program_alignment} />
                           {career.description && <p className="mt-2 text-sm text-slate-600">{career.description}</p>}
                         </div>
                       ))
@@ -1604,10 +1734,15 @@ const Profile = () => {
                   type="button"
                   onClick={() => {
                     const resetEducationHistory = normalizeEducationHistory(user.alumni || {});
-                    const primaryEducation = getPrimaryEducation(resetEducationHistory);
+                    const syncedResetEducationHistory = syncPrimaryEducationWithGraduationYear(
+                      resetEducationHistory,
+                      user.alumni?.graduationYear || user.alumni?.graduation_year || '',
+                      user.alumni?.level || ''
+                    );
+                    const primaryEducation = getPrimaryEducation(syncedResetEducationHistory);
                     setIsEditing(false);
                     resetCareerForm();
-                    setEducationHistory(resetEducationHistory);
+                    setEducationHistory(syncedResetEducationHistory);
                     setFormData({
                       username: user.username || '',
                       email: user.email || '',
@@ -1753,13 +1888,11 @@ const Profile = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      {normalizeEducationHistory(profileAlumni).filter((entry) => entry.level).length > 0 ? (
-                        normalizeEducationHistory(profileAlumni)
-                          .filter((entry) => entry.level)
+                      {displayEducationHistory.length > 0 ? (
+                        displayEducationHistory
                           .map((entry, index) => (
                             <div key={`education-readonly-${index}`} className="rounded-lg border border-gray-200 px-3 py-2 bg-gray-50 text-sm text-gray-900">
-                              {formatLevelLabel(entry.level)}
-                              {entry.batch ? `, Batch ${entry.batch}` : ''}
+                              {formatEducationHistoryLine(entry, displayClassYear)}
                             </div>
                           ))
                       ) : (
@@ -1831,12 +1964,7 @@ const Profile = () => {
                                 {formatCareerDate(career.start_date)} - {career.is_current ? 'Present' : formatCareerDate(career.end_date)}
                               </p>
                             </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getProgramMatchClass(career.program_alignment)}`}>
-                                {getProgramMatchLabel(career.program_alignment)}
-                              </span>
-                              <span className="text-xs text-slate-500">Admin/teacher reviews this match.</span>
-                            </div>
+                            <ProgramMatchReview value={career.program_alignment} />
                             {career.description && <p className="mt-2 text-sm text-slate-600">{career.description}</p>}
                           </div>
                         ))

@@ -33,6 +33,7 @@ import ManageUsers from './components/ManageUsers';
 import ActivityLogs from './components/ActivityLogs';
 import ProtectedRoute from './components/ProtectedRoute';
 import { realtimeClient } from './services/realtimeClient';
+import { setupPresence } from './services/firebaseChatService';
 import { API_BASE_URL } from './config/apiBaseUrl';
 import { authService } from './services/authService';
 import {
@@ -180,23 +181,6 @@ function AppContent() {
 }
 
 function App() {
-  const [sessionVersion, setSessionVersion] = React.useState(0);
-
-  // Remount routes only when auth token changes across tabs — not on profile updates.
-  useEffect(() => {
-    const handleStorage = (event) => {
-      if (event.key === 'token' || event.key === 'user') {
-        setSessionVersion((value) => value + 1);
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, []);
-
   const forceBlockedLogout = React.useCallback((message = BLOCKED_MESSAGE) => {
     handleAccountBlocked(message);
   }, []);
@@ -292,6 +276,7 @@ function App() {
 
     return !!(authService.getCurrentUser() && localStorage.getItem('token'));
   });
+  const [presenceUser, setPresenceUser] = React.useState(() => authService.getCurrentUser());
 
   // Keep isAuthenticated in sync with localStorage
   useEffect(() => {
@@ -299,18 +284,42 @@ function App() {
       const user = authService.getCurrentUser();
       const token = localStorage.getItem('token');
       setIsAuthenticated(!!(user && token));
+      setPresenceUser(user || null);
     };
 
-    window.addEventListener('storage', syncAuth);
     window.addEventListener('auth-user-updated', syncAuth);
     window.addEventListener('logout', syncAuth);
 
     return () => {
-      window.removeEventListener('storage', syncAuth);
       window.removeEventListener('auth-user-updated', syncAuth);
       window.removeEventListener('logout', syncAuth);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !presenceUser?.id) return undefined;
+
+    const alumni = presenceUser.alumni || {};
+    const displayName =
+      presenceUser.username ||
+      `${alumni.first_name || alumni.firstName || ''} ${alumni.last_name || alumni.lastName || ''}`.trim() ||
+      presenceUser.email ||
+      'Alumni';
+
+    return setupPresence({
+      ...presenceUser,
+      username: displayName
+    });
+  }, [
+    isAuthenticated,
+    presenceUser?.id,
+    presenceUser?.username,
+    presenceUser?.email,
+    presenceUser?.alumni?.first_name,
+    presenceUser?.alumni?.firstName,
+    presenceUser?.alumni?.last_name,
+    presenceUser?.alumni?.lastName
+  ]);
 
   // Active session guard: poll authenticated session-status + realtime block events.
   useEffect(() => {
@@ -326,46 +335,17 @@ function App() {
       authService.logout();
     };
 
-    const handleStorage = (event) => {
-      if (event.key === 'token' && !event.newValue) {
-        handleLogout();
-      }
-    };
-
-    const handleBeforeUnload = () => {
-      const currentToken = localStorage.getItem('token');
-      if (!currentToken) return;
-
-      try {
-        fetch(`${API_BASE_URL}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${currentToken}`
-          },
-          keepalive: true
-        });
-      } catch {
-        // Ignore unload network errors.
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
     window.addEventListener('logout', handleLogout);
 
     return () => {
       stopSessionGuard();
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
       window.removeEventListener('logout', handleLogout);
     };
   }, [isAuthenticated]);
 
   return (
     <Router>
-      <AppContent key={sessionVersion} />
+      <AppContent />
     </Router>
   );
 }
