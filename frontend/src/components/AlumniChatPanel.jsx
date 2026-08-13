@@ -176,7 +176,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [showMessageRequests, setShowMessageRequests] = useState(true);
-  const [showSentRequests, setShowSentRequests] = useState(false);
+  const [showSentRequests, setShowSentRequests] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
   const [staffContacts, setStaffContacts] = useState([]);
@@ -519,10 +519,24 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   }, [messageRequests.length]);
 
   useEffect(() => {
-    if (!selectedContactId && acceptedConversationContacts.length > 0) {
-      setSelectedContactId(acceptedConversationContacts[0].userId);
+    if (sentRequests.length > 0) {
+      setShowSentRequests(true);
     }
-  }, [acceptedConversationContacts, selectedContactId]);
+  }, [sentRequests.length]);
+
+  useEffect(() => {
+    if (!selectedContactId) {
+      if (acceptedConversationContacts.length > 0) {
+        setSelectedContactId(acceptedConversationContacts[0].userId);
+      } else if (messageRequests.length > 0) {
+        setSelectedContactId(messageRequests[0].userId);
+      } else if (sentRequests.length > 0) {
+        setSelectedContactId(sentRequests[0].userId);
+      }
+    }
+  }, [acceptedConversationContacts, messageRequests, sentRequests, selectedContactId]);
+
+
 
   useEffect(
     () => () => {

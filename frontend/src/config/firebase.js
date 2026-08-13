@@ -29,10 +29,10 @@ export const db = getFirestore(firebaseApp);
 export const storage = getStorage(firebaseApp);
 export const firebaseDatabase = getDatabase(firebaseApp);
 
-// Enable emulators in development (for testing)
-const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
+// Enable emulators only if explicitly configured via VITE_USE_FIREBASE_EMULATOR
+const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
 
-if (isDev && !window.FIREBASE_EMULATOR_CONNECTED) {
+if (useEmulator && !window.FIREBASE_EMULATOR_CONNECTED) {
   window.FIREBASE_EMULATOR_CONNECTED = true;
   
   try {
