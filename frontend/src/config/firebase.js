@@ -1,5 +1,13 @@
+/**
+ * Firebase Frontend Configuration (Updated for Firestore + Realtime)
+ * Initialize Firebase, Firestore, Authentication, and Realtime Database
+ */
+
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getDatabase } from 'firebase/database';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getDatabase, connectDatabaseEmulator } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCYIEN9izlnqWzWbSK9XwbDystYjB2fLs8',
@@ -12,7 +20,45 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-HT2CKFM97Z'
 };
 
+// Initialize Firebase
 const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const firebaseDatabase = getDatabase(firebaseApp);
 
-export { firebaseApp, firebaseDatabase };
+// Get Firebase services
+export const auth = getAuth(firebaseApp);
+export const db = getFirestore(firebaseApp);
+export const storage = getStorage(firebaseApp);
+export const firebaseDatabase = getDatabase(firebaseApp);
+
+// Enable emulators in development (for testing)
+const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
+
+if (isDev && !window.FIREBASE_EMULATOR_CONNECTED) {
+  window.FIREBASE_EMULATOR_CONNECTED = true;
+  
+  try {
+    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+  } catch (e) {
+    // Already connected
+  }
+
+  try {
+    connectFirestoreEmulator(db, 'localhost', 8080);
+  } catch (e) {
+    // Already connected
+  }
+
+  try {
+    connectStorageEmulator(storage, 'localhost', 9199);
+  } catch (e) {
+    // Already connected
+  }
+
+  try {
+    connectDatabaseEmulator(firebaseDatabase, 'localhost', 9000);
+  } catch (e) {
+    // Already connected
+  }
+}
+
+// Legacy export for backward compatibility
+export { firebaseApp };
