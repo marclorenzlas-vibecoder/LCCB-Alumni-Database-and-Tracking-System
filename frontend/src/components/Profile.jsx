@@ -285,7 +285,7 @@ const ProgramMatchIcon = ({ value }) => {
   );
 };
 
-const ProgramMatchReview = ({ value }) => (
+const ProgramMatchReview = ({ value, notes }) => (
   <div className={`mt-3 w-full max-w-xs rounded-lg border border-slate-200 border-l-4 px-3 py-2.5 text-sm ring-1 ${getProgramMatchReviewClass(value)}`}>
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
@@ -299,7 +299,7 @@ const ProgramMatchReview = ({ value }) => (
           </span>
         </span>
       </div>
-      <p className="mt-1 text-xs leading-5 text-slate-600">Admin/teacher reviews this match.</p>
+      <p className="mt-1 text-xs leading-5 text-slate-600">{notes || 'Alumni marked how this job relates to their program.'}</p>
     </div>
   </div>
 );
@@ -1618,7 +1618,7 @@ const Profile = () => {
                               </div>
                             </div>
                           </div>
-                          <ProgramMatchReview value={career.program_alignment} />
+                          <ProgramMatchReview value={career.program_alignment} notes={career.alignment_notes} />
                           {career.description && <p className="mt-2 text-sm text-slate-600">{career.description}</p>}
                         </div>
                       ))
@@ -1964,7 +1964,7 @@ const Profile = () => {
                                 {formatCareerDate(career.start_date)} - {career.is_current ? 'Present' : formatCareerDate(career.end_date)}
                               </p>
                             </div>
-                            <ProgramMatchReview value={career.program_alignment} />
+                            <ProgramMatchReview value={career.program_alignment} notes={career.alignment_notes} />
                             {career.description && <p className="mt-2 text-sm text-slate-600">{career.description}</p>}
                           </div>
                         ))

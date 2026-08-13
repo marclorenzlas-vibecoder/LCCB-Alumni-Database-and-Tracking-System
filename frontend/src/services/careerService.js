@@ -39,6 +39,11 @@ const careerService = {
     return response.data;
   },
 
+  updateCareerProgramMatch: async (id, reviewData) => {
+    const response = await axios.patch(`${API_URL}/${id}/program-match`, reviewData, { headers: getAuthHeaders() });
+    return response.data;
+  },
+
   // Delete career entry
   deleteCareer: async (id) => {
     const response = await axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });

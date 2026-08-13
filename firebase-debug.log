@@ -1,0 +1,16 @@
+[debug] [2026-08-10T07:08:08.026Z] ----------------------------------------------------------------------
+[debug] [2026-08-10T07:08:08.032Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\marcl\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js login --interactive
+[debug] [2026-08-10T07:08:08.033Z] CLI Version:   15.5.1
+[debug] [2026-08-10T07:08:08.033Z] Platform:      win32
+[debug] [2026-08-10T07:08:08.033Z] Node Version:  v22.18.0
+[debug] [2026-08-10T07:08:08.034Z] Time:          Mon Aug 10 2026 15:08:08 GMT+0800 (China Standard Time)
+[debug] [2026-08-10T07:08:08.034Z] ----------------------------------------------------------------------
+[debug] 
+[info] i  The Firebase CLI’s MCP server feature can optionally make use of Gemini in Firebase. Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data 
+[info] 
+[info] i  Firebase optionally collects CLI and Emulator Suite usage and error reporting information to help improve our products. Data is collected in accordance with Google's privacy policy (https://policies.google.com/privacy) and is not used to identify you. 
+[info] 
+[info] Visit this URL on this device to log in:
+[info] https://accounts.google.com/o/oauth2/auth?client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com&scope=email%20openid%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloudplatformprojects.readonly%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Ffirebase%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&response_type=code&state=1044999707&redirect_uri=http%3A%2F%2Flocalhost%3A9005
+[info] 
+[info] Waiting for authentication...

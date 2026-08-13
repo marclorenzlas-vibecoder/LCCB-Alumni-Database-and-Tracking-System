@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, teacherAuthMiddleware } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { inferProgramAlignment, normalizeProgramAlignment } = require('../utils/programAlignment');
@@ -66,6 +66,18 @@ const canViewCareerForAlumni = (req, alumni) => {
   if (viewerEmail && alumniEmail && viewerEmail === alumniEmail) return true;
 
   return alumni.is_employment_public === true;
+};
+
+const canUpdateCareerMatch = (req, career, authenticatedAlumniId) => {
+  if (!career || isStaffRequest(req)) return false;
+  if (authenticatedAlumniId && Number(authenticatedAlumniId) === Number(career.alumni_id)) return true;
+
+  const viewerId = Number(req.user?.id || 0);
+  if (viewerId && Number(career.alumni?.user_id || 0) === viewerId) return true;
+
+  const viewerEmail = String(req.user?.email || '').trim().toLowerCase();
+  const alumniEmail = String(career.alumni?.email || '').trim().toLowerCase();
+  return Boolean(viewerEmail && alumniEmail && viewerEmail === alumniEmail);
 };
 
 // Get all career entries
@@ -162,7 +174,17 @@ router.post('/', authenticateToken, async (req, res) => {
       company,
       description
     });
-    const manualAlignment = isStaffRequest(req) ? normalizeProgramAlignment(program_alignment) : null;
+    const isOwnerAlumni = !isStaffRequest(req) && authenticatedAlumniId === requestedAlumniId;
+    const manualAlignment = isOwnerAlumni && program_alignment !== undefined
+      ? normalizeProgramAlignment(program_alignment)
+      : null;
+
+    if (isOwnerAlumni && program_alignment && !manualAlignment) {
+      return res.status(400).json({
+        error: 'Program match must be Related, Not Related, or Needs Checking',
+        allowed: ['ALIGNED', 'NOT_ALIGNED', 'NEEDS_REVIEW']
+      });
+    }
 
     const career = await prisma.career_entry.create({
       data: {
@@ -174,7 +196,7 @@ router.post('/', authenticateToken, async (req, res) => {
         description: description ? description.trim() : null,
         is_current: is_current || false,
         program_alignment: manualAlignment || inferredAlignment.status,
-        alignment_notes: isStaffRequest(req) && alignment_notes ? alignment_notes.trim() : inferredAlignment.notes
+        alignment_notes: manualAlignment && alignment_notes ? alignment_notes.trim() : inferredAlignment.notes
       }
     });
 
@@ -221,7 +243,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
       where: { id: Number(id) },
       include: {
         alumni: {
-          select: { course: true }
+          select: {
+            course: true,
+            email: true,
+            user_id: true
+          }
         }
       }
     });
@@ -242,15 +268,27 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (end_date !== undefined) updateData.end_date = end_date ? new Date(end_date) : null;
     if (description !== undefined) updateData.description = description ? description.trim() : null;
     if (is_current !== undefined) updateData.is_current = is_current;
+    const isOwnerAlumni = canUpdateCareerMatch(req, oldCareer, authenticatedAlumniId);
+
     if (isStaffRequest(req) && program_alignment !== undefined) {
-      const manualAlignment = normalizeProgramAlignment(program_alignment);
-      updateData.program_alignment = manualAlignment || oldCareer.program_alignment || 'NEEDS_REVIEW';
+      return res.status(403).json({ error: 'Only the alumni can update the program match for their employment record' });
     }
-    if (isStaffRequest(req) && alignment_notes !== undefined) {
+
+    if (isOwnerAlumni && program_alignment !== undefined) {
+      const manualAlignment = normalizeProgramAlignment(program_alignment);
+      if (!manualAlignment) {
+        return res.status(400).json({
+          error: 'Program match must be Related, Not Related, or Needs Checking',
+          allowed: ['ALIGNED', 'NOT_ALIGNED', 'NEEDS_REVIEW']
+        });
+      }
+      updateData.program_alignment = manualAlignment;
+    }
+    if (isOwnerAlumni && alignment_notes !== undefined) {
       updateData.alignment_notes = alignment_notes ? alignment_notes.trim() : null;
     }
 
-    if (!isStaffRequest(req) || program_alignment === undefined) {
+    if (!oldCareer.program_alignment && program_alignment === undefined) {
       const inferredAlignment = inferProgramAlignment({
         course: oldCareer.alumni?.course,
         jobTitle: updateData.job_title || oldCareer.job_title,
@@ -299,8 +337,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Review course/program match for an employment record (Admin/teacher only)
-router.patch('/:id/review', teacherAuthMiddleware, async (req, res) => {
+// Update course/program match for an employment record (alumni owner only)
+router.patch('/:id/program-match', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { program_alignment, alignment_notes } = req.body;
@@ -314,11 +352,24 @@ router.patch('/:id/review', teacherAuthMiddleware, async (req, res) => {
     }
 
     const oldCareer = await prisma.career_entry.findUnique({
-      where: { id: Number(id) }
+      where: { id: Number(id) },
+      include: {
+        alumni: {
+          select: {
+            email: true,
+            user_id: true
+          }
+        }
+      }
     });
 
     if (!oldCareer) {
       return res.status(404).json({ error: 'Career entry not found' });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!canUpdateCareerMatch(req, oldCareer, authenticatedAlumniId)) {
+      return res.status(403).json({ error: 'Only the alumni can update the program match for their employment record' });
     }
 
     const career = await prisma.career_entry.update({
@@ -337,7 +388,77 @@ router.patch('/:id/review', teacherAuthMiddleware, async (req, res) => {
       entityType: 'career_entry',
       entityId: career.id,
       entityLabel: `${career.job_title} at ${career.company}`,
-      summary: `Reviewed employment match for "${career.job_title} at ${career.company}"`,
+      summary: `Updated employment match for "${career.job_title} at ${career.company}"`,
+      details: {
+        changes: buildChangeSet(oldCareer, career, [
+          { key: 'program_alignment', label: 'Program Match' },
+          { key: 'alignment_notes', label: 'Review Notes' }
+        ])
+      }
+    });
+
+    res.json(career);
+  } catch (error) {
+    console.error('Error updating career program match:', error);
+    res.status(500).json({
+      error: 'Failed to update career program match',
+      details: error.message
+    });
+  }
+});
+
+// Update course/program match for an employment record (alumni owner only)
+router.patch('/:id/review', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { program_alignment, alignment_notes } = req.body;
+    const normalizedAlignment = normalizeProgramAlignment(program_alignment);
+
+    if (!normalizedAlignment) {
+      return res.status(400).json({
+        error: 'Program match is required',
+        allowed: ['ALIGNED', 'NOT_ALIGNED', 'NEEDS_REVIEW']
+      });
+    }
+
+    const oldCareer = await prisma.career_entry.findUnique({
+      where: { id: Number(id) },
+      include: {
+        alumni: {
+          select: {
+            email: true,
+            user_id: true
+          }
+        }
+      }
+    });
+
+    if (!oldCareer) {
+      return res.status(404).json({ error: 'Career entry not found' });
+    }
+
+    const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
+    if (!canUpdateCareerMatch(req, oldCareer, authenticatedAlumniId)) {
+      return res.status(403).json({ error: 'Only the alumni can update the program match for their employment record' });
+    }
+
+    const career = await prisma.career_entry.update({
+      where: { id: Number(id) },
+      data: {
+        program_alignment: normalizedAlignment,
+        alignment_notes: alignment_notes ? String(alignment_notes).trim() : null
+      }
+    });
+
+    broadcastUpdate('career.updated', { careerId: career.id, alumniId: career.alumni_id });
+
+    await recordActivity({
+      req,
+      action: 'UPDATE',
+      entityType: 'career_entry',
+      entityId: career.id,
+      entityLabel: `${career.job_title} at ${career.company}`,
+      summary: `Updated employment match for "${career.job_title} at ${career.company}"`,
       details: {
         changes: buildChangeSet(oldCareer, career, [
           { key: 'program_alignment', label: 'Program Match' },

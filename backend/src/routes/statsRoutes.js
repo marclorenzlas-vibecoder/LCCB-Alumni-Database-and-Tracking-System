@@ -61,8 +61,19 @@ const normalizeProgramName = (value) => {
 
 const normalizeProgramUsageProgram = (value) => {
   const program = normalizeProgramName(value);
-  return program === 'SBIT' ? 'BSIT' : program;
+  if (program === 'SBIT') return 'BSIT';
+  if (program === 'SARFRAID') return 'SARFAID';
+  if (program === 'Master of Business Administration') return 'Master in Business Administration';
+  return program;
 };
+
+const programToLevelMap = new Map();
+groupSectionDefinitions.forEach((sec) => {
+  sec.items.forEach((item) => {
+    const norm = normalizeProgramUsageProgram(item.value);
+    programToLevelMap.set(norm, sec.key);
+  });
+});
 
 const PROGRAM_USAGE_LEVELS = new Set(['COLLEGE', 'ETEEAP', 'GRAD_SCHOOL']);
 const seenProgramUsagePrograms = new Set();
@@ -100,13 +111,14 @@ const buildProgramUsageInCareer = (careers = []) => {
     PROGRAM_USAGE_PROGRAM_ROWS.map((program) => [program, {
       program,
       using: [],
-      notUsing: []
+      notUsing: [],
+      needsChecking: []
     }])
   );
 
   latestCareerByAlumni.forEach((career) => {
     const alignment = String(career.program_alignment || '').toUpperCase();
-    if (alignment !== 'ALIGNED' && alignment !== 'NOT_ALIGNED') return;
+    if (alignment !== 'ALIGNED' && alignment !== 'NOT_ALIGNED' && alignment !== 'NEEDS_REVIEW') return;
     if (!shouldIncludeProgramUsageAlumni(career.alumni)) return;
 
     const program = normalizeProgramUsageProgram(career.alumni?.course);
@@ -123,8 +135,10 @@ const buildProgramUsageInCareer = (careers = []) => {
 
     if (alignment === 'ALIGNED') {
       row.using.push(alumnus);
-    } else {
+    } else if (alignment === 'NOT_ALIGNED') {
       row.notUsing.push(alumnus);
+    } else {
+      row.needsChecking.push(alumnus);
     }
   });
 
@@ -132,13 +146,15 @@ const buildProgramUsageInCareer = (careers = []) => {
     .map((row) => {
       const usingCount = row.using.length;
       const notUsingCount = row.notUsing.length;
-      const total = usingCount + notUsingCount;
+      const needsCheckingCount = row.needsChecking.length;
+      const total = usingCount + notUsingCount + needsCheckingCount;
       const usageRate = total > 0 ? Math.round((usingCount / total) * 100) : 0;
 
       return {
         ...row,
         usingCount,
         notUsingCount,
+        needsCheckingCount,
         total,
         usageRate
       };
@@ -298,6 +314,87 @@ router.get('/home-snapshot', async (req, res) => {
   }
 });
 
+const LEVEL_CONFIG = [
+  { key: 'COLLEGE', label: 'College' },
+  { key: 'SENIOR_HIGH', label: 'Senior High' },
+  { key: 'ETEEAP', label: 'ETEEAP' },
+  { key: 'GRAD_SCHOOL', label: 'Grad School' },
+  { key: 'INTEGRATED_SCHOOL', label: 'Integrated School' }
+];
+
+const buildAlumniByLevelAndProgram = (alumniRows = []) => {
+  const levelMap = new Map();
+
+  groupSectionDefinitions.forEach((sec) => {
+    const programCounts = new Map();
+    sec.items.forEach((item) => {
+      const norm = normalizeProgramUsageProgram(item.value);
+      programCounts.set(norm, 0);
+    });
+
+    const cfg = LEVEL_CONFIG.find((c) => c.key === sec.key);
+    levelMap.set(sec.key, {
+      key: sec.key,
+      label: cfg ? cfg.label : sec.title,
+      totalAlumni: 0,
+      programCounts
+    });
+  });
+
+  const unspecifiedKey = 'UNSPECIFIED';
+  levelMap.set(unspecifiedKey, {
+    key: unspecifiedKey,
+    label: 'Other / Unspecified',
+    totalAlumni: 0,
+    programCounts: new Map()
+  });
+
+  alumniRows.forEach((row) => {
+    const normCourse = normalizeProgramUsageProgram(row.course);
+    let levelKey = row.level ? String(row.level).toUpperCase() : unspecifiedKey;
+    if (levelKey === 'NIGHT_HIGH') levelKey = 'INTEGRATED_SCHOOL';
+
+    if (programToLevelMap.has(normCourse)) {
+      levelKey = programToLevelMap.get(normCourse);
+    }
+    if (!levelMap.has(levelKey)) levelKey = unspecifiedKey;
+
+    const targetGroup = levelMap.get(levelKey);
+    targetGroup.totalAlumni += 1;
+    const currentCount = targetGroup.programCounts.get(normCourse) || 0;
+    targetGroup.programCounts.set(normCourse, currentCount + 1);
+  });
+
+  const result = [];
+  levelMap.forEach((group) => {
+    if (group.totalAlumni === 0 && group.key === unspecifiedKey) return;
+
+    const programs = Array.from(group.programCounts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    result.push({
+      key: group.key,
+      label: group.label,
+      totalAlumni: group.totalAlumni,
+      programs
+    });
+  });
+
+  return result;
+};
+
+const buildAlumniPerCourse = (alumniRows = []) => {
+  const courseMap = new Map();
+  alumniRows.forEach((row) => {
+    const course = normalizeProgramUsageProgram(row.course);
+    courseMap.set(course, (courseMap.get(course) || 0) + 1);
+  });
+  return Array.from(courseMap.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+};
+
 router.get('/admin', async (req, res) => {
   try {
     const today = new Date();
@@ -327,7 +424,8 @@ router.get('/admin', async (req, res) => {
       pendingDeceasedReports,
       submittedRows,
       approvedRows,
-      careerRows
+      careerRows,
+      alumniLevelCourseRows
     ] = await Promise.all([
       prisma.alumni.count({ where: alumniDirectoryWhere }),
       prisma.pending_registration.count({ where: { status: 'PENDING' } }),
@@ -396,11 +494,20 @@ router.get('/admin', async (req, res) => {
           { end_date: 'desc' },
           { id: 'desc' }
         ]
+      }),
+      prisma.alumni.findMany({
+        where: alumniDirectoryWhere,
+        select: {
+          level: true,
+          course: true
+        }
       })
     ]);
 
     const monthlyActivity = buildMonthlyActivity(submittedRows, approvedRows);
     const programUsageInCareer = buildProgramUsageInCareer(careerRows);
+    const alumniByLevelAndProgram = buildAlumniByLevelAndProgram(alumniLevelCourseRows);
+    const alumniPerCourse = buildAlumniPerCourse(alumniLevelCourseRows);
     const activeMembers = getLimiterStatus().activeAlumniUsers;
 
     res.json({
@@ -413,7 +520,9 @@ router.get('/admin', async (req, res) => {
       openJobs,
       pendingDeceasedReports,
       monthlyActivity,
-      programUsageInCareer
+      programUsageInCareer,
+      alumniByLevelAndProgram,
+      alumniPerCourse
     });
   } catch (error) {
     console.error('Error loading admin stats:', error);

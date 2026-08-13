@@ -404,8 +404,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
     selectedContact &&
     !isSelectedIncomingRequest &&
     !isSelectedBlocked;
-
-  const totalUnread = useMemo(
+  const totalUnread = useMemo(
     () =>
       Object.values(conversationSummaries).reduce(
         (sum, summary) => sum + (Number(summary?.unreadCount) || 0),
@@ -454,13 +453,27 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
 
   useEffect(() => {
     if (!currentUserId) return undefined;
-    return listenToConversationSummaries(currentUserId, (nextSummaries) => {
-      setConversationSummaries((previousSummaries) =>
-        areConversationSummaryMapsEqual(previousSummaries, nextSummaries)
-          ? previousSummaries
-          : nextSummaries
-      );
-    });
+    return listenToConversationSummaries(
+      currentUserId,
+      (nextSummaries) => {
+        setConversationSummaries((previousSummaries) =>
+          areConversationSummaryMapsEqual(previousSummaries, nextSummaries)
+            ? previousSummaries
+            : nextSummaries
+        );
+      },
+      (err) => {
+        if (
+          err?.code === 'PERMISSION_DENIED' ||
+          String(err?.message || '').includes('PERMISSION_DENIED') ||
+          String(err?.message || '').includes('Permission denied')
+        ) {
+          setError(
+            'Firebase Realtime Database Permission Denied. To restore your chat & conversations, please update the Rules in Firebase Console.'
+          );
+        }
+      }
+    );
   }, [currentUserId]);
 
   useEffect(() => {
@@ -477,7 +490,17 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
       setMessages([]);
       return undefined;
     }
-    return listenToMessages(selectedChatId, setMessages);
+    return listenToMessages(selectedChatId, setMessages, (err) => {
+      if (
+        err?.code === 'PERMISSION_DENIED' ||
+        String(err?.message || '').includes('PERMISSION_DENIED') ||
+        String(err?.message || '').includes('Permission denied')
+      ) {
+        setError(
+          'Firebase Realtime Database Permission Denied. Set ".read": true and ".write": true in Firebase Console.'
+        );
+      }
+    });
   }, [selectedChatId]);
 
   useEffect(() => {
@@ -511,8 +534,6 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   );
 
   const handleSendMessage = async (event) => {
-    event.preventDefault();
-    if (!selectedContact || isSending || !canSendMessage) return;
 
     setError('');
     setIsSending(true);

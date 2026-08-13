@@ -3,24 +3,63 @@ import { toast } from 'react-toastify';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import UserLayout from './UserLayout';
 import statsService from '../services/statsService';
-import { authService } from '../services/authService';
-import donationService from '../services/donationService';
 import { realtimeClient } from '../services/realtimeClient';
+import { groupSectionDefinitions } from '../config/groupSections';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 
 const toneClasses = {
-  sky: 'from-sky-500 to-cyan-500',
-  amber: 'from-amber-500 to-orange-500',
-  emerald: 'from-emerald-500 to-teal-500',
-  violet: 'from-violet-500 to-fuchsia-500',
-  cyan: 'from-cyan-500 to-blue-500',
-  rose: 'from-rose-500 to-pink-500'
+  sky: 'from-sky-500 to-sky-500',
+  amber: 'from-amber-500 to-amber-500',
+  emerald: 'from-emerald-500 to-emerald-500',
+  violet: 'from-violet-500 to-violet-500',
+  cyan: 'from-cyan-500 to-cyan-500',
+  rose: 'from-rose-500 to-rose-500'
 };
 
-const RECENT_DONATION_CACHE_LIMIT = 1000;
+const toneBgClasses = {
+  sky: 'bg-sky-500 text-white',
+  amber: 'bg-amber-500 text-white',
+  emerald: 'bg-emerald-500 text-white',
+  violet: 'bg-violet-500 text-white',
+  cyan: 'bg-cyan-500 text-white',
+  rose: 'bg-rose-500 text-white'
+};
+
+const cardIcons = {
+  'Total Alumni': (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
+  'Pending Requests': (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  'Approved Alumni': (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  'Active Members': (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728M12 9v3l2 2" />
+    </svg>
+  ),
+  'Upcoming Events': (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+  'Teachers': (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+    </svg>
+  )
+};
 
 const AdminDashboard = ({ pendingOnly = false }) => {
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -28,47 +67,14 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   const [statsLoading, setStatsLoading] = useState(true);
   const [adminStats, setAdminStats] = useState(null);
   const [verificationStatus, setVerificationStatus] = useState({});
-  const [recentDonations, setRecentDonations] = useState([]);
-  const [recentDonationsLoading, setRecentDonationsLoading] = useState(true);
   const [expandedProgramUsageKey, setExpandedProgramUsageKey] = useState('');
+  const [selectedLevelKey, setSelectedLevelKey] = useState('COLLEGE');
 
   useEffect(() => {
     fetchPendingUsers();
     fetchAdminStats();
-    fetchRecentDonations();
 
   }, []);
-
-  useEffect(() => {
-    if (pendingOnly) return undefined;
-
-    const handleDonationActivity = (payload) => {
-      const type = payload?.type || payload?.notification?.type || null;
-      if (String(type || '').toUpperCase() !== 'DONATION') return;
-
-      const notification = payload?.notification || {};
-      const createdAt = notification.created_at || notification.createdAt || payload?.createdAt || new Date().toISOString();
-      const activity = {
-        id: notification.id ? `notification-${notification.id}` : `live-donation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        title: payload?.title || notification.title || '',
-        message: payload?.message || notification.message || '',
-        link: payload?.link || notification.link || '',
-        senderName: payload?.senderName || notification.sender_name || notification.senderName || 'Alumnus',
-        senderProfileImage: payload?.senderProfileImage || notification.sender_profile_image || notification.senderProfileImage || null,
-        amountLabel: payload?.amountLabel || notification.amountLabel || '',
-        campaignName: payload?.campaignName || notification.campaignName || '',
-        donationKind: payload?.donationKind || notification.donationKind || 'money',
-        createdAt: payload?.createdAt || createdAt
-      };
-
-      setRecentDonations((previous) => dedupeRecentDonations([activity, ...previous]));
-    };
-
-    const unsubscribe = realtimeClient.subscribe('notification.created', handleDonationActivity);
-    return () => {
-      try { unsubscribe(); } catch {}
-    };
-  }, [pendingOnly]);
 
   useEffect(() => {
     if (pendingOnly) return undefined;
@@ -103,22 +109,55 @@ const AdminDashboard = ({ pendingOnly = false }) => {
 
   const courseData = Array.isArray(adminStats?.alumniPerCourse) ? adminStats.alumniPerCourse : [];
 
+  const levelDataList = Array.isArray(adminStats?.alumniByLevelAndProgram) ? adminStats.alumniByLevelAndProgram : [];
+
+  const levelGroups = groupSectionDefinitions
+    .filter((level) => ['COLLEGE', 'ETEEAP', 'GRAD_SCHOOL'].includes(level.key))
+    .map((level) => ({ key: level.key, label: level.title }));
+
+  const programToLevel = new Map();
+  groupSectionDefinitions.forEach((section) => {
+    section.items.forEach((item) => {
+      programToLevel.set(item.value, section.key);
+    });
+  });
+
+  const programLevelLabels = {
+    COLLEGE: 'College',
+    ETEEAP: 'ETEEAP',
+    GRAD_SCHOOL: 'Graduate School'
+  };
+
+  const levelTabs = [
+    { key: 'ALL', label: 'All Levels', count: adminStats?.totalAlumni || 0 },
+    ...levelDataList.map((lvl) => ({
+      key: lvl.key,
+      label: lvl.label,
+      count: lvl.totalAlumni
+    }))
+  ];
+
+  const getActiveChartData = () => {
+    if (selectedLevelKey === 'ALL') {
+      return (adminStats?.alumniPerCourse || []).map((item) => ({
+        name: item.name,
+        count: item.value
+      }));
+    }
+    const foundGroup = levelDataList.find((g) => g.key === selectedLevelKey);
+    return foundGroup ? foundGroup.programs : [];
+  };
+
+  const currentLevelChartData = getActiveChartData();
+  const currentTotalAlumni = selectedLevelKey === 'ALL'
+    ? (adminStats?.totalAlumni || 0)
+    : (levelDataList.find((g) => g.key === selectedLevelKey)?.totalAlumni || 0);
+
   const registrationTrendsData = Array.isArray(adminStats?.registrationTrends) ? adminStats.registrationTrends : [];
 
   const eventData = Array.isArray(adminStats?.eventAttendance) ? adminStats.eventAttendance : [];
 
   const donationData = Array.isArray(adminStats?.donationTrends) ? adminStats.donationTrends : [];
-  const currentMonthDate = new Date();
-  const currentDonationMonthLabel = currentMonthDate.toLocaleString([], { month: 'long', year: 'numeric' });
-  const visibleRecentDonations = recentDonations
-    .slice()
-    .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
-    .filter((donation) => {
-      const donationDate = new Date(donation.createdAt || 0);
-      if (Number.isNaN(donationDate.getTime())) return false;
-      return donationDate.getFullYear() === currentMonthDate.getFullYear()
-        && donationDate.getMonth() === currentMonthDate.getMonth();
-    });
 
   const verifyStudentId = async (studentId) => {
     if (!studentId) return null;
@@ -184,22 +223,6 @@ const AdminDashboard = ({ pendingOnly = false }) => {
       toast.error('Failed to load dashboard stats');
     } finally {
       setStatsLoading(false);
-    }
-  };
-
-  const fetchRecentDonations = async () => {
-    if (pendingOnly) return;
-
-    try {
-      setRecentDonationsLoading(true);
-      const data = await donationService.getRecentDonationActivity();
-      setRecentDonations(dedupeRecentDonations(Array.isArray(data) ? data : []));
-    } catch (error) {
-      console.error('Error loading recent donation activity:', error);
-      toast.error(error?.response?.data?.error || 'Failed to load recent donations');
-      setRecentDonations([]);
-    } finally {
-      setRecentDonationsLoading(false);
     }
   };
 
@@ -269,24 +292,6 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   };
 
   const formatCount = (value) => new Intl.NumberFormat().format(Number(value || 0));
-  const inferDonationKind = (text = '') => {
-    const normalized = String(text || '').toLowerCase();
-    if (normalized.includes('money + items') || normalized.includes('money and items')) return 'money and items';
-    if (normalized.includes('donation type: items') || normalized.includes('item donation')) return 'items';
-    return 'money';
-  };
-  const formatDonationKind = (value) => {
-    const normalized = String(value || 'money').toLowerCase();
-    if (normalized.includes('money') && normalized.includes('item')) return 'Money + Items';
-    if (normalized.includes('item')) return 'Items';
-    return 'Money';
-  };
-  const formatActivityTime = (value) => {
-    if (!value) return 'Just now';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return 'Just now';
-    return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  };
   const getInitials = (name = 'Alumnus') => name
     .split(' ')
     .filter(Boolean)
@@ -303,6 +308,12 @@ const AdminDashboard = ({ pendingOnly = false }) => {
 
   const renderProgramUsageAlumni = (alumni = [], tone = 'using') => {
     const isUsing = tone === 'using';
+    const isChecking = tone === 'needs-checking';
+    const borderClass = isUsing
+      ? 'border-emerald-100'
+      : isChecking
+      ? 'border-amber-100'
+      : 'border-rose-100';
 
     if (!alumni.length) {
       return <p className="text-sm text-slate-500">None</p>;
@@ -316,9 +327,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
           return (
             <div
               key={`${tone}-${entry.id}-${entry.jobPosition}-${entry.company}`}
-              className={`flex min-w-0 items-center gap-3 rounded-xl border bg-white px-3 py-3 ${
-                isUsing ? 'border-emerald-100' : 'border-rose-100'
-              }`}
+              className={`flex min-w-0 items-center gap-3 rounded-xl border bg-white px-3 py-3 ${borderClass}`}
             >
               <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-blue-600 text-xs font-bold text-white ring-1 ring-slate-200">
                 {profileImage ? (
@@ -359,299 +368,288 @@ const AdminDashboard = ({ pendingOnly = false }) => {
 
   const Layout = UserLayout;
 
-  const stripDonationMeta = (text = '') => {
-    if (!text || typeof text !== 'string') return text;
-    // Remove any [[DONATION_META]]...[[/DONATION_META]] blocks and trailing whitespace
-    return text.replace(/\[\[DONATION_META\]\][\s\S]*?\[\[\/DONATION_META\]\]/gi, '').trim();
-  };
-
-  const parseDonationDetailsText = (text = '') => {
-    const result = {};
-    if (!text || typeof text !== 'string') return result;
-    const lines = text.split(/\r?\n/);
-    for (const line of lines) {
-      const match = line.match(/^([A-Za-z][A-Za-z0-9 _-]*?):\s*(.*)$/);
-      if (!match) continue;
-      const key = match[1]?.trim();
-      const value = match[2]?.trim();
-      if (key) {
-        result[key] = value;
-      }
-    }
-    return result;
-  };
-
-  const normalizeDonationSignaturePart = (value = '') => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const toMinuteBucket = (value) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return normalizeDonationSignaturePart(value);
-    date.setSeconds(0, 0);
-    return date.toISOString();
-  };
-  const extractCampaignNameFromText = (text = '') => {
-    const match = String(text || '').match(/\bto\s+(.+?)(?:[.!?]|$)/i);
-    return match?.[1]?.trim() || '';
-  };
-  const isStructuredDonationMessage = (text = '') => /(?:^|\n)\s*Donation for:/i.test(String(text || ''));
-  const buildDonationActivitySignature = (donation = {}) => {
-    const raw = stripDonationMeta(donation.message || donation.title || '');
-    const details = parseDonationDetailsText(raw);
-    const donor = details.Donor || details.donor || donation.senderName || '';
-    const amount = details.Amount || details.amount || donation.amountLabel || '';
-    const campaign = details['Donation for']
-      || details.Donation
-      || donation.campaignName
-      || extractCampaignNameFromText(donation.title || donation.message || '');
-    const recorded = details.Recorded || details.recorded || donation.createdAt || '';
-    const signature = [
-      normalizeDonationSignaturePart(campaign),
-      normalizeDonationSignaturePart(donor),
-      normalizeDonationSignaturePart(amount),
-      toMinuteBucket(recorded)
-    ].join('|');
-
-    if (signature.replace(/\|/g, '').length > 0) {
-      return signature;
-    }
-
-    return normalizeDonationSignaturePart(`${donation.id}|${donation.title}|${donation.message}`);
-  };
-  const dedupeRecentDonations = (entries = []) => {
-    const deduped = new Map();
-    const sorted = [...entries].sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
-
-    for (const donation of sorted) {
-      const signature = buildDonationActivitySignature(donation);
-
-      if (!deduped.has(signature)) {
-        deduped.set(signature, donation);
-        continue;
-      }
-
-      const existing = deduped.get(signature);
-      if (isStructuredDonationMessage(donation.message) && !isStructuredDonationMessage(existing?.message)) {
-        deduped.set(signature, donation);
-      }
-    }
-
-    return Array.from(deduped.values())
-      .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
-      .slice(0, RECENT_DONATION_CACHE_LIMIT);
-  };
-
-  const formatDonationSummary = (rawText = '', donation = {}) => {
-    // If the donation has a clean title (no embedded structured labels), use it directly.
-    // This prevents the live-event message (which may contain "Donor: X" as prose) from
-    // polluting the summary line.
-    const STRUCTURED_LABEL_RE = /(?:^|\n)\s*(donor|alumniid|amount|recorded|donation for)\s*:/i;
-    const titleText = String(donation.title || '').trim();
-    const hasCleanTitle = titleText.length > 0 && !STRUCTURED_LABEL_RE.test(titleText);
-
-    const details = parseDonationDetailsText(rawText || '');
-    const find = (re) => {
-      for (const k of Object.keys(details)) {
-        if (re.test(k)) return details[k];
-      }
-      return '';
-    };
-
-    let summary;
-    if (hasCleanTitle) {
-      // Trust the title field directly — it is always set to the clean sentence by the backend
-      summary = titleText;
-    } else {
-      const rawDonor = find(/^donor$/i) || donation.senderName || '';
-      const donor = rawDonor.trim();
-      const amount = find(/amount/i) || '';
-      const donationFor = find(/donation\s*for|donation$/i) || '';
-      if (donor && donationFor && amount) summary = `${donor} donated ${amount} to ${donationFor}`;
-      else if (donor && donationFor) summary = `${donor} donated to ${donationFor}`;
-      else if (donor && amount) summary = `${donor} donated ${amount}`;
-      else summary = rawText.split('\n')[0] || 'New donation received';
-    }
-
-    const payment = find(/payment/i) || '';
-    const country = find(/country/i) || '';
-    let address = find(/address/i) || '';
-    if (address && address.length > 80) address = address.slice(0, 80) + '...';
-    const subtextParts = [];
-    if (payment) subtextParts.push(payment);
-    if (country) subtextParts.push(country);
-    if (address) subtextParts.push(address);
-    const subtext = subtextParts.join(' • ');
-    const recorded = details.Recorded || details.recorded || '';
-    return { summary, subtext, recorded };
-  };
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   return (
     <Layout>
-      <div className="space-y-3">
+      <div className="space-y-6">
+
+        {/* Page Header */}
+        {!pendingOnly && (
+        <div className="flex flex-col gap-1 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Admin Dashboard</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{greeting}, Admin</h1>
+            <p className="mt-1 text-sm text-slate-500">Here&apos;s an overview of your alumni system for {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { fetchPendingUsers(); fetchAdminStats(); }}
+            className="inline-flex items-center gap-1.5 self-start rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:self-auto"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M5 19A9 9 0 0119 5M19 5h-4M5 19h4" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+        )}
 
         {!pendingOnly && (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {overviewCards.map((card) => (
-            <div key={card.label} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className={`h-1.5 w-20 rounded-full bg-gradient-to-r ${toneClasses[card.tone]}`} />
-              <div className="mt-4 text-sm font-medium uppercase tracking-[0.18em] text-slate-500">{card.label}</div>
-              <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{card.value}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-500">{card.note}</p>
+            <div key={card.label} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{card.label}</div>
+                  <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+                    {statsLoading ? <span className="inline-block h-8 w-14 animate-pulse rounded-md bg-slate-200" /> : card.value}
+                  </div>
+                  <p className="mt-1.5 text-sm text-slate-500">{card.note}</p>
+                </div>
+                <div className={`shrink-0 rounded-xl p-2.5 ${toneBgClasses[card.tone]}`}>
+                  {cardIcons[card.label]}
+                </div>
+              </div>
+              <div className={`mt-4 h-1 w-full rounded-full bg-gradient-to-r ${toneClasses[card.tone]} opacity-70`} />
             </div>
           ))}
         </section>
         )}
 
-        {!pendingOnly && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Registration Trends</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Monthly submissions and approvals</h2>
-              <p className="mt-2 text-sm text-slate-500">The graph shows the last six months of registration activity.</p>
-            </div>
-            <div className="flex items-center gap-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-sky-600" /> Submitted</span>
-              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-600" /> Approved</span>
-            </div>
-          </div>
+        {!pendingOnly && (() => {
+          const PROGRAM_COLORS = {
+            BSIT: '#f59e0b',
+            SSLATE: '#3b82f6',
+            SARFAID: '#a855f7',
+            SHTM: '#fb923c'
+          };
 
-          {statsLoading ? (
-            <div className="grid gap-4 py-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="h-4 w-16 animate-pulse rounded bg-slate-200" />
-                  <div className="mt-6 h-44 animate-pulse rounded-2xl bg-slate-200/80" />
-                </div>
-              ))}
-            </div>
-          ) : monthlyActivity.length > 0 ? (
-            <div className="mt-6 overflow-x-auto pb-2">
-              <div className="min-w-[760px] rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-                <div className="mb-3 grid h-52 grid-rows-4">
-                  {[4, 3, 2, 1].map((row) => (
-                    <div key={row} className="border-b border-dashed border-slate-300/80" />
-                  ))}
-                </div>
-                <div className="-mt-52 grid grid-cols-6 gap-4">
-                  {monthlyActivity.map((month) => (
-                    <div key={month.key} className="flex min-w-0 flex-col items-center">
-                      <div className="flex h-52 w-full items-end justify-center gap-2">
-                        <div className="flex w-1/2 flex-col items-center justify-end gap-2">
-                          <div className="w-full rounded-t-md bg-sky-600/90 shadow-sm" style={{ height: `${monthBarHeight(month.submitted)}px` }} />
-                          <span className="text-xs font-semibold text-slate-700">{month.submitted}</span>
-                        </div>
-                        <div className="flex w-1/2 flex-col items-center justify-end gap-2">
-                          <div className="w-full rounded-t-md bg-emerald-600/90 shadow-sm" style={{ height: `${monthBarHeight(month.approved)}px` }} />
-                          <span className="text-xs font-semibold text-slate-700">{month.approved}</span>
-                        </div>
-                      </div>
-                      <div className="mt-3 w-full truncate text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{month.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="py-12 text-center text-sm text-slate-500">No recent registration activity yet.</div>
-          )}
-        </section>
-        )}
+          const LEVEL_COLORS = [
+            '#3b82f6', '#8b5cf6', '#10b981', '#f97316', '#ef4444',
+            '#0ea5e9', '#ec4899', '#84cc16', '#6366f1', '#14b8a6'
+          ];
 
-        {!pendingOnly && (
-        <section className="grid items-stretch gap-3 xl:grid-cols-2">
-          <div className="flex h-[620px] min-h-0 flex-col rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-3">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Donation Activity</p>
-                </div>
-                <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">Recent donations</h2>
-                <p className="mt-2 text-sm text-slate-500">Showing donations from {currentDonationMonthLabel}. Scroll to review earlier donations this month.</p>
-              </div>
-              <button
-                type="button"
-                onClick={fetchRecentDonations}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-              >
-                Refresh
-              </button>
-            </div>
+          const levelDataList2 = Array.isArray(adminStats?.alumniByLevelAndProgram)
+            ? adminStats.alumniByLevelAndProgram
+            : [];
 
-            {recentDonationsLoading ? (
-              <div className="grid flex-1 gap-3 overflow-hidden py-5">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                    <div className="h-12 w-12 animate-pulse rounded-full bg-slate-200" />
-                    <div className="min-w-0 flex-1">
-                      <div className="h-4 w-36 animate-pulse rounded bg-slate-200" />
-                      <div className="mt-3 h-3 w-56 max-w-full animate-pulse rounded bg-slate-200" />
-                    </div>
-                  </div>
-                ))}
+          const levelButtons = [
+            { key: 'COLLEGE', label: 'College' },
+            { key: 'SENIOR_HIGH', label: 'Senior High' },
+            { key: 'ETEEAP', label: 'ETEEAP' },
+            { key: 'GRAD_SCHOOL', label: 'Grad School' },
+            { key: 'INTEGRATED_SCHOOL', label: 'Integrated School' }
+          ];
+
+          const activeLevelData = levelDataList2.find((g) => g.key === selectedLevelKey);
+          const allLevelPrograms = activeLevelData ? activeLevelData.programs : [];
+
+          const pieSlices = allLevelPrograms
+            .filter((p) => p.count > 0)
+            .map((p, i) => ({
+              name: p.name,
+              value: p.count,
+              color: selectedLevelKey === 'COLLEGE'
+                ? PROGRAM_COLORS[p.name] || '#94a3b8'
+                : LEVEL_COLORS[i % LEVEL_COLORS.length]
+            }));
+
+          const colorMap = new Map(pieSlices.map((s) => [s.name, s.color]));
+          const activeTotal = activeLevelData?.totalAlumni || 0;
+
+          const RADIAN = Math.PI / 180;
+          const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+            if (percent < 0.04) return null;
+            const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+            return (
+              <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
+                {`${(percent * 100).toFixed(0)}%`}
+              </text>
+            );
+          };
+
+          return (
+            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              {/* Header */}
+              <div className="border-b border-slate-200 pb-5">
+                <p className="text-xs uppercase tracking-[0.24em] font-semibold text-slate-500">Program Demographics</p>
+                <h2 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">Alumni by Program & Education Level</h2>
+                <p className="mt-1 text-sm text-slate-500">Select an education level to see the program distribution of registered alumni.</p>
               </div>
-              ) : visibleRecentDonations.length > 0 ? (
-              <div className="mt-5 flex-1 space-y-3 overflow-y-auto pr-2 pb-1">
-                {visibleRecentDonations.map((donation) => (
-                  <div key={donation.id} className="flex min-w-0 items-start gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                    <div
-                      className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200"
-                      aria-hidden
+
+              {/* Level Selector */}
+              <div className="mt-5 flex flex-wrap gap-2">
+                {levelButtons.map((btn) => {
+                  const lvlData = levelDataList2.find((g) => g.key === btn.key);
+                  const count = lvlData?.totalAlumni || 0;
+                  const isActive = selectedLevelKey === btn.key;
+                  return (
+                    <button
+                      key={btn.key}
+                      type="button"
+                      onClick={() => setSelectedLevelKey(btn.key)}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-600 ring-offset-1'
+                          : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+                      }`}
                     >
-                      {getInitials(donation.senderName)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {(() => {
-                        // Parse message for structured subtext details (payment, country, address).
-                        // Pass the full donation object so formatDonationSummary can prefer
-                        // donation.title as the clean summary instead of re-parsing message prose.
-                        const raw = stripDonationMeta(donation.message || donation.title || '');
-                        const { summary, subtext, recorded } = formatDonationSummary(raw, donation);
-                        return (
-                          <>
-                            <div className="text-sm font-semibold text-slate-900">{summary}</div>
-                            {subtext && <div className="mt-1 text-sm text-slate-600 break-words">{subtext}</div>}
-                            <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{formatActivityTime(recorded || donation.createdAt)}</div>
-                          </>
-                        );
-                      })()}
+                      <span>{btn.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        isActive ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-600'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Chart Area */}
+              {statsLoading ? (
+                <div className="mt-6 flex items-center justify-center py-16">
+                  <div className="h-64 w-64 animate-pulse rounded-full bg-slate-100" />
+                </div>
+              ) : !selectedLevelKey ? (
+                <div className="mt-8 py-12 text-center text-sm text-slate-500">
+                  Select a level above to view program distribution.
+                </div>
+              ) : allLevelPrograms.length === 0 ? (
+                <div className="mt-8 py-12 text-center">
+                  <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                    <svg className="h-7 w-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-slate-500">No alumni data for this level yet.</p>
+                </div>
+              ) : (
+                <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start">
+                  {/* Pie Chart */}
+                  <div className="flex flex-col items-center lg:w-1/2">
+                    <div className="relative h-72 w-full max-w-sm">
+                      {pieSlices.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={pieSlices}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={68}
+                              outerRadius={120}
+                              paddingAngle={2}
+                              dataKey="value"
+                              labelLine={false}
+                              label={renderCustomLabel}
+                            >
+                              {pieSlices.map((entry) => (
+                                <Cell key={entry.name} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                borderRadius: '12px',
+                                border: 'none',
+                                color: '#fff',
+                                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)',
+                                padding: '10px 14px'
+                              }}
+                              formatter={(value, name) => [`${value} alumni`, name]}
+                              labelStyle={{ display: 'none' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-400 text-sm">
+                          No alumni registered in these programs yet.
+                        </div>
+                      )}
+                      {/* Center label */}
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-extrabold text-slate-900">{formatCount(activeTotal)}</span>
+                        <span className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Alumni</span>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center text-center text-sm text-slate-500">No donation activity for {currentDonationMonthLabel} yet.</div>
-            )}
-          </div>
 
-          <div className="flex h-[620px] min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  {/* Legend / Program List */}
+                  <div className="flex-1 space-y-2 lg:max-h-72 lg:overflow-y-auto pr-1">
+                    {allLevelPrograms.map((prog) => {
+                      const color = colorMap.get(prog.name) || '#94a3b8';
+                      const pct = activeTotal > 0 ? Math.round((prog.count / activeTotal) * 100) : 0;
+                      const hasAlumni = prog.count > 0;
+                      return (
+                        <div
+                          key={prog.name}
+                          className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition ${
+                            hasAlumni
+                              ? 'border-slate-100 bg-slate-50/70 hover:bg-white hover:shadow-sm'
+                              : 'border-slate-100/60 bg-slate-50/30 opacity-60'
+                          }`}
+                        >
+                          <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                          <span className={`flex-1 truncate text-sm font-semibold ${hasAlumni ? 'text-slate-800' : 'text-slate-500'}`}>
+                            {prog.name}
+                          </span>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="hidden w-24 sm:block">
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: color }} />
+                              </div>
+                            </div>
+                            <span className="w-10 text-right text-xs font-bold text-slate-500">{pct}%</span>
+                            <span
+                              className="w-14 rounded-full py-0.5 text-center text-xs font-bold text-white"
+                              style={{ backgroundColor: hasAlumni ? color : '#cbd5e1' }}
+                            >
+                              {formatCount(prog.count)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })()}
+
+        {!pendingOnly && (
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-4 flex-shrink-0">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Registrations</p>
               <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Registration Status Overview</h2>
               <p className="mt-2 text-sm text-slate-500">A compact snapshot of current registration outcomes.</p>
             </div>
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-3">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-3">
               {approvalStatusData.map((entry) => {
                 const total = approvalStatusData.reduce((sum, item) => sum + item.value, 0) || 1;
                 const percentage = Math.round((entry.value / total) * 100);
 
                 return (
-                  <div key={entry.name} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm sm:p-4">
-                    <div className="flex items-start justify-between gap-3">
+                  <div key={entry.name} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-6">
+                    <div className="flex items-center justify-between gap-4">
                       <div>
                         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{entry.name}</div>
-                        <div className="mt-1 text-3xl font-bold tracking-tight text-slate-900">{formatCount(entry.value)}</div>
+                        <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{formatCount(entry.value)}</div>
                       </div>
-                      <span className="mt-1 h-3.5 w-3.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                      <span className="mt-1 inline-flex h-3.5 w-3.5 rounded-full ring-2 ring-white shadow-sm" style={{ backgroundColor: entry.color }} />
                     </div>
-                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
-                      <div className="h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: entry.color }} />
+                    <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full shadow-sm" style={{ width: `${percentage}%`, backgroundColor: entry.color }} />
                     </div>
-                    <div className="mt-2 text-xs text-slate-500">{percentage}% of all registrations</div>
+                    <div className="mt-3 text-xs text-slate-600">{percentage}% of all registrations</div>
                   </div>
                 );
               })}
             </div>
-          </div>
         </section>
         )}
 
@@ -672,20 +670,43 @@ const AdminDashboard = ({ pendingOnly = false }) => {
           ) : programUsageInCareer.length > 0 ? (
             <>
               <div className="overflow-x-auto">
-                <table className="min-w-[880px] w-full text-left">
+                <table className="min-w-[980px] w-full text-left">
                   <thead className="bg-slate-50 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                     <tr>
                       <th className="px-5 py-4">Program</th>
                       <th className="px-5 py-4 text-center">Using ✓</th>
                       <th className="px-5 py-4 text-center">Not Using ✕</th>
+                      <th className="px-5 py-4 text-center">Needs Checking</th>
                       <th className="px-5 py-4 text-center">Total</th>
                       <th className="px-5 py-4">Usage Rate</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-transparent text-sm">
-                    {programUsageInCareer.map((row) => {
+                    {programUsageInCareer.reduce((rows, row) => {
+                      const levelKey = programToLevel.get(row.program) || 'COLLEGE';
+                      const lastLevel = rows.length ? rows[rows.length - 1].level : null;
+                      const currentLevel = levelKey;
+
+                      if (lastLevel !== currentLevel) {
+                        rows.push({ type: 'section', level: currentLevel, key: `level-${currentLevel}` });
+                      }
+                      rows.push({ type: 'row', row, level: currentLevel, key: row.program });
+                      return rows;
+                    }, []).map((entry) => {
+                      if (entry.type === 'section') {
+                        return (
+                          <tr key={entry.key} className="bg-slate-200 border-y border-slate-300">
+                            <td colSpan={6} className="px-5 py-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-900">
+                              {programLevelLabels[entry.level] || entry.level}
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      const row = entry.row;
                       const isExpanded = expandedProgramUsageKey === row.program;
                       const usageRate = Number(row.usageRate || 0);
+
                       return (
                         <React.Fragment key={row.program}>
                           <tr className={isExpanded ? 'bg-slate-50/70' : 'bg-white'}>
@@ -719,6 +740,12 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                                 {formatCount(row.notUsingCount)}
                               </span>
                             </td>
+                            <td className="px-5 py-4 text-center">
+                              <span className="inline-flex items-center justify-center gap-1.5 font-bold text-amber-600">
+                                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                                {formatCount(row.needsCheckingCount)}
+                              </span>
+                            </td>
                             <td className="px-5 py-4 text-center font-bold text-blue-950">{formatCount(row.total)}</td>
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-3">
@@ -734,21 +761,28 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                           </tr>
                           {isExpanded && (
                             <tr className="bg-slate-50/70">
-                              <td colSpan={5} className="px-5 pb-5">
-                                <div className="grid gap-3 lg:grid-cols-2">
+                              <td colSpan={6} className="px-5 pb-5">
+                                <div className="grid gap-3 lg:grid-cols-3">
                                   <div>
                                     <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-bold text-emerald-600">
                                       <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                                      Using in Work
+                                      Related
                                     </div>
                                     {renderProgramUsageAlumni(row.using, 'using')}
                                   </div>
                                   <div>
                                     <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-bold text-rose-500">
                                       <span className="h-2 w-2 rounded-full bg-rose-400" />
-                                      Not Using in Work
+                                      Not Related
                                     </div>
                                     {renderProgramUsageAlumni(row.notUsing, 'not-using')}
+                                  </div>
+                                  <div>
+                                    <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-bold text-amber-600">
+                                      <span className="h-2 w-2 rounded-full bg-amber-400" />
+                                      Needs Checking
+                                    </div>
+                                    {renderProgramUsageAlumni(row.needsChecking, 'needs-checking')}
                                   </div>
                                 </div>
                               </td>
@@ -769,6 +803,10 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                   <span className="h-3 w-3 rounded-full bg-rose-400" />
                   Working in unrelated field
                 </span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-amber-400" />
+                  Needs checking
+                </span>
               </div>
             </>
           ) : (
@@ -776,113 +814,6 @@ const AdminDashboard = ({ pendingOnly = false }) => {
               No reviewed employment classifications yet.
             </div>
           )}
-        </section>
-        )}
-        {!pendingOnly && courseData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="mb-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Analytics</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Alumni by Course/Department</h2>
-            <p className="mt-2 text-sm text-slate-500">Distribution of registered alumni across courses and programs.</p>
-          </div>
-          <div className="h-96 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={courseData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-        )}
-
-        {!pendingOnly && employmentStatusData.some(d => d.value > 0) && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="mb-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Alumni Status</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Employment Status Distribution</h2>
-            <p className="mt-2 text-sm text-slate-500">Current employment status of alumni members.</p>
-          </div>
-          <div className="h-96 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={employmentStatusData} cx="50%" cy="50%" labelLine={false} label={(entry) => `${entry.name}: ${entry.value}`} outerRadius={120} fill="#8884d8" dataKey="value">
-                  {employmentStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-        )}
-
-        {!pendingOnly && registrationTrendsData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="mb-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Growth</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Alumni Registration Trends</h2>
-            <p className="mt-2 text-sm text-slate-500">Monthly registration growth over time.</p>
-          </div>
-          <div className="h-96 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={registrationTrendsData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-        )}
-
-        {!pendingOnly && eventData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="mb-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Events</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Event Participation</h2>
-            <p className="mt-2 text-sm text-slate-500">Attendance across reunions, webinars, job fairs, and school activities.</p>
-          </div>
-          <div className="h-96 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={eventData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="attendees" fill="#10b981" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-        )}
-
-        {!pendingOnly && donationData.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="mb-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Fundraising</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Donation Trends</h2>
-            <p className="mt-2 text-sm text-slate-500">Monthly donation collection and trends.</p>
-          </div>
-          <div className="h-96 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={donationData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value) => `₱${value.toLocaleString()}`} />
-                <Legend />
-                <Line type="monotone" dataKey="amount" stroke="#f59e0b" strokeWidth={2} dot={{ fill: '#f59e0b', r: 4 }} name="Total Donations" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
         </section>
         )}
 

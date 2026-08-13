@@ -83,7 +83,7 @@ export const normalizeChatUser = (entry = {}) => {
   };
 };
 
-export const listenToUserStatuses = (userIds, callback) => {
+export const listenToUserStatuses = (userIds, callback, onError) => {
   const wanted = new Set((userIds || []).map(toId).filter(Boolean));
   if (!wanted.size) {
     callback({});
@@ -91,14 +91,21 @@ export const listenToUserStatuses = (userIds, callback) => {
   }
 
   const statusRef = ref(firebaseDatabase, 'usersStatus');
-  return onValue(statusRef, (snapshot) => {
-    const allStatuses = snapshot.val() || {};
-    const filtered = {};
-    wanted.forEach((userId) => {
-      filtered[userId] = allStatuses[userId] || { online: false, lastActive: null };
-    });
-    callback(filtered);
-  });
+  return onValue(
+    statusRef,
+    (snapshot) => {
+      const allStatuses = snapshot.val() || {};
+      const filtered = {};
+      wanted.forEach((userId) => {
+        filtered[userId] = allStatuses[userId] || { online: false, lastActive: null };
+      });
+      callback(filtered);
+    },
+    (error) => {
+      console.error('Firebase listenToUserStatuses error:', error);
+      if (onError) onError(error);
+    }
+  );
 };
 
 export const setupPresence = (user) => {
@@ -118,12 +125,12 @@ export const setupPresence = (user) => {
       displayName
     };
 
-    onDisconnect(statusRef).set(offlineState);
+    onDisconnect(statusRef).set(offlineState).catch(() => {});
     set(statusRef, {
       online: true,
       lastActive: serverTimestamp(),
       displayName
-    });
+    }).catch(() => {});
   });
 
   return () => {
@@ -132,11 +139,11 @@ export const setupPresence = (user) => {
       online: false,
       lastActive: serverTimestamp(),
       displayName
-    });
+    }).catch(() => {});
   };
 };
 
-export const listenToMessages = (chatId, callback) => {
+export const listenToMessages = (chatId, callback, onError) => {
   if (!chatId) {
     callback([]);
     return () => {};
@@ -148,34 +155,52 @@ export const listenToMessages = (chatId, callback) => {
     limitToLast(100)
   );
 
-  return onValue(messagesQuery, (snapshot) => {
-    const value = snapshot.val() || {};
-    const messages = Object.entries(value)
-      .map(([id, message]) => ({ id, ...message }))
-      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    callback(messages);
-  });
+  return onValue(
+    messagesQuery,
+    (snapshot) => {
+      const value = snapshot.val() || {};
+      const messages = Object.entries(value)
+        .map(([id, message]) => ({ id, ...message }))
+        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      callback(messages);
+    },
+    (error) => {
+      console.error('Firebase listenToMessages error:', error);
+      if (onError) onError(error);
+    }
+  );
 };
 
-export const listenToConversationSummaries = (userId, callback) => {
+export const listenToConversationSummaries = (userId, callback, onError) => {
   const ownerId = toId(userId);
   if (!ownerId) {
     callback({});
     return () => {};
   }
 
-  return onValue(ref(firebaseDatabase, `conversationMembers/${ownerId}`), (snapshot) => {
-    callback(snapshot.val() || {});
-  });
+  return onValue(
+    ref(firebaseDatabase, `conversationMembers/${ownerId}`),
+    (snapshot) => {
+      callback(snapshot.val() || {});
+    },
+    (error) => {
+      console.error('Firebase listenToConversationSummaries error:', error);
+      if (onError) onError(error);
+    }
+  );
 };
 
 export const markConversationRead = async (userId, chatId) => {
   const ownerId = toId(userId);
   if (!ownerId || !chatId) return;
-  await update(ref(firebaseDatabase, `conversationMembers/${ownerId}/${chatId}`), {
-    unreadCount: 0,
-    lastReadAt: serverTimestamp()
-  });
+  try {
+    await update(ref(firebaseDatabase, `conversationMembers/${ownerId}/${chatId}`), {
+      unreadCount: 0,
+      lastReadAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.warn('markConversationRead error:', err.message);
+  }
 };
 
 export const acceptMessageRequest = async ({ chatId, currentUserId }) => {
@@ -311,137 +336,151 @@ export const sendChatMessage = async ({ sender, receiver, text }) => {
 
   const preferredChatId = getChatId(senderUser.userId, receiverUser.userId);
   const legacyChatId = getLegacyNumericChatId(senderUser.userId, receiverUser.userId);
-  const preferredSnapshot = await get(ref(firebaseDatabase, `conversations/${preferredChatId}`));
-  const legacySnapshot =
-    !preferredSnapshot.exists() && legacyChatId !== preferredChatId
-      ? await get(ref(firebaseDatabase, `conversations/${legacyChatId}`))
-      : null;
-  const chatId = legacySnapshot?.exists() ? legacyChatId : preferredChatId;
-  const conversationSnapshot = legacySnapshot?.exists() ? legacySnapshot : preferredSnapshot;
-  const existingConversation = conversationSnapshot.val();
-  const existingStatus = existingConversation?.status || ACCEPTED_STATUS;
-  const isFirstMessage = !existingConversation;
-  const senderBlockedReceiverSnapshot = await get(
-    ref(firebaseDatabase, `blockedUsers/${senderUser.userId}/${receiverUser.userId}`)
-  );
-  const receiverBlockedSenderSnapshot = await get(
-    ref(firebaseDatabase, `blockedUsers/${receiverUser.userId}/${senderUser.userId}`)
-  );
 
-  if (senderBlockedReceiverSnapshot.exists()) {
-    throw new Error('You blocked this user. Unblock them to send a message.');
-  }
+  try {
+    const preferredSnapshot = await get(ref(firebaseDatabase, `conversations/${preferredChatId}`));
+    const legacySnapshot =
+      !preferredSnapshot.exists() && legacyChatId !== preferredChatId
+        ? await get(ref(firebaseDatabase, `conversations/${legacyChatId}`))
+        : null;
+    const chatId = legacySnapshot?.exists() ? legacyChatId : preferredChatId;
+    const conversationSnapshot = legacySnapshot?.exists() ? legacySnapshot : preferredSnapshot;
+    const existingConversation = conversationSnapshot.val();
+    const existingStatus = existingConversation?.status || ACCEPTED_STATUS;
+    const isFirstMessage = !existingConversation;
+    const senderBlockedReceiverSnapshot = await get(
+      ref(firebaseDatabase, `blockedUsers/${senderUser.userId}/${receiverUser.userId}`)
+    );
+    const receiverBlockedSenderSnapshot = await get(
+      ref(firebaseDatabase, `blockedUsers/${receiverUser.userId}/${senderUser.userId}`)
+    );
 
-  if (receiverBlockedSenderSnapshot.exists()) {
-    throw new Error('You cannot send messages to this user.');
-  }
-
-  if (existingConversation?.status === BLOCKED_STATUS) {
-    if (String(existingConversation.blockedBy || '') === senderUser.userId) {
+    if (senderBlockedReceiverSnapshot.exists()) {
       throw new Error('You blocked this user. Unblock them to send a message.');
     }
-    throw new Error('You cannot send messages to this user.');
-  }
 
-  if (existingConversation?.status === PENDING_STATUS) {
-    if (String(existingConversation.requestedBy || '') !== senderUser.userId) {
-      throw new Error('Accept this message request before replying.');
+    if (receiverBlockedSenderSnapshot.exists()) {
+      throw new Error('You cannot send messages to this user.');
     }
-  }
 
-  if (existingConversation?.status === REJECTED_STATUS) {
-    throw new Error('You cannot send messages to this user.');
-  }
-
-  const conversationStatus = isFirstMessage ? PENDING_STATUS : existingStatus;
-  const messageType = isFirstMessage ? 'request' : 'message';
-  const messageRef = push(ref(firebaseDatabase, `messages/${chatId}`));
-  const message = {
-    id: messageRef.key,
-    chatId,
-    senderId: senderUser.userId,
-    receiverId: receiverUser.userId,
-    text: cleanText,
-    message: cleanText,
-    timestamp: serverTimestamp(),
-    isRead: false,
-    type: messageType,
-    readBy: {
-      [senderUser.userId]: true
+    if (existingConversation?.status === BLOCKED_STATUS) {
+      if (String(existingConversation.blockedBy || '') === senderUser.userId) {
+        throw new Error('You blocked this user. Unblock them to send a message.');
+      }
+      throw new Error('You cannot send messages to this user.');
     }
-  };
 
-  const latestMessage = {
-    text: cleanText,
-    message: cleanText,
-    senderId: senderUser.userId,
-    timestamp: serverTimestamp()
-  };
+    if (existingConversation?.status === PENDING_STATUS) {
+      if (String(existingConversation.requestedBy || '') !== senderUser.userId) {
+        throw new Error('Accept this message request before replying.');
+      }
+    }
 
-  const updates = {
-    [`messages/${chatId}/${messageRef.key}`]: message,
-    [`conversations/${chatId}`]: {
+    if (existingConversation?.status === REJECTED_STATUS) {
+      throw new Error('You cannot send messages to this user.');
+    }
+
+    const conversationStatus = isFirstMessage ? PENDING_STATUS : existingStatus;
+    const messageType = isFirstMessage ? 'request' : 'message';
+    const messageRef = push(ref(firebaseDatabase, `messages/${chatId}`));
+    const message = {
+      id: messageRef.key,
       chatId,
-      requestedBy: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
-      requestTo: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
-      status: conversationStatus,
-      participantIds: {
-        [senderUser.userId]: true,
-        [receiverUser.userId]: true
-      },
-      participants: {
-        [senderUser.userId]: senderUser,
-        [receiverUser.userId]: receiverUser
-      },
-      latestMessage,
-      lastMessage: cleanText,
-      lastMessageTime: serverTimestamp(),
-      lastSenderId: senderUser.userId,
-      createdAt: existingConversation?.createdAt || serverTimestamp(),
-      updatedAt: serverTimestamp()
-    },
-    [`chats/${chatId}/chatId`]: chatId,
-    [`chats/${chatId}/participants/${senderUser.userId}`]: true,
-    [`chats/${chatId}/participants/${receiverUser.userId}`]: true,
-    [`chats/${chatId}/requestedBy`]: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
-    [`chats/${chatId}/requestTo`]: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
-    [`chats/${chatId}/status`]: conversationStatus,
-    [`chats/${chatId}/createdAt`]: existingConversation?.createdAt || serverTimestamp(),
-    [`chats/${chatId}/lastMessage`]: cleanText,
-    [`chats/${chatId}/lastMessageTime`]: serverTimestamp(),
-    [`chats/${chatId}/lastSenderId`]: senderUser.userId,
-    [`conversationMembers/${senderUser.userId}/${chatId}`]: {
-      chatId,
-      otherUserId: receiverUser.userId,
-      otherUser: receiverUser,
-      requestedBy: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
-      requestTo: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
-      status: conversationStatus,
-      latestMessage,
-      latestMessageText: cleanText,
-      latestMessageSenderId: senderUser.userId,
-      latestMessageAt: serverTimestamp(),
-      unreadCount: 0,
-      updatedAt: serverTimestamp()
-    },
-    [`conversationMembers/${receiverUser.userId}/${chatId}/chatId`]: chatId,
-    [`conversationMembers/${receiverUser.userId}/${chatId}/otherUserId`]: senderUser.userId,
-    [`conversationMembers/${receiverUser.userId}/${chatId}/otherUser`]: senderUser,
-    [`conversationMembers/${receiverUser.userId}/${chatId}/requestedBy`]: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
-    [`conversationMembers/${receiverUser.userId}/${chatId}/requestTo`]: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
-    [`conversationMembers/${receiverUser.userId}/${chatId}/status`]: conversationStatus,
-    [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessage`]: latestMessage,
-    [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessageText`]: cleanText,
-    [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessageSenderId`]: senderUser.userId,
-    [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessageAt`]: serverTimestamp(),
-    [`conversationMembers/${receiverUser.userId}/${chatId}/updatedAt`]: serverTimestamp()
-  };
+      senderId: senderUser.userId,
+      receiverId: receiverUser.userId,
+      text: cleanText,
+      message: cleanText,
+      timestamp: serverTimestamp(),
+      isRead: false,
+      type: messageType,
+      readBy: {
+        [senderUser.userId]: true
+      }
+    };
 
-  await update(ref(firebaseDatabase), updates);
-  await runTransaction(
-    ref(firebaseDatabase, `conversationMembers/${receiverUser.userId}/${chatId}/unreadCount`),
-    (currentValue) => (Number(currentValue) || 0) + 1
-  );
+    const latestMessage = {
+      text: cleanText,
+      message: cleanText,
+      senderId: senderUser.userId,
+      timestamp: serverTimestamp()
+    };
 
-  return { chatId, messageId: messageRef.key };
+    const updates = {
+      [`messages/${chatId}/${messageRef.key}`]: message,
+      [`conversations/${chatId}`]: {
+        chatId,
+        requestedBy: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
+        requestTo: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
+        status: conversationStatus,
+        participantIds: {
+          [senderUser.userId]: true,
+          [receiverUser.userId]: true
+        },
+        participants: {
+          [senderUser.userId]: senderUser,
+          [receiverUser.userId]: receiverUser
+        },
+        latestMessage,
+        lastMessage: cleanText,
+        lastMessageTime: serverTimestamp(),
+        lastSenderId: senderUser.userId,
+        createdAt: existingConversation?.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      [`chats/${chatId}/chatId`]: chatId,
+      [`chats/${chatId}/participants/${senderUser.userId}`]: true,
+      [`chats/${chatId}/participants/${receiverUser.userId}`]: true,
+      [`chats/${chatId}/requestedBy`]: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
+      [`chats/${chatId}/requestTo`]: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
+      [`chats/${chatId}/status`]: conversationStatus,
+      [`chats/${chatId}/createdAt`]: existingConversation?.createdAt || serverTimestamp(),
+      [`chats/${chatId}/lastMessage`]: cleanText,
+      [`chats/${chatId}/lastMessageTime`]: serverTimestamp(),
+      [`chats/${chatId}/lastSenderId`]: senderUser.userId,
+      [`conversationMembers/${senderUser.userId}/${chatId}`]: {
+        chatId,
+        otherUserId: receiverUser.userId,
+        otherUser: receiverUser,
+        requestedBy: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
+        requestTo: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
+        status: conversationStatus,
+        latestMessage,
+        latestMessageText: cleanText,
+        latestMessageSenderId: senderUser.userId,
+        latestMessageAt: serverTimestamp(),
+        unreadCount: 0,
+        updatedAt: serverTimestamp()
+      },
+      [`conversationMembers/${receiverUser.userId}/${chatId}/chatId`]: chatId,
+      [`conversationMembers/${receiverUser.userId}/${chatId}/otherUserId`]: senderUser.userId,
+      [`conversationMembers/${receiverUser.userId}/${chatId}/otherUser`]: senderUser,
+      [`conversationMembers/${receiverUser.userId}/${chatId}/requestedBy`]: existingConversation?.requestedBy || (isFirstMessage ? senderUser.userId : null),
+      [`conversationMembers/${receiverUser.userId}/${chatId}/requestTo`]: existingConversation?.requestTo || (isFirstMessage ? receiverUser.userId : null),
+      [`conversationMembers/${receiverUser.userId}/${chatId}/status`]: conversationStatus,
+      [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessage`]: latestMessage,
+      [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessageText`]: cleanText,
+      [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessageSenderId`]: senderUser.userId,
+      [`conversationMembers/${receiverUser.userId}/${chatId}/latestMessageAt`]: serverTimestamp(),
+      [`conversationMembers/${receiverUser.userId}/${chatId}/updatedAt`]: serverTimestamp()
+    };
+
+    await update(ref(firebaseDatabase), updates);
+    await runTransaction(
+      ref(firebaseDatabase, `conversationMembers/${receiverUser.userId}/${chatId}/unreadCount`),
+      (currentValue) => (Number(currentValue) || 0) + 1
+    );
+
+    return { chatId, messageId: messageRef.key };
+  } catch (err) {
+    if (
+      err?.code === 'PERMISSION_DENIED' ||
+      String(err?.message || '').includes('PERMISSION_DENIED') ||
+      String(err?.message || '').includes('Permission denied')
+    ) {
+      throw new Error(
+        'Permission denied by Firebase Realtime Database. Please set ".read": true and ".write": true in your Firebase Console rules.'
+      );
+    }
+    throw err;
+  }
 };

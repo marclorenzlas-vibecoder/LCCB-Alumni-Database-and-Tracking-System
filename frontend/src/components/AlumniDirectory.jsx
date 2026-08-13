@@ -69,33 +69,6 @@ const getCourseLabel = (value) => {
   return value;
 };
 
-const renderCourseOptions = (selectedLevel, currentCourse = '') => {
-  const groupedSections = selectedLevel
-    ? registerCourseSections.filter((section) => section.key === selectedLevel)
-    : registerCourseSections;
-
-  const hasCurrentCourse = currentCourse && groupedSections.some((section) => section.items.some((item) => item.value === currentCourse));
-  const fallbackCourse = !hasCurrentCourse && currentCourse
-    ? [{ value: currentCourse, label: currentCourse, isFallback: true }]
-    : [];
-
-  return (
-    <>
-      <option value="">Select course</option>
-      {fallbackCourse.length > 0 && (
-        <option value={fallbackCourse[0].value}>{fallbackCourse[0].label}</option>
-      )}
-      {groupedSections.map((section) => (
-        <optgroup key={section.key} label={section.title}>
-          {section.items.map((item) => (
-            <option key={item.value} value={item.value}>{item.label}</option>
-          ))}
-        </optgroup>
-      ))}
-    </>
-  );
-};
-
 const getPersonName = (person) => {
   const firstName = person?.first_name || person?.firstName || '';
   const lastName = person?.last_name || person?.lastName || '';
@@ -155,7 +128,7 @@ const buildRegisterCourseSections = (selectedLevel = '') => groupSectionDefiniti
     return {
       ...section,
       items: items.map((item) => {
-        const { description, ...rest } = item;
+        const { description: _description, ...rest } = item;
         return rest;
       })
     };
@@ -174,6 +147,12 @@ const PROGRAM_ALIGNMENT_OPTIONS = [
 const getProgramAlignmentLabel = (value) => (
   PROGRAM_ALIGNMENT_OPTIONS.find((option) => option.value === value)?.label || 'Needs Checking'
 );
+
+const getProgramAlignmentNote = (value) => {
+  if (value === 'ALIGNED') return 'Alumni marked this job as related to their program.';
+  if (value === 'NOT_ALIGNED') return 'Alumni marked this job as not related to their program.';
+  return 'Alumni marked this job as needing checking.';
+};
 
 const getProgramAlignmentClass = (value) => {
   if (value === 'ALIGNED') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -225,7 +204,7 @@ const ProgramAlignmentReview = ({ value, notes }) => (
           </span>
         </span>
       </div>
-      <p className="mt-1 text-xs leading-5 text-slate-600">{notes || 'Admin/teacher reviews this match.'}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-600">{notes || 'Alumni marked how this job relates to their program.'}</p>
     </div>
   </div>
 );
@@ -239,11 +218,6 @@ const AlumniDirectory = () => {
   const canViewEmploymentHistory = (record) => (
     (record?.isEmploymentPublic ?? record?.is_employment_public ?? false) !== false
   );
-  const visibleOrPrivate = (record, value, camelKey, snakeKey, fallback = 'Not specified') => {
-    if (!fieldIsPublic(record, camelKey, snakeKey)) return privateLabel;
-    return value || fallback;
-  };
-
   // Core data
   const [alumni, setAlumni] = useState([]);
   const [userStatuses, setUserStatuses] = useState({});
@@ -260,12 +234,10 @@ const AlumniDirectory = () => {
   const [showLevelMenu, setShowLevelMenu] = useState(false);
   const [showBatchMenu, setShowBatchMenu] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
-  const [showAddLevelMenu, setShowAddLevelMenu] = useState(false);
   const [showAddCourseMenu, setShowAddCourseMenu] = useState(false);
   const levelMenuRef = useRef(null);
   const batchMenuRef = useRef(null);
   const groupMenuRef = useRef(null);
-  const addLevelMenuRef = useRef(null);
   const addCourseMenuRef = useRef(null);
   const alumniListRef = useRef(null);
   const paginationRef = useRef(null);
@@ -299,7 +271,7 @@ const AlumniDirectory = () => {
     start_date: '',
     end_date: '',
     is_current: false,
-    program_alignment: '',
+    program_alignment: 'NEEDS_REVIEW',
     alignment_notes: '',
     description: ''
   });
@@ -446,13 +418,11 @@ const AlumniDirectory = () => {
       const clickInsideLevel = levelMenuRef.current && levelMenuRef.current.contains(event.target);
       const clickInsideBatch = batchMenuRef.current && batchMenuRef.current.contains(event.target);
       const clickInsideGroup = groupMenuRef.current && groupMenuRef.current.contains(event.target);
-      const clickInsideAddLevel = addLevelMenuRef.current && addLevelMenuRef.current.contains(event.target);
       const clickInsideAddCourse = addCourseMenuRef.current && addCourseMenuRef.current.contains(event.target);
 
       if (!clickInsideLevel) setShowLevelMenu(false);
       if (!clickInsideBatch) setShowBatchMenu(false);
       if (!clickInsideGroup) setShowGroupMenu(false);
-      if (!clickInsideAddLevel) setShowAddLevelMenu(false);
       if (!clickInsideAddCourse) setShowAddCourseMenu(false);
     };
 
@@ -461,7 +431,6 @@ const AlumniDirectory = () => {
         setShowLevelMenu(false);
         setShowBatchMenu(false);
         setShowGroupMenu(false);
-        setShowAddLevelMenu(false);
         setShowAddCourseMenu(false);
       }
     };
@@ -731,6 +700,17 @@ const AlumniDirectory = () => {
     }
   };
 
+  const isOwnAlumniProfile = (record) => {
+    if (!record || isTeacher) return false;
+
+    const currentAlumniId = Number(currentUser?.alumniId || currentUser?.alumni?.id || 0);
+    if (currentAlumniId && currentAlumniId === Number(record.id)) return true;
+
+    const userEmail = String(currentUser?.email || '').trim().toLowerCase();
+    const alumniEmail = String(record.email || record.user?.email || '').trim().toLowerCase();
+    return Boolean(userEmail && alumniEmail && userEmail === alumniEmail);
+  };
+
   // Delete helpers (achievements/careers)
   const handleDeleteAchievement = (id) => {
     setConfirmModal({
@@ -794,7 +774,7 @@ const AlumniDirectory = () => {
         start_date: '',
         end_date: '',
         is_current: false,
-        program_alignment: '',
+        program_alignment: 'NEEDS_REVIEW',
         alignment_notes: '',
         description: ''
       });
@@ -802,23 +782,31 @@ const AlumniDirectory = () => {
   };
 
   const handleReviewCareerMatch = async (careerId, programAlignment) => {
+    if (!isOwnAlumniProfile(viewingAlumni)) return;
+
+    setCareers(prev => prev.map(c => (Number(c.id) === Number(careerId) ? { ...c, program_alignment: programAlignment } : c)));
+
     try {
+      const alignmentNotes = getProgramAlignmentNote(programAlignment);
+      const reviewPayload = {
+        program_alignment: programAlignment,
+        alignment_notes: alignmentNotes
+      };
       let updated;
       try {
-        updated = await careerService.reviewCareerMatch(careerId, {
-          program_alignment: programAlignment
-        });
-      } catch (reviewError) {
-        if (reviewError.response?.status !== 404) {
-          throw reviewError;
-        }
-        updated = await careerService.updateCareer(careerId, {
-          program_alignment: programAlignment
-        });
+        updated = await careerService.updateCareerProgramMatch(careerId, reviewPayload);
+      } catch (programMatchError) {
+        if (programMatchError.response?.status !== 404) throw programMatchError;
+        updated = await careerService.updateCareer(careerId, reviewPayload);
       }
-      setCareers(prev => prev.map(c => (c.id === careerId ? updated : c)));
+      setCareers(prev => prev.map(c => (
+        Number(c.id) === Number(careerId)
+          ? { ...c, ...updated, program_alignment: programAlignment, alignment_notes: updated.alignment_notes || alignmentNotes }
+          : c
+      )));
       toast.success('Employment match updated');
     } catch (err) {
+      await openViewModal(viewingAlumni);
       toast.error(err.response?.data?.error || 'Failed to update employment match');
     }
   };
@@ -1092,7 +1080,18 @@ const AlumniDirectory = () => {
                   </div>
                   {/* Employment */}
                   {canViewEmploymentHistory(viewingAlumni) && <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
-                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3></div>
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3>
+                      {isOwnAlumniProfile(viewingAlumni) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowCareerModal(true)}
+                          className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
+                        >
+                          Add Employment
+                        </button>
+                      )}
+                    </div>
                     <div className="space-y-2">
                       {careers.length === 0 ? (
                         <p className="text-gray-500 text-sm">No employment history recorded yet.</p>
@@ -1108,7 +1107,7 @@ const AlumniDirectory = () => {
                               </div>
                               <p className="text-sm text-blue-600 font-medium">{c.company}</p>
                               <ProgramAlignmentReview value={c.program_alignment} notes={c.alignment_notes} />
-                              {isTeacher && (
+                              {isOwnAlumniProfile(viewingAlumni) && (
                                 <div className="mt-3 flex flex-wrap items-center gap-2">
                                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Program Match</label>
                                   <select
@@ -1475,19 +1474,19 @@ const AlumniDirectory = () => {
                       onChange={e => setNewCareer(s => ({ ...s, program_alignment: e.target.value }))}
                       className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
                     >
-                      {PROGRAM_ALIGNMENT_OPTIONS.map((option) => (
-                        <option key={option.value || 'auto'} value={option.value}>{option.label}</option>
+                      {PROGRAM_ALIGNMENT_OPTIONS.filter((option) => option.value).map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </select>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Review Notes</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Match Notes</label>
                     <input
                       type="text"
                       value={newCareer.alignment_notes}
                       onChange={e => setNewCareer(s => ({ ...s, alignment_notes: e.target.value }))}
                       className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                      placeholder="Optional note about how the job relates to the program"
+                      placeholder="Optional note about how this job relates to your program"
                     />
                   </div>
                   <div className="sm:col-span-2">
