@@ -126,10 +126,13 @@ const Employment = () => {
 
   const fetchPostedJobs = async () => {
     try {
+      setLoading(true);
       const data = await careerService.getAllJobs();
       setPostedJobs(data);
     } catch (err) {
       console.error('Error fetching posted jobs:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -443,19 +446,34 @@ const Employment = () => {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={isTeacher ? 5 : 4} className="text-center py-8 text-gray-500 text-base">Loading jobs...</td>
-                </tr>
-              )}
-              {!loading && filteredJobs.length === 0 && (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={`skel-${i}`} className="border-b border-gray-100 animate-pulse">
+                    <td className="px-6 py-4">
+                      <div className="h-5 w-48 bg-slate-200 rounded mb-2"></div>
+                      <div className="h-4 w-32 bg-slate-200 rounded"></div>
+                    </td>
+                    <td className="px-6 py-4"><div className="h-5 w-24 bg-slate-200 rounded"></div></td>
+                    <td className="px-6 py-4"><div className="h-5 w-24 bg-slate-200 rounded"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 w-20 bg-slate-200 rounded-full"></div></td>
+                    {isTeacher && (
+                      <td className="px-4 py-4">
+                        <div className="flex gap-2">
+                          <div className="h-9 w-16 bg-slate-200 rounded-md flex-1"></div>
+                          <div className="h-9 w-16 bg-slate-200 rounded-md flex-1"></div>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              ) : filteredJobs.length === 0 ? (
                 <tr>
                   <td colSpan={isTeacher ? 5 : 4} className="text-center py-12">
                     <p className="text-gray-500">No job postings found.</p>
                   </td>
                 </tr>
-              )}
-              {!loading && filteredJobs.map((job) => (
+              ) : (
+                filteredJobs.map((job) => (
                 <tr
                   key={job.id}
                   onClick={() => handleOpenJobDetail(job)}
@@ -495,7 +513,8 @@ const Employment = () => {
                     </td>
                   )}
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
           </div>

@@ -36,6 +36,7 @@ function searchFiles(directory) {
       let hasMatch = false;
 
       PATTERNS.forEach(pattern => {
+        pattern.lastIndex = 0;
         if (pattern.test(content)) {
           hasMatch = true;
         }

@@ -9,7 +9,7 @@ import ScreenContainer from '../../components/ScreenContainer';
 import { API_ORIGIN } from '../../config/api';
 import { communityService } from '../../services/communityService';
 import { adminService } from '../../services/adminService';
-import { getAlumniChatUserId, getSystemUserId, listenToConversationSummaries, listenToUserStatuses } from '../../services/firebaseChatService';
+import { getAlumniChatUserId, getSystemUserId, listenToConversationSummaries, listenToUserStatuses } from '../../services/supabaseChatService';
 import { realtimeClient } from '../../services/realtimeClient';
 import { imageUrl } from '../../utils/formatters';
 import { dataEmitter } from '../../utils/EventEmitter';

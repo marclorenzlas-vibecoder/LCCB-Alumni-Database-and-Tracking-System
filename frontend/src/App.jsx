@@ -33,7 +33,7 @@ import ManageUsers from './components/ManageUsers';
 import ActivityLogs from './components/ActivityLogs';
 import ProtectedRoute from './components/ProtectedRoute';
 import { realtimeClient } from './services/realtimeClient';
-import { setupPresence } from './services/firebaseChatService';
+import { setupPresence } from './services/supabaseChatService';
 import { API_BASE_URL } from './config/apiBaseUrl';
 import { authService } from './services/authService';
 import {

@@ -1,9 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../middleware/auth');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 const router = express.Router();
 
 const isStaffRequest = (req) => {
@@ -125,7 +124,7 @@ const selectJobSql = `
 
 const getJobById = async (client, id) => {
   const rows = await client.$queryRawUnsafe(
-    `${selectJobSql} WHERE jp.id = ? LIMIT 1`,
+    `${selectJobSql} WHERE jp.id = $1 LIMIT 1`,
     Number(id)
   );
   return normalizeJobRow(rows[0]);
@@ -194,7 +193,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     const job = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`
+      const inserted = await tx.$queryRaw`
         INSERT INTO job_posting (
           posted_by_alumni_id,
           job_title,
@@ -221,10 +220,9 @@ router.post('/', authenticateToken, async (req, res) => {
           ${description || null},
           ${normalizedApplicationUrl},
           ${application_deadline ? new Date(application_deadline) : null}
-        )
+        ) RETURNING id
       `;
 
-      const inserted = await tx.$queryRaw`SELECT LAST_INSERT_ID() AS id`;
       const createdId = Number(inserted?.[0]?.id);
       return getJobById(tx, createdId);
     });

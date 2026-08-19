@@ -117,94 +117,94 @@ const AchievementDetail = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-6">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 pt-2">
-            {renderBackToAchievementsButton('mb-5')}
-            <div className="flex flex-wrap items-baseline gap-3 mb-4">
-              <h1 className="text-4xl font-bold text-blue-900">
-                {alumniName}
-              </h1>
-              <span className="text-xl text-gray-600 font-normal">
-                {formattedDate}
-              </span>
-            </div>
-            <div className="h-px bg-gray-200"></div>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 pt-2">
+          {renderBackToAchievementsButton('mb-5')}
+          <div className="flex flex-wrap items-baseline gap-3 mb-4">
+            <h1 className="text-4xl font-bold text-blue-900">
+              {alumniName}
+            </h1>
+            <span className="text-xl text-gray-600 font-normal">
+              {formattedDate}
+            </span>
           </div>
-
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,30%)] xl:gap-14 items-start">
-            <div className="min-w-0 w-full">
-              <div className="prose max-w-none">
-                <p className="text-gray-700 leading-relaxed text-lg text-justify mb-6 whitespace-pre-wrap">
-                  {achievement.description || 'No description provided'}
-                </p>
-              </div>
-
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Category</h3>
-                  <p className="text-gray-600">{achievement.category || 'General'}</p>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Posted</h3>
-                  <p className="text-gray-600">{formattedCreatedAt}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="w-full lg:max-w-[420px] lg:justify-self-end">
-              {achievement.image ? (
-                <div className="rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
-                  {/\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
-                    <AchievementVideoPreview
-                      src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-                      className="h-64 w-full rounded-lg sm:h-80"
-                      videoClassName="h-64 w-full rounded-lg object-cover sm:h-80"
-                    />
-                  ) : (
-                    <img
-                      src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
-                      alt={achievement.title}
-                      className="w-full h-auto object-cover"
-                      style={{ 
-                        borderRadius: '8px',
-                        maxHeight: '400px',
-                        objectFit: 'cover'
-                      }}
-                    />
-                  )}
-                </div>
-              ) : (
-                <div 
-                  className="rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center"
-                  style={{ 
-                    borderRadius: '8px',
-                    minHeight: '200px'
-                  }}
-                >
-                  <div className="text-center p-8">
-                    <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
-                      <svg 
-                        className="w-8 h-8 text-gray-400" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={2} 
-                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" 
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-gray-500 text-sm">No image available</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
+          <div className="h-px bg-gray-200"></div>
         </div>
+
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,30%)] xl:gap-14 items-start">
+          <div className="min-w-0 w-full">
+            <div className="prose max-w-none">
+              <p className="text-gray-700 leading-relaxed text-lg text-justify mb-6 whitespace-pre-wrap">
+                {achievement.description || 'No description provided'}
+              </p>
+            </div>
+
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Category</h3>
+                <p className="text-gray-600">{achievement.category || 'General'}</p>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Posted</h3>
+                <p className="text-gray-600">{formattedCreatedAt}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full lg:max-w-[420px] lg:justify-self-end">
+            {achievement.image ? (
+              <div className="rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
+                {/\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
+                  <AchievementVideoPreview
+                    src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+                    className="h-64 w-full rounded-lg sm:h-80"
+                    videoClassName="h-64 w-full rounded-lg object-cover sm:h-80"
+                  />
+                ) : (
+                  <img
+                    src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+                    alt={achievement.title}
+                    className="w-full h-auto object-cover"
+                    style={{
+                      borderRadius: '8px',
+                      maxHeight: '400px',
+                      objectFit: 'cover'
+                    }}
+                  />
+                )}
+              </div>
+            ) : (
+              <div
+                className="rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center"
+                style={{
+                  borderRadius: '8px',
+                  minHeight: '200px'
+                }}
+              >
+                <div className="text-center p-8">
+                  <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                    <svg
+                      className="w-8 h-8 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-gray-500 text-sm">No image available</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 };

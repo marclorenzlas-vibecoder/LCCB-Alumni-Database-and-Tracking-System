@@ -205,7 +205,7 @@ const JobApplications = () => {
                   <div className="flex-shrink-0">
                     {(selectedApplication.applicant.profile_image || selectedApplication.applicant.profileImage) ? (
                       <img
-                        src={`http://localhost:5001${selectedApplication.applicant.profile_image || selectedApplication.applicant.profileImage}`}
+                        src={`${IMAGE_BASE_URL}${selectedApplication.applicant.profile_image || selectedApplication.applicant.profileImage}`}
                         alt={`${selectedApplication.applicant.first_name} ${selectedApplication.applicant.last_name}`}
                         className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-lg"
                         onError={(e) => {

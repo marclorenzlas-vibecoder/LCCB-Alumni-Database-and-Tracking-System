@@ -2,7 +2,6 @@ const express = require('express');
 const { registerUser, loginUser, registerTeacher, loginTeacher } = require('../services/authService');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
-const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
@@ -20,7 +19,7 @@ const {
 } = require('../utils/educationHistory');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 const uploadsDir = path.join(__dirname, '../../uploads/profiles');
 if (!fs.existsSync(uploadsDir)) {
@@ -1621,7 +1620,7 @@ router.get('/notification-preference/:userId', authMiddleware, async (req, res) 
     try {
       const birthdayRows = await prisma.$queryRaw`
         SELECT birthday_notification_visibility
-        FROM user
+        FROM "user"
         WHERE id = ${userId}
         LIMIT 1
       `;
@@ -1727,7 +1726,7 @@ router.put('/notification-preference', authMiddleware, async (req, res) => {
     if (normalizedBirthdayVisibility !== undefined) {
       try {
         await prisma.$executeRaw`
-          UPDATE user
+          UPDATE "user"
           SET birthday_notification_visibility = ${normalizedBirthdayVisibility}
           WHERE id = ${parsedUserId}
         `;
@@ -1744,7 +1743,7 @@ router.put('/notification-preference', authMiddleware, async (req, res) => {
       try {
         const savedRows = await prisma.$queryRaw`
           SELECT birthday_notification_visibility
-          FROM user
+          FROM "user"
           WHERE id = ${parsedUserId}
           LIMIT 1
         `;

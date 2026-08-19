@@ -80,7 +80,7 @@ const getPendingConsent = async (pendingId) => {
   try {
     await ensureConsentColumns();
     const rows = await prisma.$queryRawUnsafe(
-      'SELECT `consent_core`, `consent_timestamp`, `privacy_notice_version` FROM `pending_registration` WHERE `id` = ? LIMIT 1',
+      'SELECT consent_core, consent_timestamp, privacy_notice_version FROM pending_registration WHERE id = $1 LIMIT 1',
       pendingId
     );
     const row = Array.isArray(rows) ? rows[0] : null;

@@ -11,6 +11,7 @@ import UserLayout from './UserLayout';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { extractDonationMeta } from '../utils/donationMeta';
 import AchievementVideoPreview from './AchievementVideoPreview';
+import CardSkeleton from './CardSkeleton';
 
 function AchievementHomeCard({ achievement }) {
   const titleRef = useRef(null);
@@ -644,7 +645,9 @@ const Home = () => {
           </div>
           
           {loading ? (
-            <div className="text-center py-8">Loading events...</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              <CardSkeleton count={3} />
+            </div>
           ) : events.length === 0 ? (
             <div className="text-center py-8 text-gray-500">No events available</div>
           ) : (
@@ -676,7 +679,9 @@ const Home = () => {
           </div>
           
           {loading ? (
-            <div className="text-center py-8">Loading achievements...</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              <CardSkeleton count={3} />
+            </div>
           ) : achievements.length === 0 ? (
             <div className="text-center py-8 text-gray-500">No achievements available</div>
           ) : (
@@ -708,7 +713,9 @@ const Home = () => {
           </div>
           
           {loading ? (
-            <div className="text-center py-8">Loading jobs...</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              <CardSkeleton count={3} />
+            </div>
           ) : jobs.length === 0 ? (
             <div className="text-center py-8 text-gray-500">No job postings available</div>
           ) : (
@@ -769,7 +776,9 @@ const Home = () => {
           </div>
           
           {loading ? (
-            <div className="text-center py-8">Loading campaigns...</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              <CardSkeleton count={3} />
+            </div>
           ) : donations.length === 0 ? (
             <div className="text-center py-8 text-gray-500">No campaigns available</div>
           ) : (

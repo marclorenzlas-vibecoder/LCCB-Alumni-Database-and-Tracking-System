@@ -16,7 +16,8 @@ const toneClasses = {
   emerald: 'from-emerald-500 to-emerald-500',
   violet: 'from-violet-500 to-violet-500',
   cyan: 'from-cyan-500 to-cyan-500',
-  rose: 'from-rose-500 to-rose-500'
+  rose: 'from-rose-500 to-rose-500',
+  blue: 'from-blue-700 to-blue-700'
 };
 
 const toneBgClasses = {
@@ -25,7 +26,8 @@ const toneBgClasses = {
   emerald: 'bg-emerald-500 text-white',
   violet: 'bg-violet-500 text-white',
   cyan: 'bg-cyan-500 text-white',
-  rose: 'bg-rose-500 text-white'
+  rose: 'bg-rose-500 text-white',
+  blue: 'bg-blue-700 text-white'
 };
 
 const cardIcons = {
@@ -352,13 +354,13 @@ const AdminDashboard = ({ pendingOnly = false }) => {
     );
   };
   const overviewCards = [
-    { label: 'Total Alumni', value: formatCount(adminStats?.totalAlumni), note: 'Verified alumni directory entries', tone: 'sky' },
-    { label: 'Pending Requests', value: formatCount(adminStats?.pendingRegistrations), note: 'Waiting for admin review', tone: 'amber' },
+    { label: 'Total Alumni', value: formatCount(adminStats?.totalAlumni), note: 'Verified alumni directory entries', tone: 'blue' },
+    { label: 'Pending Requests', value: formatCount(adminStats?.pendingRegistrations), note: 'Waiting for admin review', tone: 'blue' },
 
-    { label: 'Approved Alumni', value: formatCount(adminStats?.approvedAlumni), note: 'Approved account records', tone: 'emerald' },
-    { label: 'Active Members', value: formatCount(adminStats?.activeMembers), note: 'Currently online sessions', tone: 'violet' },
-    { label: 'Upcoming Events', value: formatCount(adminStats?.upcomingEvents), note: 'Scheduled and current events', tone: 'cyan' },
-    { label: 'Teachers', value: formatCount(adminStats?.teachers), note: 'Teacher accounts in the system', tone: 'rose' }
+    { label: 'Approved Alumni', value: formatCount(adminStats?.approvedAlumni), note: 'Approved account records', tone: 'blue' },
+    { label: 'Active Members', value: formatCount(adminStats?.activeMembers), note: 'Currently online sessions', tone: 'blue' },
+    { label: 'Upcoming Events', value: formatCount(adminStats?.upcomingEvents), note: 'Scheduled and current events', tone: 'blue' },
+    { label: 'Teachers', value: formatCount(adminStats?.teachers), note: 'Teacher accounts in the system', tone: 'blue' }
   ];
 
   const monthlyActivity = Array.isArray(adminStats?.monthlyActivity) ? adminStats.monthlyActivity : [];

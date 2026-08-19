@@ -3,7 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const { broadcastUpdate } = require("../services/realtimeService");
 const { authenticateToken } = require("../middleware/auth");
 const { buildChangeSet, recordActivity } = require("../services/activityLogService");
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 const router = express.Router();
 
 const isStaffRequest = (req) => {

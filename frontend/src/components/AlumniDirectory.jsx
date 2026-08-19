@@ -12,7 +12,7 @@ import UserLayout from './UserLayout';
 import AlumniChatPanel from './AlumniChatPanel';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { groupSectionDefinitions, levelOptions as sharedLevelOptions } from '../config/groupSections';
-import { getAlumniChatUserId, listenToUserStatuses } from '../services/firebaseChatService';
+import { getAlumniChatUserId, listenToUserStatuses } from '../services/supabaseChatService';
 
 // Helper function to get display label for level
 const getLevelLabel = (level) => {
@@ -1746,7 +1746,17 @@ const AlumniDirectory = () => {
         )}
         <div className="grid auto-rows-[104px] content-start items-stretch gap-3 px-4 py-4 sm:px-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           {loading && (
-            <div className="col-span-full rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">Loading...</div>
+            <>
+              {Array.from({ length: 12 }).map((_, index) => (
+                <div key={`skel-${index}`} className="alumni-directory-card flex h-full min-h-[104px] w-full items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-2.5 shadow-sm animate-pulse">
+                  <div className="h-12 w-12 shrink-0 rounded-full bg-slate-200"></div>
+                  <div className="flex-1 space-y-2 py-1">
+                    <div className="h-4 w-3/4 rounded bg-slate-200"></div>
+                    <div className="h-3 w-5/6 rounded bg-slate-200"></div>
+                  </div>
+                </div>
+              ))}
+            </>
           )}
           {error && !loading && (
             <div className="col-span-full rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-600">{error}</div>

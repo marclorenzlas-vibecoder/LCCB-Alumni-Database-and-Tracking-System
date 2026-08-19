@@ -9,6 +9,7 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { Link } from 'react-router-dom';
 import AchievementVideoPreview from './AchievementVideoPreview';
 import FilterMenu from './FilterMenu';
+import CardSkeleton from './CardSkeleton';
 
 const ACHIEVEMENT_CATEGORIES = ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
 
@@ -582,20 +583,23 @@ const Achievements = () => {
 
         {/* Achievements Grid */}
         <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
-          {loading && <div className="col-span-full text-center">Loading...</div>}
-          {error && <div className="col-span-full text-center text-red-600">{error}</div>}
-          {!loading && filteredAchievements.length === 0 && (
+          {loading ? (
+            <CardSkeleton count={6} />
+          ) : error ? (
+            <div className="col-span-full text-center text-red-600">{error}</div>
+          ) : filteredAchievements.length === 0 ? (
             <div className="col-span-full text-center text-gray-500">No achievements found</div>
+          ) : (
+            filteredAchievements.map((achievement) => (
+              <AchievementGridCard
+                key={achievement.id}
+                achievement={achievement}
+                isTeacher={isTeacher}
+                onEdit={handleEdit}
+                handleDelete={handleDelete}
+              />
+            ))
           )}
-          {filteredAchievements.map((achievement) => (
-            <AchievementGridCard
-              key={achievement.id}
-              achievement={achievement}
-              isTeacher={isTeacher}
-              onEdit={handleEdit}
-              handleDelete={handleDelete}
-            />
-          ))}
         </div>
 
         {/* Modal for Adding Achievement */}

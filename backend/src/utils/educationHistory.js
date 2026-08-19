@@ -87,17 +87,18 @@ function getEducationHistoryWithFallback(alumniLike, history = []) {
 async function ensureEducationHistoryTable(prisma) {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS alumni_education_history (
-      id INT NOT NULL AUTO_INCREMENT,
+      id SERIAL PRIMARY KEY,
       alumni_id INT NOT NULL,
-      level ENUM('INTEGRATED_SCHOOL','NIGHT_HIGH','SENIOR_HIGH','COLLEGE','ETEEAP','GRAD_SCHOOL') NOT NULL,
-      batch INT NULL,
-      graduation_year INT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      KEY idx_alumni_education_history_alumni_id (alumni_id),
+      level VARCHAR(50) NOT NULL CHECK (level IN ('INTEGRATED_SCHOOL','NIGHT_HIGH','SENIOR_HIGH','COLLEGE','ETEEAP','GRAD_SCHOOL')),
+      batch INT,
+      graduation_year INT,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT fk_alumni_education_history_alumni FOREIGN KEY (alumni_id) REFERENCES alumni(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    );
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS idx_alumni_education_history_alumni_id ON alumni_education_history(alumni_id);
   `);
 }
 
@@ -110,7 +111,7 @@ async function getEducationHistoryByAlumniIds(prisma, alumniIds) {
     `
       SELECT id, alumni_id, level, batch, graduation_year
       FROM alumni_education_history
-      WHERE alumni_id IN (${alumniIds.map(() => '?').join(',')})
+      WHERE alumni_id IN (${alumniIds.map((_, i) => '$' + (i + 1)).join(',')})
       ORDER BY alumni_id ASC, graduation_year ASC, batch ASC, id ASC
     `,
     ...alumniIds

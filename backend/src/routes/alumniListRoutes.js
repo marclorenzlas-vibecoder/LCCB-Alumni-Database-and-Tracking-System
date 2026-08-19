@@ -1,9 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { teacherAuthMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 // Get all alumni from alumni_list
 router.get('/', async (req, res) => {

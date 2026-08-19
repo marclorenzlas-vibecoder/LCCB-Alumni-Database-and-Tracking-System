@@ -1,11 +1,10 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { inferProgramAlignment, normalizeProgramAlignment } = require('../utils/programAlignment');
 const jwt = require('jsonwebtoken');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 

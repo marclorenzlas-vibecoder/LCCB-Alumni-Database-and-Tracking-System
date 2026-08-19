@@ -12,7 +12,7 @@ const {
   getEducationHistoryByAlumniIds,
   replaceEducationHistory,
 } = require("../utils/educationHistory");
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 const router = express.Router();
 
 // ---------------------------------------------------------------------------
@@ -495,11 +495,11 @@ router.get("/birthdays/today", authMiddleware, async (req, res) => {
         u.email as user_email,
         COALESCE(u.birthday_notification_visibility, 'PUBLIC') AS birthday_notification_visibility
       FROM alumni a
-      LEFT JOIN user u ON a.user_id = u.id
+      LEFT JOIN "user" u ON a.user_id = u.id
       WHERE a.date_of_birth IS NOT NULL
         AND (a.status IS NULL OR a.status != 'DECEASED')
-        AND MONTH(a.date_of_birth) = ${currentMonth}
-        AND DAY(a.date_of_birth) = ${currentDay}
+        AND EXTRACT(MONTH FROM a.date_of_birth) = ${currentMonth}
+        AND EXTRACT(DAY FROM a.date_of_birth) = ${currentDay}
     `;
 
     const birthdayList = birthdays
@@ -519,7 +519,7 @@ router.get("/birthdays/today", authMiddleware, async (req, res) => {
         a.date_of_birth,
         COALESCE(u.birthday_notification_visibility, 'PUBLIC') AS birthday_notification_visibility
       FROM alumni a
-      LEFT JOIN user u ON a.user_id = u.id
+      LEFT JOIN "user" u ON a.user_id = u.id
       WHERE a.user_id = ${req.user.id} OR a.email = ${req.user.email}
       LIMIT 1
     `;

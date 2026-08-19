@@ -3,125 +3,126 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model GoogleAccount {
   id           Int      @id @default(autoincrement())
   userId       Int?     @map("user_id")
-  googleId     String   @unique(map: "google_id_unique") @map("google_id") @db.VarChar(255)
-  email        String   @db.VarChar(255)
-  name         String?  @db.VarChar(255)
-  picture      String?  @db.VarChar(512)
-  accessToken  String?  @map("access_token") @db.VarChar(1024)
-  refreshToken String?  @map("refresh_token") @db.VarChar(1024)
-  role         String?  @db.VarChar(100)
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  googleId     String   @unique(map: "google_id_unique") @map("google_id")
+  email        String
+  name         String?
+  picture      String?
+  accessToken  String?  @map("access_token")
+  refreshToken String?  @map("refresh_token")
+  role         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
-  @@index([userId], map: "idx_user_id")
+  @@index([userId])
   @@map("google_accounts")
 }
 
 model activity_log {
   id           Int      @id @default(autoincrement())
   actor_id     Int?
-  actor_name   String?  @db.VarChar(255)
-  actor_role   String?  @db.VarChar(100)
-  action       String   @db.VarChar(100)
-  entity_type  String   @db.VarChar(100)
+  actor_name   String?
+  actor_role   String?
+  action       String
+  entity_type  String
   entity_id    Int?
-  entity_label String?  @db.VarChar(255)
-  summary      String   @db.Text
-  details      String?  @db.Text
-  created_at   DateTime @default(now()) @db.DateTime(0)
+  entity_label String?
+  summary      String
+  details      String?
+  created_at   DateTime @default(now())
 
-  @@index([created_at], map: "idx_activity_log_created_at")
-  @@index([actor_id], map: "idx_activity_log_actor_id")
-  @@index([entity_type, action], map: "idx_activity_log_entity")
+  @@index([created_at])
+  @@index([actor_id])
+  @@index([entity_type, action])
 }
 
 model achievement {
   id          Int       @id @default(autoincrement())
   alumni_id   Int?
-  title       String    @db.VarChar(255)
-  category    String?   @db.VarChar(100)
-  image       String?   @db.VarChar(255)
-  description String?   @db.Text
-  date        DateTime? @db.Date
-  alumni      alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "achievement_ibfk_1")
+  title       String
+  category    String?
+  image       String?
+  description String?
+  date        DateTime?
+  alumni      alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([alumni_id], map: "alumni_id")
+  @@index([alumni_id])
 }
 
 model alumni {
-  id               Int                @id @default(autoincrement())
-  user_id          Int?               @unique(map: "user_id")
-  student_id       String?            @unique(map: "student_id") @db.VarChar(50)
-  first_name       String             @db.VarChar(100)
-  last_name        String             @db.VarChar(100)
-  middle_name      String?            @db.VarChar(100)
-  date_of_birth    DateTime?          @db.Date
-  email            String?            @db.VarChar(255)
-  contact_number   String?            @db.VarChar(50)
+  id                          Int                @id @default(autoincrement())
+  user_id                     Int?               @unique(map: "user_id")
+  student_id                  String?            @unique(map: "student_id")
+  first_name                  String
+  last_name                   String
+  middle_name                 String?
+  date_of_birth               DateTime?
+  email                       String?
+  contact_number              String?
   // Educational level: College, High School, Senior High School
-  level            alumni_level?
+  level                       alumni_level?
   // Batch/Year grouping (separate from graduation_year if needed)
-  batch            Int?
-  graduation_year  Int?
-  course           String?            @db.VarChar(100)
-  current_position String?            @db.VarChar(100)
-  company          String?            @db.VarChar(100)
-  location         String?            @db.VarChar(100)
-  profile_image    String?            @db.VarChar(255)
-  skills           String?            @db.Text
-  bio              String?            @db.Text
-  is_public        Boolean?           @default(true)
-  is_student_id_public Boolean         @default(false)
-  is_date_of_birth_public Boolean      @default(false)
-  is_course_public     Boolean         @default(true)
-  is_graduation_year_public Boolean    @default(true)
-  is_education_history_public Boolean  @default(true)
-  is_email_public      Boolean            @default(false)
-  is_phone_public      Boolean            @default(false)
-  is_position_public   Boolean            @default(false)
-  is_company_public    Boolean            @default(false)
-  is_employment_public Boolean            @default(false)
-  is_location_public   Boolean            @default(false)
-  is_social_links_public Boolean           @default(false)
-  is_skills_public       Boolean           @default(false)
-  is_verified      Boolean?           @default(false)
-  status           String?            @default("LIVING") @db.VarChar(20)
-  created_at       DateTime?          @default(now()) @db.DateTime(0)
-  updated_at       DateTime?          @default(now()) @updatedAt @db.DateTime(0)
-  achievement      achievement[]
-  user             user?              @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "alumni_ibfk_1")
-  career_entry     career_entry[]
-  donation         donation[]
-  event_attendance event_attendance[]
-  social_link      social_link[]
-  job_posting      job_posting[]
-  batch_officer    batch_officer[]
-  job_applications job_application[]
-  deceased_reports deceased_report[] @relation("deceased_alumni")
-  reports_submitted deceased_report[] @relation("reported_by_alumni")
+  batch                       Int?
+  graduation_year             Int?
+  course                      String?
+  current_position            String?
+  company                     String?
+  location                    String?
+  profile_image               String?
+  skills                      String?
+  bio                         String?
+  is_public                   Boolean?           @default(true)
+  is_student_id_public        Boolean            @default(false)
+  is_date_of_birth_public     Boolean            @default(false)
+  is_course_public            Boolean            @default(true)
+  is_graduation_year_public   Boolean            @default(true)
+  is_education_history_public Boolean            @default(true)
+  is_email_public             Boolean            @default(false)
+  is_phone_public             Boolean            @default(false)
+  is_position_public          Boolean            @default(false)
+  is_company_public           Boolean            @default(false)
+  is_employment_public        Boolean            @default(false)
+  is_location_public          Boolean            @default(false)
+  is_social_links_public      Boolean            @default(false)
+  is_skills_public            Boolean            @default(false)
+  is_verified                 Boolean?           @default(false)
+  status                      String?            @default("LIVING")
+  created_at                  DateTime?          @default(now())
+  updated_at                  DateTime?          @default(now()) @updatedAt
+  achievement                 achievement[]
+  user                        user?              @relation(fields: [user_id], references: [id], onUpdate: Restrict)
+  career_entry                career_entry[]
+  donation                    donation[]
+  event_attendance            event_attendance[]
+  social_link                 social_link[]
+  job_posting                 job_posting[]
+  batch_officer               batch_officer[]
+  job_applications            job_application[]
+  deceased_reports            deceased_report[]  @relation("deceased_alumni")
+  reports_submitted           deceased_report[]  @relation("reported_by_alumni")
 }
 
 model deceased_report {
-  id                    Int       @id @default(autoincrement())
+  id                    Int      @id @default(autoincrement())
   alumni_id             Int
   reported_by_alumni_id Int?
-  reason                String?   @db.Text
-  evidence_file         String?   @db.VarChar(255)
-  evidence_link         String?   @db.VarChar(512)
-  status                String    @default("PENDING") @db.VarChar(20)
-  admin_notes           String?   @db.Text
-  created_at            DateTime  @default(now()) @db.DateTime(0)
-  updated_at            DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  reason                String?
+  evidence_file         String?
+  evidence_link         String?
+  status                String   @default("PENDING")
+  admin_notes           String?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @default(now()) @updatedAt
 
-  alumni                alumni    @relation("deceased_alumni", fields: [alumni_id], references: [id], onDelete: Cascade)
-  reported_by           alumni?   @relation("reported_by_alumni", fields: [reported_by_alumni_id], references: [id], onDelete: SetNull)
+  alumni      alumni  @relation("deceased_alumni", fields: [alumni_id], references: [id], onDelete: Cascade)
+  reported_by alumni? @relation("reported_by_alumni", fields: [reported_by_alumni_id], references: [id], onDelete: SetNull)
 
   @@index([alumni_id])
   @@index([reported_by_alumni_id])
@@ -129,59 +130,59 @@ model deceased_report {
 }
 
 model career_entry {
-  id          Int       @id @default(autoincrement())
-  alumni_id   Int?
-  company     String?   @db.VarChar(255)
-  job_title   String?   @db.VarChar(255)
-  start_date  DateTime? @db.Date
-  end_date    DateTime? @db.Date
-  description String?   @db.Text
-  is_current  Boolean?  @default(false)
-  program_alignment String? @default("NEEDS_REVIEW") @db.VarChar(20)
-  alignment_notes String? @db.Text
-  alumni      alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "career_entry_ibfk_1")
+  id                Int       @id @default(autoincrement())
+  alumni_id         Int?
+  company           String?
+  job_title         String?
+  start_date        DateTime?
+  end_date          DateTime?
+  description       String?
+  is_current        Boolean?  @default(false)
+  program_alignment String?   @default("NEEDS_REVIEW")
+  alignment_notes   String?
+  alumni            alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([alumni_id], map: "alumni_id")
+  @@index([alumni_id])
 }
 
 model job_posting {
-  id                  Int       @id @default(autoincrement())
-  posted_by_alumni_id Int?
-  job_title           String    @db.VarChar(255)
-  company             String    @db.VarChar(255)
-  location            String?   @db.VarChar(255)
-  department          String?   @db.VarChar(100)
-  job_type            String?   @db.VarChar(50)
-  salary_range        String?   @db.VarChar(100)
-  requirements        String?   @db.Text
-  benefits            String?   @db.Text
-  description         String?   @db.Text
-  application_url     String?   @db.VarChar(1000)
-  application_deadline DateTime? @db.Date
-  created_at          DateTime? @default(now()) @db.DateTime(0)
-  updated_at          DateTime? @default(now()) @db.DateTime(0)
-  alumni              alumni?   @relation(fields: [posted_by_alumni_id], references: [id], onDelete: SetNull)
-  job_applications    job_application[]
+  id                   Int               @id @default(autoincrement())
+  posted_by_alumni_id  Int?
+  job_title            String
+  company              String
+  location             String?
+  department           String?
+  job_type             String?
+  salary_range         String?
+  requirements         String?
+  benefits             String?
+  description          String?
+  application_url      String?
+  application_deadline DateTime?
+  created_at           DateTime?         @default(now())
+  updated_at           DateTime?         @default(now())
+  alumni               alumni?           @relation(fields: [posted_by_alumni_id], references: [id], onDelete: SetNull)
+  job_applications     job_application[]
 
-  @@index([posted_by_alumni_id], map: "idx_posted_by")
+  @@index([posted_by_alumni_id])
 }
 
 model job_application {
-  id               Int       @id @default(autoincrement())
-  job_posting_id   Int
-  applicant_id     Int
-  cover_letter     String?   @db.Text
-  resume_url       String?   @db.VarChar(255)
-  status           application_status @default(PENDING)
-  applied_at       DateTime  @default(now()) @db.DateTime(0)
-  reviewed_at      DateTime? @db.DateTime(0)
-  notes            String?   @db.Text
-  job_posting      job_posting @relation(fields: [job_posting_id], references: [id], onDelete: Cascade)
-  applicant        alumni      @relation(fields: [applicant_id], references: [id], onDelete: Cascade, map: "job_application_applicant")
-  
-  @@unique([job_posting_id, applicant_id], map: "unique_job_application")
-  @@index([job_posting_id], map: "idx_job_posting")
-  @@index([applicant_id], map: "idx_applicant")
+  id             Int                @id @default(autoincrement())
+  job_posting_id Int
+  applicant_id   Int
+  cover_letter   String?
+  resume_url     String?
+  status         application_status @default(PENDING)
+  applied_at     DateTime           @default(now())
+  reviewed_at    DateTime?
+  notes          String?
+  job_posting    job_posting        @relation(fields: [job_posting_id], references: [id], onDelete: Cascade)
+  applicant      alumni             @relation(fields: [applicant_id], references: [id], onDelete: Cascade)
+
+  @@unique([job_posting_id, applicant_id])
+  @@index([job_posting_id])
+  @@index([applicant_id])
 }
 
 enum application_status {
@@ -193,32 +194,32 @@ enum application_status {
 }
 
 model donation {
-  id              Int       @id @default(autoincrement())
-  alumni_id       Int?
-  amount          Decimal   @db.Decimal(10, 2)
-  date            DateTime? @db.Date
-  purpose         String?   @db.VarChar(255)
-  description     String?   @db.Text
-  image           String?   @db.VarChar(255)
-  category        String?   @db.VarChar(100)
-  goal            Decimal?  @db.Decimal(10, 2)
-  donation_type   String?   @default("both") @db.VarChar(20)
-  accepts_money   Boolean?  @default(true)
-  accepts_items   Boolean?  @default(true)
-  item_name       String?   @db.VarChar(255)
-  item_description String?  @db.Text
-  alumni          alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "donation_ibfk_1")
-  donation_images donation_image[]
+  id                  Int                  @id @default(autoincrement())
+  alumni_id           Int?
+  amount              Decimal
+  date                DateTime?
+  purpose             String?
+  description         String?
+  image               String?
+  category            String?
+  goal                Decimal?
+  donation_type       String?              @default("both")
+  accepts_money       Boolean?             @default(true)
+  accepts_items       Boolean?             @default(true)
+  item_name           String?
+  item_description    String?
+  alumni              alumni?              @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  donation_images     donation_image[]
   receipt_submissions receipt_submission[]
 
-  @@index([alumni_id], map: "alumni_id")
+  @@index([alumni_id])
 }
 
 model donation_image {
   id          Int       @id @default(autoincrement())
   donation_id Int
-  image_url   String    @db.VarChar(500)
-  created_at  DateTime? @default(now()) @db.DateTime(0)
+  image_url   String
+  created_at  DateTime? @default(now())
   donation    donation? @relation(fields: [donation_id], references: [id], onDelete: Cascade)
 
   @@index([donation_id])
@@ -229,30 +230,30 @@ model receipt_submission {
   campaign_id   Int
   admin_user_id Int
   submitted_at  DateTime  @default(now())
-  status        String    @default("submitted") @db.VarChar(50)
-  notes         String?   @db.Text
+  status        String    @default("submitted")
+  notes         String?
   campaign      donation? @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
 
   @@index([campaign_id])
 }
 
 model event {
-  id               Int                @id @default(autoincrement())
-  name             String             @db.VarChar(255)
-  description      String?            @db.Text
-  date             DateTime?          @db.Date
-  end_date         DateTime?          @db.Date
-  location         String?            @db.VarChar(255)
-  image            String?            @db.VarChar(255)
-  send_notification Boolean?          @default(false)
-  status           event_status?      @default(UPCOMING)
-  notified_current Boolean?           @default(false)
-  target_batch     Int?
-  created_at       DateTime?          @default(now()) @db.DateTime(0)
-  updated_at       DateTime?          @default(now()) @db.DateTime(0)
-  event_attendance event_attendance[]
-  event_gallery    event_gallery[]
-  notifications    notification[]
+  id                Int                @id @default(autoincrement())
+  name              String
+  description       String?
+  date              DateTime?
+  end_date          DateTime?
+  location          String?
+  image             String?
+  send_notification Boolean?           @default(false)
+  status            event_status?      @default(UPCOMING)
+  notified_current  Boolean?           @default(false)
+  target_batch      Int?
+  created_at        DateTime?          @default(now())
+  updated_at        DateTime?          @default(now())
+  event_attendance  event_attendance[]
+  event_gallery     event_gallery[]
+  notifications     notification[]
 }
 
 enum event_status {
@@ -264,68 +265,68 @@ enum event_status {
 model event_gallery {
   id          Int       @id @default(autoincrement())
   event_id    Int
-  image       String    @db.VarChar(255)
-  caption     String?   @db.Text
+  image       String
+  caption     String?
   uploaded_by Int?
-  created_at  DateTime? @default(now()) @db.DateTime(0)
+  created_at  DateTime? @default(now())
   event       event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
   user        user?     @relation(fields: [uploaded_by], references: [id], onDelete: SetNull)
 
-  @@index([event_id], map: "idx_event_id")
-  @@index([uploaded_by], map: "idx_uploaded_by")
+  @@index([event_id])
+  @@index([uploaded_by])
 }
 
 model event_attendance {
   id            Int       @id @default(autoincrement())
   event_id      Int?
   alumni_id     Int?
-  registered_at DateTime? @default(now()) @db.DateTime(0)
+  registered_at DateTime? @default(now())
   attended      Boolean?  @default(false)
-  event         event?    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "event_attendance_ibfk_1")
-  alumni        alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "event_attendance_ibfk_2")
+  event         event?    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  alumni        alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([alumni_id], map: "alumni_id")
-  @@index([event_id], map: "event_id")
+  @@index([alumni_id])
+  @@index([event_id])
 }
 
 model social_link {
   id        Int     @id @default(autoincrement())
   alumni_id Int?
-  platform  String? @db.VarChar(100)
-  url       String? @db.VarChar(255)
-  alumni    alumni? @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "social_link_ibfk_1")
+  platform  String?
+  url       String?
+  alumni    alumni? @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([alumni_id], map: "alumni_id")
+  @@index([alumni_id])
 }
 
 model user {
-  id                      Int              @id @default(autoincrement())
-  email                   String           @unique(map: "email") @db.VarChar(255)
-  password                String?          @db.VarChar(255)
-  username                String?          @db.VarChar(100)
-  profile_image           String?          @db.VarChar(255)
-  role                    user_role?       @default(ALUMNI)
-  approval_status         approval_status? @default(PENDING)
-  is_active               Boolean?         @default(false)
-  is_blocked              Boolean?         @default(false)
-  notification_enabled    Boolean?         @default(true)
-  notification_prompt_shown Boolean?       @default(false)
-  notify_events           Boolean?         @default(true)
-  notify_achievements     Boolean?         @default(true)
-  notify_donations        Boolean?         @default(true)
-  notify_jobs             Boolean?         @default(true)
-  show_donation_toasts    Boolean?         @default(true)
-  birthday_notification_visibility String? @default("PUBLIC") @db.VarChar(16)
-  notify_pending_registrations Boolean?    @default(true)
-  notify_job_applications Boolean?        @default(true)
-  consent_core           Boolean?         @default(false)
-  consent_timestamp      DateTime?        @db.DateTime(0)
-  privacy_notice_version String?          @db.VarChar(50)
-  created_at              DateTime?        @default(now()) @db.DateTime(0)
-  updated_at              DateTime?        @default(now()) @db.DateTime(0)
-  alumni                  alumni?
-  event_gallery           event_gallery[]
-  notifications           notification[]
+  id                               Int              @id @default(autoincrement())
+  email                            String           @unique(map: "email")
+  password                         String?
+  username                         String?
+  profile_image                    String?
+  role                             user_role?       @default(ALUMNI)
+  approval_status                  approval_status? @default(PENDING)
+  is_active                        Boolean?         @default(false)
+  is_blocked                       Boolean?         @default(false)
+  notification_enabled             Boolean?         @default(true)
+  notification_prompt_shown        Boolean?         @default(false)
+  notify_events                    Boolean?         @default(true)
+  notify_achievements              Boolean?         @default(true)
+  notify_donations                 Boolean?         @default(true)
+  notify_jobs                      Boolean?         @default(true)
+  show_donation_toasts             Boolean?         @default(true)
+  birthday_notification_visibility String?          @default("PUBLIC")
+  notify_pending_registrations     Boolean?         @default(true)
+  notify_job_applications          Boolean?         @default(true)
+  consent_core                     Boolean?         @default(false)
+  consent_timestamp                DateTime?
+  privacy_notice_version           String?
+  created_at                       DateTime?        @default(now())
+  updated_at                       DateTime?        @default(now())
+  alumni                           alumni?
+  event_gallery                    event_gallery[]
+  notifications                    notification[]
 }
 
 enum notification_type {
@@ -362,58 +363,58 @@ enum alumni_level {
 // New teacher table for managing teacher accounts separately from user/alumni
 model teacher {
   id            Int       @id @default(autoincrement())
-  email         String    @unique @db.VarChar(255)
-  username      String?   @db.VarChar(100)
-  department    String?   @db.VarChar(100)
-  password      String?   @db.VarChar(255)
-  profile_image String?   @db.VarChar(255)
-  created_at    DateTime? @default(now()) @db.DateTime(0)
-  updated_at    DateTime? @default(now()) @db.DateTime(0)
+  email         String    @unique
+  username      String?
+  department    String?
+  password      String?
+  profile_image String?
+  created_at    DateTime? @default(now())
+  updated_at    DateTime? @default(now())
 }
 
 model notification {
-  id         Int       @id @default(autoincrement())
-  user_id    Int
-  event_id   Int?
-  type       notification_type @default(GENERAL)
-  title      String    @db.VarChar(255)
-  message    String    @db.Text
-  link       String?   @db.VarChar(255)
-  sender_name String?  @db.VarChar(255)
-  sender_profile_image String? @db.VarChar(255)
-  is_read    Boolean   @default(false)
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  user       user      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  event      event?    @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  
-  @@index([user_id], map: "user_id")
-  @@index([event_id], map: "idx_notification_event")
+  id                   Int               @id @default(autoincrement())
+  user_id              Int
+  event_id             Int?
+  type                 notification_type @default(GENERAL)
+  title                String
+  message              String
+  link                 String?
+  sender_name          String?
+  sender_profile_image String?
+  is_read              Boolean           @default(false)
+  created_at           DateTime          @default(now())
+  user                 user              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event                event?            @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([event_id])
 }
 
 // Pending registrations table - holds registration requests until admin approval
 model pending_registration {
-  id                    Int            @id @default(autoincrement())
-  email                 String         @unique @db.VarChar(255)
-  password              String         @db.VarChar(255)
-  username              String         @db.VarChar(100)
-  first_name            String?        @db.VarChar(100)
-  last_name             String?        @db.VarChar(100)
-  student_id            String?        @db.VarChar(50)
-  contact_number        String?        @db.VarChar(50)
-  level                 alumni_level?
-  course                String?        @db.VarChar(100)
-  batch                 Int?
-  graduation_year       Int?
-  profile_image         String?        @db.VarChar(255)
-  verification_document String?        @db.VarChar(255)
-  additional_info       String?        @db.Text
-  consent_core          Boolean        @default(false)
-  consent_timestamp     DateTime?      @db.DateTime(0)
-  privacy_notice_version String?       @db.VarChar(50)
-  status                pending_status @default(PENDING)
-  created_at            DateTime       @default(now()) @db.DateTime(0)
-  updated_at            DateTime       @default(now()) @updatedAt @db.DateTime(0)
-  rejected_reason       String?        @db.Text
+  id                     Int            @id @default(autoincrement())
+  email                  String         @unique
+  password               String
+  username               String
+  first_name             String?
+  last_name              String?
+  student_id             String?
+  contact_number         String?
+  level                  alumni_level?
+  course                 String?
+  batch                  Int?
+  graduation_year        Int?
+  profile_image          String?
+  verification_document  String?
+  additional_info        String?
+  consent_core           Boolean        @default(false)
+  consent_timestamp      DateTime?
+  privacy_notice_version String?
+  status                 pending_status @default(PENDING)
+  created_at             DateTime       @default(now())
+  updated_at             DateTime       @default(now()) @updatedAt
+  rejected_reason        String?
 }
 
 enum pending_status {
@@ -423,36 +424,75 @@ enum pending_status {
 }
 
 model batch_officer {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   alumni_id  Int
   batch      Int
-  position   String    @db.VarChar(100)
+  position   String
   term_start Int?
   term_end   Int?
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @default(now()) @updatedAt @db.DateTime(0)
-  alumni     alumni    @relation(fields: [alumni_id], references: [id], onDelete: Cascade)
-  
-  @@unique([alumni_id, batch, position], map: "unique_officer_position")
-  @@index([batch], map: "idx_batch")
-  @@index([alumni_id], map: "idx_alumni_officer")
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+  alumni     alumni   @relation(fields: [alumni_id], references: [id], onDelete: Cascade)
+
+  @@unique([alumni_id, batch, position])
+  @@index([batch])
+  @@index([alumni_id])
 }
 
 model alumni_list {
-  id              Int       @id @default(autoincrement())
-  student_id      String    @unique @db.VarChar(50)
-  first_name      String    @db.VarChar(100)
-  last_name       String    @db.VarChar(100)
-  middle_name     String?   @db.VarChar(100)
-  course          String?   @db.VarChar(100)
-  level           String?   @db.VarChar(50)
+  id              Int      @id @default(autoincrement())
+  student_id      String   @unique
+  first_name      String
+  last_name       String
+  middle_name     String?
+  course          String?
+  level           String?
   batch           Int?
   graduation_year Int?
-  status          String    @default("ACTIVE") @db.VarChar(20) // ACTIVE, GRADUATED
-  created_at      DateTime  @default(now()) @db.DateTime(0)
-  updated_at      DateTime  @default(now()) @updatedAt @db.DateTime(0)
-  
-  @@index([student_id], map: "idx_student_id")
-  @@index([batch], map: "idx_alumni_batch")
-  @@index([graduation_year], map: "idx_graduation_year")
+  status          String   @default("ACTIVE") // ACTIVE, GRADUATED
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
+
+  @@index([student_id])
+  @@index([batch])
+  @@index([graduation_year])
+}
+
+model chat_conversations {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chat_id           String              @unique
+  status            String              @default("pending")
+  requested_by      String?
+  request_to        String?
+  blocked_by        String?
+  blocked_user      String?
+  last_message      String?
+  last_message_time DateTime?           @default(now()) @db.Timestamptz(6)
+  last_sender_id    String?
+  created_at        DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?           @default(now()) @db.Timestamptz(6)
+  chat_messages     chat_messages[]
+  chat_participants chat_participants[]
+}
+
+model chat_participants {
+  chat_id            String
+  user_id            String
+  unread_count       Int?               @default(0)
+  updated_at         DateTime?          @default(now()) @db.Timestamptz(6)
+  chat_conversations chat_conversations @relation(fields: [chat_id], references: [chat_id], onDelete: Cascade)
+
+  @@id([chat_id, user_id])
+}
+
+model chat_messages {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chat_id            String?
+  sender_id          String
+  receiver_id        String
+  message            String
+  type               String              @default("message")
+  is_read            Boolean?            @default(false)
+  created_at         DateTime?           @default(now()) @db.Timestamptz(6)
+  chat_conversations chat_conversations? @relation(fields: [chat_id], references: [chat_id], onDelete: Cascade)
 }

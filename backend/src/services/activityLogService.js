@@ -6,25 +6,26 @@ let ensureTablePromise = null;
 
 const ensureActivityLogTable = () => {
   if (!ensureTablePromise) {
-    ensureTablePromise = prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS activity_log (
-        id INT NOT NULL AUTO_INCREMENT,
-        actor_id INT NULL,
-        actor_name VARCHAR(255) NULL,
-        actor_role VARCHAR(100) NULL,
-        action VARCHAR(100) NOT NULL,
-        entity_type VARCHAR(100) NOT NULL,
-        entity_id INT NULL,
-        entity_label VARCHAR(255) NULL,
-        summary TEXT NOT NULL,
-        details TEXT NULL,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        INDEX idx_activity_log_created_at (created_at),
-        INDEX idx_activity_log_actor_id (actor_id),
-        INDEX idx_activity_log_entity (entity_type, action)
-      )
-    `).catch((error) => {
+    ensureTablePromise = (async () => {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS activity_log (
+          id SERIAL PRIMARY KEY,
+          actor_id INT NULL,
+          actor_name VARCHAR(255) NULL,
+          actor_role VARCHAR(100) NULL,
+          action VARCHAR(100) NOT NULL,
+          entity_type VARCHAR(100) NOT NULL,
+          entity_id INT NULL,
+          entity_label VARCHAR(255) NULL,
+          summary TEXT NOT NULL,
+          details TEXT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at)`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_activity_log_actor_id ON activity_log(actor_id)`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_activity_log_entity ON activity_log(entity_type, action)`);
+    })().catch((error) => {
       ensureTablePromise = null;
       throw error;
     });

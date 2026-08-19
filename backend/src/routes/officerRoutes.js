@@ -1,10 +1,9 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authMiddleware, teacherAuthMiddleware } = require('../middleware/auth');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 // Position hierarchy for ordering
 const positionOrder = {

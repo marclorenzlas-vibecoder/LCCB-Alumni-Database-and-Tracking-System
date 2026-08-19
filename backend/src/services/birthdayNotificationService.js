@@ -45,11 +45,11 @@ async function sendBirthdayNotifications() {
       a.date_of_birth,
       COALESCE(u.birthday_notification_visibility, 'PUBLIC') AS birthday_notification_visibility
     FROM alumni a
-    LEFT JOIN user u ON a.user_id = u.id
+    LEFT JOIN "user" u ON a.user_id = u.id
     WHERE a.date_of_birth IS NOT NULL
       AND (a.status IS NULL OR a.status != 'DECEASED')
-      AND MONTH(a.date_of_birth) = ${currentMonth}
-      AND DAY(a.date_of_birth) = ${currentDay}
+      AND EXTRACT(MONTH FROM a.date_of_birth) = ${currentMonth}
+      AND EXTRACT(DAY FROM a.date_of_birth) = ${currentDay}
       AND COALESCE(u.birthday_notification_visibility, 'PUBLIC') NOT IN ('OFF', 'PRIVATE')
   `;
   const eligibleRecipients = await prisma.user.findMany({

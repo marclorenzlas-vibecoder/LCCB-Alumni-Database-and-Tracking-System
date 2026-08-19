@@ -35,7 +35,7 @@ import {
   sendChatMessage,
   setupPresence,
   unblockChatUser
-} from '../../services/firebaseChatService';
+} from '../../services/supabaseChatService';
 import { imageUrl } from '../../utils/formatters';
 import { isTeacher } from '../../utils/auth';
 

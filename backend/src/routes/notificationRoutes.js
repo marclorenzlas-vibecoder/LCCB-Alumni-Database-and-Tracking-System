@@ -2,10 +2,9 @@ const express = require('express');
 const router = express.Router();
 const notificationService = require('../services/notificationService');
 const { authenticateToken } = require('../middleware/auth');
-const { PrismaClient } = require('@prisma/client');
 const { broadcastUpdate } = require('../services/realtimeService');
 
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 const normalizeBirthdayNotificationVisibility = (value) => {
   const normalized = String(value || 'PUBLIC').trim().toUpperCase();
@@ -242,7 +241,7 @@ router.post('/birthday-greetings', authenticateToken, async (req, res) => {
     try {
       const visibilityRows = await prisma.$queryRaw`
         SELECT birthday_notification_visibility
-        FROM user
+        FROM "user"
         WHERE id = ${recipientUser.id}
         LIMIT 1
       `;

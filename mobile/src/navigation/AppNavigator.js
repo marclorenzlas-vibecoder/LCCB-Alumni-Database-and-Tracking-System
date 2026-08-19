@@ -34,15 +34,23 @@ export default function AppNavigator() {
         const session = await authService.loadSession();
         if (session.user) {
           setUser(session.user);
+          // Set isLoading false right away so UI appears instantly using cached session user
+          setIsLoading(false);
+          
+          // Fetch fresh user in background
           try {
             const freshUser = await authService.getUser(session.user.id);
             if (freshUser) {
               setUser(freshUser);
               await authService.saveUser(freshUser);
             }
-          } catch {}
+          } catch (e) {
+             console.warn("Could not fetch fresh user details in background", e);
+          }
+        } else {
+          setIsLoading(false);
         }
-      } finally {
+      } catch (err) {
         setIsLoading(false);
       }
     };

@@ -8,6 +8,7 @@ import UserLayout from './UserLayout';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import { extractDonationMeta, withDonationMeta } from '../utils/donationMeta';
+import CardSkeleton from './CardSkeleton';
 
 const initialDonationForm = {
   purpose: '',
@@ -630,39 +631,40 @@ const Donations = () => {
           </div>
 
           {/* Campaign Cards */}
-          {loading && <div className="text-center">Loading...</div>}
-          {error && <div className="text-center text-red-600">{error}</div>}
-
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
-            {filteredDonations.map((donation) => (
-              <DonationCard
-                key={donation.id}
-                donation={donation}
-                isTeacher={isTeacher}
-                isAdminDonationPage={isAdminDonationPage}
-                donationStats={getCampaignStats(donation, recentDonationActivity)}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onDonate={(d) => {
-                  const role = authService.getRole();
-                  if (role === 'admin' || role === 'teacher') {
-                    navigate(`/admin/donate/${d.id}`);
-                  } else {
-                    navigate(`/donate/${d.id}`);
-                  }
-                }}
-                onShare={handleShare}
-                formatAmount={formatAmount}
-                calculateProgress={calculateProgress}
-              />
-            ))}
+            {loading ? (
+              <CardSkeleton count={6} />
+            ) : error ? (
+              <div className="col-span-full text-center text-red-600">{error}</div>
+            ) : filteredDonations.length === 0 ? (
+              <div className="col-span-full text-center text-gray-500 py-12">
+                No campaigns found. Create your first campaign!
+              </div>
+            ) : (
+              filteredDonations.map((donation) => (
+                <DonationCard
+                  key={donation.id}
+                  donation={donation}
+                  isTeacher={isTeacher}
+                  isAdminDonationPage={isAdminDonationPage}
+                  donationStats={getCampaignStats(donation, recentDonationActivity)}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onDonate={(d) => {
+                    const role = authService.getRole();
+                    if (role === 'admin' || role === 'teacher') {
+                      navigate(`/admin/donate/${d.id}`);
+                    } else {
+                      navigate(`/donate/${d.id}`);
+                    }
+                  }}
+                  onShare={handleShare}
+                  formatAmount={formatAmount}
+                  calculateProgress={calculateProgress}
+                />
+              ))
+            )}
           </div>
-
-          {filteredDonations.length === 0 && !loading && (
-            <div className="text-center text-gray-500 py-12">
-              No campaigns found. Create your first campaign!
-            </div>
-          )}
 
           {/* Modal for Adding/Editing Campaign */}
           {showModal && (

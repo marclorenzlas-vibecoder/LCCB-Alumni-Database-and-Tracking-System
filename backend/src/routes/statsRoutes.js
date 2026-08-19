@@ -1,10 +1,10 @@
 const express = require('express');
-const { PrismaClient, event_status } = require('@prisma/client');
+const { event_status } = require('@prisma/client');
 const { getLimiterStatus } = require('../services/activeUserLimiter');
 const { groupSectionDefinitions } = require('../config/groupSections.json');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 const createMonthlyBuckets = (monthsBack = 6) => {
   const buckets = [];
