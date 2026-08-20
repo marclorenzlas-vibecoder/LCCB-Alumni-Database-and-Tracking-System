@@ -85,6 +85,8 @@ export const getImageUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   if (path.startsWith('data:')) return path; // for base64
+  if (path.startsWith('blob:')) return path; // for Object URLs
+  if (path.startsWith('file:') || path.includes('fakepath') || /^[a-zA-Z]:\\/.test(path)) return ''; // Sanitize bad db values
   if (path.startsWith('/')) return `${IMAGE_BASE_URL}${path}`;
   return `${IMAGE_BASE_URL}/${path}`;
 };

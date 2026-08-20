@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { uploadToSupabase } = require('../services/storageService');
 const { authMiddleware, invalidateUserBlockCache, teacherAuthMiddleware } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
