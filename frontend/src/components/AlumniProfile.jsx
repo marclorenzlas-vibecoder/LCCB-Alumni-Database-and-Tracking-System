@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import alumniService from '../services/alumniService';
 import { authService } from '../services/authService';
@@ -145,20 +145,60 @@ const AlumniProfile = () => {
 
   const privateLabel = 'Hidden by User';
   const canViewPrivate = authService.isTeacher();
-  const flagIsPublic = (camelKey, snakeKey) => canViewPrivate || (profile[camelKey] ?? profile[snakeKey] ?? true) !== false;
-  const isStudentIdPublic = flagIsPublic('isStudentIdPublic', 'is_student_id_public');
-  const isDateOfBirthPublic = flagIsPublic('isDateOfBirthPublic', 'is_date_of_birth_public');
-  const isCoursePublic = flagIsPublic('isCoursePublic', 'is_course_public');
-  const isGraduationYearPublic = flagIsPublic('isGraduationYearPublic', 'is_graduation_year_public');
-  const isEducationHistoryPublic = flagIsPublic('isEducationHistoryPublic', 'is_education_history_public');
-  const isEmailPublic = flagIsPublic('isEmailPublic', 'is_email_public');
-  const isPhonePublic = flagIsPublic('isPhonePublic', 'is_phone_public');
-  const isPositionPublic = flagIsPublic('isPositionPublic', 'is_position_public');
-  const isEmploymentPublic = (profile.isEmploymentPublic ?? profile.is_employment_public ?? false) !== false;
-  const isCompanyPublic = flagIsPublic('isCompanyPublic', 'is_company_public');
-  const isLocationPublic = flagIsPublic('isLocationPublic', 'is_location_public');
-  const isSocialLinksPublic = flagIsPublic('isSocialLinksPublic', 'is_social_links_public');
-  const isSkillsPublic = flagIsPublic('isSkillsPublic', 'is_skills_public');
+  const parseBooleanFlag = (value, defaultValue = false) => {
+    if (value === undefined || value === null) return defaultValue;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['true', '1', 'yes', 'public'].includes(normalized)) return true;
+      if (['false', '0', 'no', 'private'].includes(normalized)) return false;
+    }
+    return defaultValue;
+  };
+  const flagIsPublic = (camelKey, snakeKey, defaultValue = false) => {
+    if (canViewPrivate) return true;
+    const val = profile[camelKey] ?? profile[snakeKey];
+    return parseBooleanFlag(val, defaultValue);
+  };
+  const isStudentIdPublic = flagIsPublic('isStudentIdPublic', 'is_student_id_public', false);
+  const isDateOfBirthPublic = flagIsPublic('isDateOfBirthPublic', 'is_date_of_birth_public', false);
+  const isCoursePublic = flagIsPublic('isCoursePublic', 'is_course_public', true);
+  const isGraduationYearPublic = flagIsPublic('isGraduationYearPublic', 'is_graduation_year_public', true);
+  const isEducationHistoryPublic = flagIsPublic('isEducationHistoryPublic', 'is_education_history_public', true);
+  const isEmailPublic = flagIsPublic('isEmailPublic', 'is_email_public', false);
+  const isPhonePublic = flagIsPublic('isPhonePublic', 'is_phone_public', false);
+  const isPositionPublic = flagIsPublic('isPositionPublic', 'is_position_public', false);
+  const isEmploymentPublic = flagIsPublic('isEmploymentPublic', 'is_employment_public', false);
+  const isCompanyPublic = flagIsPublic('isCompanyPublic', 'is_company_public', false);
+  const isLocationPublic = flagIsPublic('isLocationPublic', 'is_location_public', false);
+  const isSocialLinksPublic = flagIsPublic('isSocialLinksPublic', 'is_social_links_public', false);
+  const isSkillsPublic = flagIsPublic('isSkillsPublic', 'is_skills_public', false);
+
+  const parsedSkills = useMemo(() => {
+    if (!profile?.skills) return [];
+    if (Array.isArray(profile.skills)) {
+      return profile.skills
+        .map((s) => (typeof s === 'string' ? s.trim() : s?.name?.trim() || ''))
+        .filter(Boolean);
+    }
+    if (typeof profile.skills === 'string') {
+      try {
+        const parsed = JSON.parse(profile.skills);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((s) => (typeof s === 'string' ? s.trim() : s?.name?.trim() || ''))
+            .filter(Boolean);
+        }
+      } catch {
+        return profile.skills
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+    return [];
+  }, [profile]);
 
   // Merge actual profile data with default structure for compatibility
   const displayProfile = {
@@ -181,13 +221,11 @@ const AlumniProfile = () => {
       github: '#',
       twitter: '#'
     }) : {},
-    skills: isSkillsPublic && profile.skills && Array.isArray(profile.skills) && profile.skills.length > 0 ? profile.skills.map(skill => ({
-      name: typeof skill === 'string' ? skill : skill.name || 'Unknown',
-      level: Math.floor(Math.random() * 30) + 70, // Random level between 70-100
+    skills: isSkillsPublic && parsedSkills.length > 0 ? parsedSkills.map(skill => ({
+      name: skill,
+      level: 90,
       category: 'Technical'
-    })) : [
-      { name: 'No skills listed', level: 0, category: 'General' }
-    ],
+    })) : [],
     careerHistory: profile.careerHistory && profile.careerHistory.length > 0 && isEmploymentPublic ? profile.careerHistory : (isEmploymentPublic && isPositionPublic && isCompanyPublic && profile.currentPosition && profile.company ? [
       { 
         id: '1', 
@@ -458,35 +496,44 @@ const AlumniProfile = () => {
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-xl font-semibold text-gray-900 mb-6">Technical Skills</h3>
-        <div className="space-y-6">
-          {Object.entries(
-            displayProfile.skills.reduce((acc, skill) => {
-              if (!acc[skill.category]) acc[skill.category] = [];
-              acc[skill.category].push(skill);
-              return acc;
-            }, {})
-          ).map(([category, skills]) => (
-            <div key={category}>
-              <h4 className="text-lg font-medium text-gray-900 mb-3">{category}</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {skills.map((skill, index) => (
-                  <div key={index} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700">{skill.name}</span>
-                      <span className="text-sm text-gray-500">{skill.level}%</span>
+        {!isSkillsPublic ? (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-gray-500">
+            <p className="font-medium">Hidden by User</p>
+          </div>
+        ) : displayProfile.skills.length === 0 ? (
+          <p className="text-gray-500">No skills listed.</p>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(
+              displayProfile.skills.reduce((acc, skill) => {
+                const category = skill.category || 'Technical';
+                if (!acc[category]) acc[category] = [];
+                acc[category].push(skill);
+                return acc;
+              }, {})
+            ).map(([category, skills]) => (
+              <div key={category}>
+                <h4 className="text-lg font-medium text-gray-900 mb-3">{category}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {skills.map((skill, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">{skill.name}</span>
+                        <span className="text-sm text-gray-500">{skill.level}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-900 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${skill.level}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-900 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${skill.level}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

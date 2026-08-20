@@ -4,6 +4,23 @@ import { API_BASE_URL, IMAGE_BASE_URL } from "../config/apiBaseUrl";
 
 const API_URL = `${API_BASE_URL}/alumni`;
 
+const parseBooleanFlag = (value, fallback = false) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (value === true || value === 1 || value === "1") return true;
+  if (value === false || value === 0 || value === "0") return false;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "yes", "public"].includes(normalized)) return true;
+    if (["false", "no", "private"].includes(normalized)) return false;
+  }
+  return fallback;
+};
+
+const pickPrivacyFlag = (source = {}, camelKey, snakeKey, fallback = false) => {
+  const value = source?.[camelKey] !== undefined ? source[camelKey] : source?.[snakeKey];
+  return parseBooleanFlag(value, fallback);
+};
+
 class AlumniService {
   getAvatarFallbackUrl(firstName, lastName) {
     const fullName = `${firstName || ""} ${lastName || ""}`.trim() || "Alumni";
@@ -77,66 +94,34 @@ class AlumniService {
         profileImageUrl || this.getAvatarFallbackUrl(firstName, lastName),
       bio: alumnus.bio || "",
       status,
-      isPublic: alumnus.is_public !== undefined ? alumnus.is_public : true,
-      isStudentIdPublic:
-        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? false,
-      is_student_id_public:
-        alumnus.isStudentIdPublic ?? alumnus.is_student_id_public ?? false,
-      isDateOfBirthPublic:
-        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? false,
-      is_date_of_birth_public:
-        alumnus.isDateOfBirthPublic ?? alumnus.is_date_of_birth_public ?? false,
-      isCoursePublic: alumnus.isCoursePublic ?? alumnus.is_course_public ?? true,
-      is_course_public: alumnus.isCoursePublic ?? alumnus.is_course_public ?? true,
-      isGraduationYearPublic:
-        alumnus.isGraduationYearPublic ??
-        alumnus.is_graduation_year_public ??
-        true,
-      is_graduation_year_public:
-        alumnus.isGraduationYearPublic ??
-        alumnus.is_graduation_year_public ??
-        true,
-      isEducationHistoryPublic:
-        alumnus.isEducationHistoryPublic ??
-        alumnus.is_education_history_public ??
-        true,
-      is_education_history_public:
-        alumnus.isEducationHistoryPublic ??
-        alumnus.is_education_history_public ??
-        true,
-      isEmailPublic: alumnus.isEmailPublic ?? alumnus.is_email_public ?? false,
-      is_email_public: alumnus.isEmailPublic ?? alumnus.is_email_public ?? false,
-      isPhonePublic: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? false,
-      is_phone_public: alumnus.isPhonePublic ?? alumnus.is_phone_public ?? false,
-      isPositionPublic:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
-          false,
-      is_position_public:
-        (alumnus.isPositionPublic ?? alumnus.is_position_public ?? false) !==
-          false,
-      isEmploymentPublic:
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
-          false,
-      is_employment_public:
-        (alumnus.isEmploymentPublic ?? alumnus.is_employment_public ?? false) !==
-          false,
-      isCompanyPublic:
-        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? false,
-      is_company_public:
-        alumnus.isCompanyPublic ?? alumnus.is_company_public ?? false,
-      isLocationPublic:
-        alumnus.isLocationPublic ?? alumnus.is_location_public ?? false,
-      is_location_public:
-        alumnus.isLocationPublic ?? alumnus.is_location_public ?? false,
-      isSocialLinksPublic:
-        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? false,
-      is_social_links_public:
-        alumnus.isSocialLinksPublic ?? alumnus.is_social_links_public ?? false,
-      isSkillsPublic: alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? false,
-      is_skills_public:
-        alumnus.isSkillsPublic ?? alumnus.is_skills_public ?? false,
-      isVerified:
-        alumnus.is_verified !== undefined ? alumnus.is_verified : false,
+      isPublic: parseBooleanFlag(alumnus.is_public ?? alumnus.isPublic, true),
+      isStudentIdPublic: pickPrivacyFlag(alumnus, 'isStudentIdPublic', 'is_student_id_public', false),
+      is_student_id_public: pickPrivacyFlag(alumnus, 'isStudentIdPublic', 'is_student_id_public', false),
+      isDateOfBirthPublic: pickPrivacyFlag(alumnus, 'isDateOfBirthPublic', 'is_date_of_birth_public', false),
+      is_date_of_birth_public: pickPrivacyFlag(alumnus, 'isDateOfBirthPublic', 'is_date_of_birth_public', false),
+      isCoursePublic: pickPrivacyFlag(alumnus, 'isCoursePublic', 'is_course_public', true),
+      is_course_public: pickPrivacyFlag(alumnus, 'isCoursePublic', 'is_course_public', true),
+      isGraduationYearPublic: pickPrivacyFlag(alumnus, 'isGraduationYearPublic', 'is_graduation_year_public', true),
+      is_graduation_year_public: pickPrivacyFlag(alumnus, 'isGraduationYearPublic', 'is_graduation_year_public', true),
+      isEducationHistoryPublic: pickPrivacyFlag(alumnus, 'isEducationHistoryPublic', 'is_education_history_public', true),
+      is_education_history_public: pickPrivacyFlag(alumnus, 'isEducationHistoryPublic', 'is_education_history_public', true),
+      isEmailPublic: pickPrivacyFlag(alumnus, 'isEmailPublic', 'is_email_public', false),
+      is_email_public: pickPrivacyFlag(alumnus, 'isEmailPublic', 'is_email_public', false),
+      isPhonePublic: pickPrivacyFlag(alumnus, 'isPhonePublic', 'is_phone_public', false),
+      is_phone_public: pickPrivacyFlag(alumnus, 'isPhonePublic', 'is_phone_public', false),
+      isPositionPublic: pickPrivacyFlag(alumnus, 'isPositionPublic', 'is_position_public', false),
+      is_position_public: pickPrivacyFlag(alumnus, 'isPositionPublic', 'is_position_public', false),
+      isEmploymentPublic: pickPrivacyFlag(alumnus, 'isEmploymentPublic', 'is_employment_public', false),
+      is_employment_public: pickPrivacyFlag(alumnus, 'isEmploymentPublic', 'is_employment_public', false),
+      isCompanyPublic: pickPrivacyFlag(alumnus, 'isCompanyPublic', 'is_company_public', false),
+      is_company_public: pickPrivacyFlag(alumnus, 'isCompanyPublic', 'is_company_public', false),
+      isLocationPublic: pickPrivacyFlag(alumnus, 'isLocationPublic', 'is_location_public', false),
+      is_location_public: pickPrivacyFlag(alumnus, 'isLocationPublic', 'is_location_public', false),
+      isSocialLinksPublic: pickPrivacyFlag(alumnus, 'isSocialLinksPublic', 'is_social_links_public', false),
+      is_social_links_public: pickPrivacyFlag(alumnus, 'isSocialLinksPublic', 'is_social_links_public', false),
+      isSkillsPublic: pickPrivacyFlag(alumnus, 'isSkillsPublic', 'is_skills_public', false),
+      is_skills_public: pickPrivacyFlag(alumnus, 'isSkillsPublic', 'is_skills_public', false),
+      isVerified: parseBooleanFlag(alumnus.is_verified ?? alumnus.isVerified, false),
     };
   }
 

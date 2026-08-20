@@ -98,6 +98,7 @@ const PRIVACY_FIELD_MAP = [
 ];
 
 const parseBooleanFlag = (value) => {
+  if (value === undefined || value === null || value === "") return undefined;
   if (value === true || value === 1 || value === "1") return true;
   if (value === false || value === 0 || value === "0") return false;
   if (typeof value === "string") {
@@ -115,7 +116,6 @@ const appendPrivacyUpdates = (body, target) => {
     const parsed = parseBooleanFlag(body[foundKey]);
     if (parsed !== undefined) target[dbKey] = parsed;
   });
-
 };
 
 const hasPrivacyInput = (body) =>
@@ -139,10 +139,43 @@ const PRIVACY_DEFAULTS = {
   is_skills_public: false,
 };
 
-const isPublicFlag = (entry, key) => {
-  if (entry?.[key] === undefined || entry?.[key] === null) return PRIVACY_DEFAULTS[key] === true;
-  return entry[key] !== false;
+const readPrivacyFlag = (entry = {}, key) => {
+  const raw = entry?.[key];
+  const parsed = parseBooleanFlag(raw);
+  if (parsed !== undefined) return parsed;
+  return PRIVACY_DEFAULTS[key] === true;
 };
+
+const isPublicFlag = (entry, key) => readPrivacyFlag(entry, key);
+
+const alumniPrivacyPayload = (alumni = {}) => ({
+  isStudentIdPublic: readPrivacyFlag(alumni, "is_student_id_public"),
+  is_student_id_public: readPrivacyFlag(alumni, "is_student_id_public"),
+  isDateOfBirthPublic: readPrivacyFlag(alumni, "is_date_of_birth_public"),
+  is_date_of_birth_public: readPrivacyFlag(alumni, "is_date_of_birth_public"),
+  isCoursePublic: readPrivacyFlag(alumni, "is_course_public"),
+  is_course_public: readPrivacyFlag(alumni, "is_course_public"),
+  isGraduationYearPublic: readPrivacyFlag(alumni, "is_graduation_year_public"),
+  is_graduation_year_public: readPrivacyFlag(alumni, "is_graduation_year_public"),
+  isEducationHistoryPublic: readPrivacyFlag(alumni, "is_education_history_public"),
+  is_education_history_public: readPrivacyFlag(alumni, "is_education_history_public"),
+  isEmailPublic: readPrivacyFlag(alumni, "is_email_public"),
+  is_email_public: readPrivacyFlag(alumni, "is_email_public"),
+  isPhonePublic: readPrivacyFlag(alumni, "is_phone_public"),
+  is_phone_public: readPrivacyFlag(alumni, "is_phone_public"),
+  isPositionPublic: readPrivacyFlag(alumni, "is_position_public"),
+  is_position_public: readPrivacyFlag(alumni, "is_position_public"),
+  isEmploymentPublic: readPrivacyFlag(alumni, "is_employment_public"),
+  is_employment_public: readPrivacyFlag(alumni, "is_employment_public"),
+  isCompanyPublic: readPrivacyFlag(alumni, "is_company_public"),
+  is_company_public: readPrivacyFlag(alumni, "is_company_public"),
+  isLocationPublic: readPrivacyFlag(alumni, "is_location_public"),
+  is_location_public: readPrivacyFlag(alumni, "is_location_public"),
+  isSocialLinksPublic: readPrivacyFlag(alumni, "is_social_links_public"),
+  is_social_links_public: readPrivacyFlag(alumni, "is_social_links_public"),
+  isSkillsPublic: readPrivacyFlag(alumni, "is_skills_public"),
+  is_skills_public: readPrivacyFlag(alumni, "is_skills_public"),
+});
 
 const isStaffViewer = (viewer) => {
   const roleUpper = String(viewer?.role || "").toUpperCase();
@@ -151,14 +184,9 @@ const isStaffViewer = (viewer) => {
 
 const canViewPrivateAlumniFields = (viewer, alumni) => {
   if (!viewer || !alumni) return false;
-  if (isStaffViewer(viewer)) return true;
-  const viewerId = Number(viewer.id);
-  if (viewerId && Number(alumni.user_id) === viewerId) return true;
-  if (viewer.alumniId && Number(viewer.alumniId) === Number(alumni.id)) return true;
-  if (viewer.alumni_id && Number(viewer.alumni_id) === Number(alumni.id)) return true;
-  const viewerEmail = String(viewer.email || "").toLowerCase();
-  const alumniEmail = String(alumni.email || alumni.user?.email || "").toLowerCase();
-  return Boolean(viewerEmail && alumniEmail && viewerEmail === alumniEmail);
+  const isStaff = isStaffViewer(viewer);
+  const isOwner = viewer.id && alumni.user_id && Number(viewer.id) === Number(alumni.user_id);
+  return isStaff || isOwner;
 };
 
 const sanitizeAlumniForViewer = (entry, viewer) => {
@@ -273,6 +301,7 @@ router.get("/", softAuth, async (req, res) => {
       );
       return {
         ...visibleEntry,
+        ...alumniPrivacyPayload(visibleEntry),
         education_history: history,
         educationHistory: history,
       };
@@ -587,6 +616,7 @@ router.get("/:id", softAuth, async (req, res) => {
 
     res.json({
       ...visibleAlumni,
+      ...alumniPrivacyPayload(visibleAlumni),
       education_history: history,
       educationHistory: history,
     });
@@ -935,6 +965,7 @@ router.put("/:id", authMiddleware, runProfileUpload, async (req, res) => {
 
     res.json({
       ...updatedAlumni,
+      ...alumniPrivacyPayload(updatedAlumni),
       education_history: history,
       educationHistory: history,
     });

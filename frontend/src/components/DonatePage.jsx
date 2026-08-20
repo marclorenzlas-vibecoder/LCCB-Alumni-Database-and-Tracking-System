@@ -1152,16 +1152,13 @@ const DonatePage = () => {
 
   const renderDonationStepper = () => (
     <nav
-      className="donation-stepper border-t border-slate-200 bg-white px-4 py-5 sm:px-8"
+      className="donation-stepper border-t border-slate-200 bg-white px-4 py-3 sm:px-8"
       aria-label="Donation progress"
       style={{
         '--donation-step': currentStep,
         '--donation-steps': donationSteps.length
       }}
     >
-      <p className="donation-stepper__label">
-        Step {Math.min(currentStep, donationSteps.length)} of {donationSteps.length}
-      </p>
       <div className="donation-stepper__track-wrap">
         <div className="donation-stepper__track-bg" aria-hidden="true" />
         <div className="donation-stepper__track-fill" aria-hidden="true" />
@@ -1202,10 +1199,10 @@ const DonatePage = () => {
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="w-full space-y-6 px-4 sm:px-6 lg:px-8">
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
-          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-100 px-6 py-6 text-slate-900 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-100 px-6 py-3 text-slate-900 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs uppercase tracking-[0.35em] text-slate-600">Donation journey</p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Donate to {campaign?.purpose}</h1>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Donate to {campaign?.purpose}</h1>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
               <div className="text-xs uppercase tracking-[0.3em] text-slate-600">Signed in as</div>
@@ -1262,8 +1259,7 @@ const DonatePage = () => {
 
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-lg">
             <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-900">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Step {currentStep} of {donationSteps.length}</p>
-              <h3 className="mt-2 text-2xl font-bold">{isMoneyPath ? 'Make a Donation' : 'Donate Physical Items'}</h3>
+              <h3 className="mt-2 text-2xl font-bold">Make a Donation</h3>
             </div>
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-sm text-red-800">{error}</div>}

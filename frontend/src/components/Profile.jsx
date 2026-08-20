@@ -409,27 +409,29 @@ const Profile = () => {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       window.dispatchEvent(new CustomEvent(PROFILE_UPDATED_EVENT, { detail: updatedUser }));
 
-      setFormData((prev) => ({
-        ...prev,
-        username: updatedUser.username || '',
-        email: updatedUser.email || '',
-        firstName: normalizedAlumni?.firstName || '',
-        middleName: normalizedAlumni?.middleName || '',
-        lastName: normalizedAlumni?.lastName || '',
-        studentId: normalizedAlumni?.studentId || normalizedAlumni?.student_id || '',
-        dateOfBirth: formatDateForInput(normalizedAlumni?.dateOfBirth || normalizedAlumni?.date_of_birth),
-        level: primaryEducation.level || '',
-        course: normalizedAlumni?.course || '',
-        batch: primaryEducation.batch || '',
-        graduationYear: normalizedAlumni?.graduationYear || '',
-        currentPosition: normalizedAlumni?.currentPosition || '',
-        company: normalizedAlumni?.company || '',
-        location: normalizedAlumni?.location || '',
-        contactNumber: normalizedAlumni?.contactNumber || normalizedAlumni?.contact_number || '',
-        skills: normalizedAlumni?.skills || ''
-      }));
-      setPrivacySettings(normalizePrivacySettings(normalizedAlumni || {}));
-      setEducationHistory(syncedHistory);
+      if (!isEditing) {
+        setFormData((prev) => ({
+          ...prev,
+          username: updatedUser.username || prev.username || '',
+          email: updatedUser.email || prev.email || '',
+          firstName: normalizedAlumni?.firstName || prev.firstName || '',
+          middleName: normalizedAlumni?.middleName || prev.middleName || '',
+          lastName: normalizedAlumni?.lastName || prev.lastName || '',
+          studentId: normalizedAlumni?.studentId || normalizedAlumni?.student_id || prev.studentId || '',
+          dateOfBirth: formatDateForInput(normalizedAlumni?.dateOfBirth || normalizedAlumni?.date_of_birth) || prev.dateOfBirth || '',
+          level: primaryEducation.level || prev.level || '',
+          course: normalizedAlumni?.course || prev.course || '',
+          batch: primaryEducation.batch || prev.batch || '',
+          graduationYear: normalizedAlumni?.graduationYear || prev.graduationYear || '',
+          currentPosition: normalizedAlumni?.currentPosition || prev.currentPosition || '',
+          company: normalizedAlumni?.company || prev.company || '',
+          location: normalizedAlumni?.location || prev.location || '',
+          contactNumber: normalizedAlumni?.contactNumber || normalizedAlumni?.contact_number || prev.contactNumber || '',
+          skills: normalizedAlumni?.skills || prev.skills || ''
+        }));
+        setPrivacySettings(normalizePrivacySettings(normalizedAlumni || {}));
+        setEducationHistory(syncedHistory);
+      }
 
       if (updatedUser.profile_image) {
         setProfileImagePreview(`${IMAGE_BASE_URL}${updatedUser.profile_image}`);
@@ -574,54 +576,6 @@ const Profile = () => {
       if (response.ok) {
         const data = await response.json();
         setSocialLinks(data.social_link || []);
-
-        // Keep profile synced with backend values (city + country location, etc.).
-        const normalizedAlumni = {
-          ...data,
-          firstName: data.firstName || data.first_name || '',
-          middleName: data.middleName || data.middle_name || '',
-          lastName: data.lastName || data.last_name || '',
-          studentId: data.studentId || data.student_id || '',
-          student_id: data.student_id || data.studentId || '',
-          graduationYear: data.graduationYear || data.graduation_year || '',
-          dateOfBirth: formatDateForInput(data.dateOfBirth || data.date_of_birth),
-          currentPosition: data.currentPosition || data.current_position || '',
-          contactNumber: data.contactNumber || data.contact_number || ''
-        };
-        const normalizedHistory = normalizeEducationHistory(normalizedAlumni);
-        const syncedHistory = syncPrimaryEducationWithGraduationYear(
-          normalizedHistory,
-          normalizedAlumni.graduationYear || '',
-          normalizedAlumni.level || ''
-        );
-        const primaryEducation = getPrimaryEducation(syncedHistory);
-
-        setUser((prev) => {
-          if (!prev) return prev;
-          const updatedUser = { ...prev, alumni: normalizedAlumni };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          return updatedUser;
-        });
-
-        setFormData((prev) => ({
-          ...prev,
-          firstName: normalizedAlumni.firstName,
-          middleName: normalizedAlumni.middleName,
-          lastName: normalizedAlumni.lastName,
-          studentId: normalizedAlumni.studentId || normalizedAlumni.student_id || '',
-          dateOfBirth: formatDateForInput(normalizedAlumni.dateOfBirth || normalizedAlumni.date_of_birth),
-          level: primaryEducation.level || '',
-          course: normalizedAlumni.course || '',
-          batch: primaryEducation.batch || '',
-          graduationYear: normalizedAlumni.graduationYear || '',
-          currentPosition: normalizedAlumni.currentPosition || '',
-          company: normalizedAlumni.company || '',
-          location: normalizedAlumni.location || '',
-          contactNumber: normalizedAlumni.contactNumber || normalizedAlumni.contact_number || '',
-          skills: normalizedAlumni.skills || ''
-        }));
-        setPrivacySettings(normalizePrivacySettings(normalizedAlumni));
-        setEducationHistory(syncedHistory);
       }
     } catch (error) {
       console.error('Error fetching alumni details:', error);

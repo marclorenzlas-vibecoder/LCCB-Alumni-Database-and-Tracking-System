@@ -67,6 +67,7 @@ const PRIVACY_FIELD_MAP = [
 ];
 
 const parseBooleanFlag = (value) => {
+  if (value === undefined || value === null || value === '') return undefined;
   if (value === true || value === 1 || value === '1') return true;
   if (value === false || value === 0 || value === '0') return false;
   if (typeof value === 'string') {
@@ -98,7 +99,6 @@ const appendPrivacyUpdates = (body, target) => {
     const parsed = parseBooleanFlag(body[foundKey]);
     if (parsed !== undefined) target[dbKey] = parsed;
   });
-
 };
 
 const hasPrivacyInput = (body) =>
@@ -121,8 +121,10 @@ const PRIVACY_DEFAULTS = {
 };
 
 const readPrivacyFlag = (alumni = {}, key) => {
-  if (alumni[key] === undefined || alumni[key] === null) return PRIVACY_DEFAULTS[key] === true;
-  return alumni[key] !== false;
+  const raw = alumni[key];
+  const parsed = parseBooleanFlag(raw);
+  if (parsed !== undefined) return parsed;
+  return PRIVACY_DEFAULTS[key] === true;
 };
 
 const alumniPrivacyPayload = (alumni = {}) => ({

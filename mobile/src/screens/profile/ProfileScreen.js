@@ -109,22 +109,37 @@ const DEFAULT_PRIVACY_SETTINGS = {
   isSkillsPublic: false
 };
 
+const parseBooleanFlag = (value, fallback = false) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (value === true || value === 1 || value === '1') return true;
+  if (value === false || value === 0 || value === '0') return false;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', 'public'].includes(normalized)) return true;
+    if (['false', 'no', 'private'].includes(normalized)) return false;
+  }
+  return fallback;
+};
+
+const pickPrivacyFlag = (source = {}, camelKey, snakeKey, fallback = false) => {
+  const value = source[camelKey] !== undefined ? source[camelKey] : source[snakeKey];
+  return parseBooleanFlag(value, fallback);
+};
+
 const normalizePrivacySettings = (alumni = {}) => ({
-  isStudentIdPublic: (alumni.isStudentIdPublic ?? alumni.is_student_id_public ?? DEFAULT_PRIVACY_SETTINGS.isStudentIdPublic) !== false,
-  isDateOfBirthPublic: (alumni.isDateOfBirthPublic ?? alumni.is_date_of_birth_public ?? DEFAULT_PRIVACY_SETTINGS.isDateOfBirthPublic) !== false,
-  isCoursePublic: (alumni.isCoursePublic ?? alumni.is_course_public ?? DEFAULT_PRIVACY_SETTINGS.isCoursePublic) !== false,
-  isGraduationYearPublic: (alumni.isGraduationYearPublic ?? alumni.is_graduation_year_public ?? DEFAULT_PRIVACY_SETTINGS.isGraduationYearPublic) !== false,
-  isEducationHistoryPublic: (alumni.isEducationHistoryPublic ?? alumni.is_education_history_public ?? DEFAULT_PRIVACY_SETTINGS.isEducationHistoryPublic) !== false,
-  isEmailPublic: (alumni.isEmailPublic ?? alumni.is_email_public ?? DEFAULT_PRIVACY_SETTINGS.isEmailPublic) !== false,
-  isPhonePublic: (alumni.isPhonePublic ?? alumni.is_phone_public ?? DEFAULT_PRIVACY_SETTINGS.isPhonePublic) !== false,
-  isPositionPublic:
-    (alumni.isPositionPublic ?? alumni.is_position_public ?? DEFAULT_PRIVACY_SETTINGS.isPositionPublic) !== false,
-  isEmploymentPublic:
-    (alumni.isEmploymentPublic ?? alumni.is_employment_public ?? DEFAULT_PRIVACY_SETTINGS.isEmploymentPublic) !== false,
-  isCompanyPublic: (alumni.isCompanyPublic ?? alumni.is_company_public ?? DEFAULT_PRIVACY_SETTINGS.isCompanyPublic) !== false,
-  isLocationPublic: (alumni.isLocationPublic ?? alumni.is_location_public ?? DEFAULT_PRIVACY_SETTINGS.isLocationPublic) !== false,
-  isSocialLinksPublic: (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? DEFAULT_PRIVACY_SETTINGS.isSocialLinksPublic) !== false,
-  isSkillsPublic: (alumni.isSkillsPublic ?? alumni.is_skills_public ?? DEFAULT_PRIVACY_SETTINGS.isSkillsPublic) !== false
+  isStudentIdPublic: pickPrivacyFlag(alumni, 'isStudentIdPublic', 'is_student_id_public', DEFAULT_PRIVACY_SETTINGS.isStudentIdPublic),
+  isDateOfBirthPublic: pickPrivacyFlag(alumni, 'isDateOfBirthPublic', 'is_date_of_birth_public', DEFAULT_PRIVACY_SETTINGS.isDateOfBirthPublic),
+  isCoursePublic: pickPrivacyFlag(alumni, 'isCoursePublic', 'is_course_public', DEFAULT_PRIVACY_SETTINGS.isCoursePublic),
+  isGraduationYearPublic: pickPrivacyFlag(alumni, 'isGraduationYearPublic', 'is_graduation_year_public', DEFAULT_PRIVACY_SETTINGS.isGraduationYearPublic),
+  isEducationHistoryPublic: pickPrivacyFlag(alumni, 'isEducationHistoryPublic', 'is_education_history_public', DEFAULT_PRIVACY_SETTINGS.isEducationHistoryPublic),
+  isEmailPublic: pickPrivacyFlag(alumni, 'isEmailPublic', 'is_email_public', DEFAULT_PRIVACY_SETTINGS.isEmailPublic),
+  isPhonePublic: pickPrivacyFlag(alumni, 'isPhonePublic', 'is_phone_public', DEFAULT_PRIVACY_SETTINGS.isPhonePublic),
+  isPositionPublic: pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public', DEFAULT_PRIVACY_SETTINGS.isPositionPublic),
+  isEmploymentPublic: pickPrivacyFlag(alumni, 'isEmploymentPublic', 'is_employment_public', DEFAULT_PRIVACY_SETTINGS.isEmploymentPublic),
+  isCompanyPublic: pickPrivacyFlag(alumni, 'isCompanyPublic', 'is_company_public', DEFAULT_PRIVACY_SETTINGS.isCompanyPublic),
+  isLocationPublic: pickPrivacyFlag(alumni, 'isLocationPublic', 'is_location_public', DEFAULT_PRIVACY_SETTINGS.isLocationPublic),
+  isSocialLinksPublic: pickPrivacyFlag(alumni, 'isSocialLinksPublic', 'is_social_links_public', DEFAULT_PRIVACY_SETTINGS.isSocialLinksPublic),
+  isSkillsPublic: pickPrivacyFlag(alumni, 'isSkillsPublic', 'is_skills_public', DEFAULT_PRIVACY_SETTINGS.isSkillsPublic)
 });
 
 export default function ProfileScreen({ navigation, user, setUser }) {

@@ -258,21 +258,37 @@ export default function AlumniDetailScreen({ route, navigation }) {
     educationHistory.length > 0
       ? educationHistory[educationHistory.length - 1]
       : {};
+  const parseBooleanFlag = (value, fallback = false) => {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['true', 'yes', 'public'].includes(normalized)) return true;
+      if (['false', 'no', 'private'].includes(normalized)) return false;
+    }
+    return fallback;
+  };
+
+  const pickPrivacyFlag = (source = {}, camelKey, snakeKey, fallback = false) => {
+    const value = source?.[camelKey] !== undefined ? source[camelKey] : source?.[snakeKey];
+    return parseBooleanFlag(value, fallback);
+  };
+
   const privateLabel = "Hidden by User";
-  const isStudentIdPublic = (alumni.isStudentIdPublic ?? alumni.is_student_id_public ?? true) !== false;
-  const isDateOfBirthPublic = (alumni.isDateOfBirthPublic ?? alumni.is_date_of_birth_public ?? true) !== false;
-  const isCoursePublic = (alumni.isCoursePublic ?? alumni.is_course_public ?? true) !== false;
-  const isGraduationYearPublic = (alumni.isGraduationYearPublic ?? alumni.is_graduation_year_public ?? true) !== false;
-  const isEducationHistoryPublic = (alumni.isEducationHistoryPublic ?? alumni.is_education_history_public ?? true) !== false;
-  const isEmailPublic = (alumni.isEmailPublic ?? alumni.is_email_public ?? false) !== false;
-  const isPhonePublic = (alumni.isPhonePublic ?? alumni.is_phone_public ?? false) !== false;
-  const isPositionPublic =
-    (alumni.isPositionPublic ?? alumni.is_position_public ?? false) !== false;
-  const employmentPublic = isEmploymentHistoryPublic(alumni);
-  const isCompanyPublic = (alumni.isCompanyPublic ?? alumni.is_company_public ?? false) !== false;
-  const isLocationPublic = (alumni.isLocationPublic ?? alumni.is_location_public ?? true) !== false;
-  const isSocialLinksPublic = (alumni.isSocialLinksPublic ?? alumni.is_social_links_public ?? true) !== false;
-  const isSkillsPublic = (alumni.isSkillsPublic ?? alumni.is_skills_public ?? true) !== false;
+  const isStudentIdPublic = pickPrivacyFlag(alumni, 'isStudentIdPublic', 'is_student_id_public', false);
+  const isDateOfBirthPublic = pickPrivacyFlag(alumni, 'isDateOfBirthPublic', 'is_date_of_birth_public', false);
+  const isCoursePublic = pickPrivacyFlag(alumni, 'isCoursePublic', 'is_course_public', true);
+  const isGraduationYearPublic = pickPrivacyFlag(alumni, 'isGraduationYearPublic', 'is_graduation_year_public', true);
+  const isEducationHistoryPublic = pickPrivacyFlag(alumni, 'isEducationHistoryPublic', 'is_education_history_public', true);
+  const isEmailPublic = pickPrivacyFlag(alumni, 'isEmailPublic', 'is_email_public', false);
+  const isPhonePublic = pickPrivacyFlag(alumni, 'isPhonePublic', 'is_phone_public', false);
+  const isPositionPublic = pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public', false);
+  const employmentPublic = pickPrivacyFlag(alumni, 'isEmploymentPublic', 'is_employment_public', false);
+  const isCompanyPublic = pickPrivacyFlag(alumni, 'isCompanyPublic', 'is_company_public', false);
+  const isLocationPublic = pickPrivacyFlag(alumni, 'isLocationPublic', 'is_location_public', false);
+  const isSocialLinksPublic = pickPrivacyFlag(alumni, 'isSocialLinksPublic', 'is_social_links_public', false);
+  const isSkillsPublic = pickPrivacyFlag(alumni, 'isSkillsPublic', 'is_skills_public', false);
   const visibleOrPrivate = (isPublic, value, fallback = "Not provided") =>
     isPublic ? (value || fallback) : privateLabel;
 

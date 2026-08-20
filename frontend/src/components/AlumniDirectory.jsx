@@ -214,10 +214,40 @@ const AlumniDirectory = () => {
   const isTeacher = authService.isTeacher();
   const currentUser = useMemo(() => authService.getCurrentUser(), []);
   const privateLabel = 'Hidden by User';
-  const fieldIsPublic = (record, camelKey, snakeKey) => isTeacher || (record?.[camelKey] ?? record?.[snakeKey] ?? true) !== false;
-  const canViewEmploymentHistory = (record) => (
-    (record?.isEmploymentPublic ?? record?.is_employment_public ?? false) !== false
+
+  const parseBooleanFlag = (value, fallback = false) => {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['true', 'yes', 'public'].includes(normalized)) return true;
+      if (['false', 'no', 'private'].includes(normalized)) return false;
+    }
+    return fallback;
+  };
+
+  const isOwnerOfRecord = (record) => Boolean(
+    currentUser && record && (
+      (currentUser.id && record.userId && Number(currentUser.id) === Number(record.userId)) ||
+      (currentUser.id && record.user_id && Number(currentUser.id) === Number(record.user_id)) ||
+      (currentUser.alumni?.id && record.id && Number(currentUser.alumni.id) === Number(record.id)) ||
+      (currentUser.email && record.email && currentUser.email.toLowerCase() === record.email.toLowerCase())
+    )
   );
+
+  const fieldIsPublic = (record, camelKey, snakeKey, fallback = false) => {
+    if (isTeacher) return true;
+    const value = record?.[camelKey] !== undefined ? record[camelKey] : record?.[snakeKey];
+    return parseBooleanFlag(value, fallback);
+  };
+
+  const canViewEmploymentHistory = (record) => {
+    if (isTeacher) return true;
+    const value = record?.isEmploymentPublic !== undefined ? record.isEmploymentPublic : record?.is_employment_public;
+    return parseBooleanFlag(value, false);
+  };
+
   // Core data
   const [alumni, setAlumni] = useState([]);
   const [userStatuses, setUserStatuses] = useState({});
@@ -228,7 +258,7 @@ const AlumniDirectory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
   const [selectedBatch, setSelectedBatch] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState(''); // Placeholder for future grouping logic
+  const [selectedGroup, setSelectedGroup] = useState('');
   const [sortOrder] = useState({ field: 'id', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [showLevelMenu, setShowLevelMenu] = useState(false);
