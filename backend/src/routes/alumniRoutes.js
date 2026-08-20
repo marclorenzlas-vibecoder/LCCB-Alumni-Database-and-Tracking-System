@@ -5,6 +5,7 @@ const authMiddleware = require("../middleware/auth").authMiddleware;
 const path = require("path");
 const { broadcastUpdate } = require("../services/realtimeService");
 const { buildChangeSet, recordActivity } = require("../services/activityLogService");
+const { uploadToSupabase } = require("../services/storageService");
 const {
   normalizeLevel,
   parseEducationHistory,
@@ -415,11 +416,17 @@ router.post("/", runProfileUpload, async (req, res) => {
         !Number.isNaN(parsedDateOfBirth.getTime())
           ? parsedDateOfBirth
           : null,
-      profile_image: req.file
-        ? `/uploads/profiles/${req.file.filename}`
-        : profileImage || null,
       ...PRIVACY_DEFAULTS,
     };
+
+    if (req.file) {
+      alumniData.profile_image = await uploadToSupabase(req.file, 'profiles');
+    } else if (profileImage) {
+      alumniData.profile_image = profileImage;
+    } else {
+      alumniData.profile_image = null;
+    }
+    
     appendPrivacyUpdates(req.body, alumniData);
 
     // Only add user_id if we found an existing user
@@ -761,10 +768,10 @@ router.put("/:id", authMiddleware, runProfileUpload, async (req, res) => {
 
     // Handle profile image upload
     if (req.file) {
-      updateData.profile_image = `/uploads/profiles/${req.file.filename}`;
+      updateData.profile_image = await uploadToSupabase(req.file, 'profiles');
     } else if (
       req.body.profileImage &&
-      req.body.profileImage.includes("/uploads/")
+      (req.body.profileImage.includes("/uploads/") || req.body.profileImage.includes("supabase.co"))
     ) {
       updateData.profile_image = req.body.profileImage;
     }
@@ -775,7 +782,7 @@ router.put("/:id", authMiddleware, runProfileUpload, async (req, res) => {
     console.log("Has file upload:", !!req.file);
     if (req.file) {
       console.log("File details:", {
-        filename: req.file.filename,
+        originalname: req.file.originalname,
         size: req.file.size,
         mimetype: req.file.mimetype,
       });

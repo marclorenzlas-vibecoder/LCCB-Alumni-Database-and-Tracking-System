@@ -9,17 +9,10 @@ const isNetworkAccess = typeof window !== 'undefined' &&
   window.location.hostname !== '127.0.0.1';
 
 // Image base URL (for serving static files like profile pictures)
-const getImageBaseUrl = () => {
-  if (typeof window === 'undefined') return '';
-  
-  // If we have API base URL from env, derive image URL from it
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-  if (apiBaseUrl) {
-    return apiBaseUrl.replace(/\/api$/, '');
-  }
-
-  // Fallback: use current origin
-  return window.location.origin;
+// Derived from API_BASE_URL to ensure consistency (e.g., localhost:5001 during local dev)
+const deriveImageBaseUrl = (apiUrl) => {
+  if (!apiUrl) return '';
+  return apiUrl.replace(/\/api$/, '');
 };
 
 const normalizeApiBase = (rawUrl) => {
@@ -46,13 +39,22 @@ const normalizeApiBase = (rawUrl) => {
 const getApiBaseUrl = () => {
   // Prefer explicit environment variables in all modes.
   // Support both VITE_API_BASE_URL and legacy VITE_API_URL.
-  const envUrl = normalizeApiBase(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL);
+  let envUrl = normalizeApiBase(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL);
+  
   if (envUrl) {
+    // If we are on the network (not localhost), and envUrl points to localhost, 
+    // rewrite it to use the current window's hostname so network devices can reach it!
+    if (typeof window !== 'undefined' && isNetworkAccess && envUrl.includes('localhost')) {
+      envUrl = envUrl.replace('localhost', window.location.hostname);
+    }
     return envUrl;
   }
 
   // Local development fallback should point to backend, not frontend origin.
   if (import.meta.env.DEV) {
+    if (typeof window !== 'undefined' && isNetworkAccess) {
+      return `http://${window.location.hostname}:5001/api`;
+    }
     return 'http://localhost:5001/api';
   }
 
@@ -69,7 +71,7 @@ const getApiBaseUrl = () => {
 };
 
 export const API_BASE_URL = getApiBaseUrl();
-export const IMAGE_BASE_URL = getImageBaseUrl();
+export const IMAGE_BASE_URL = deriveImageBaseUrl(API_BASE_URL);
 
 console.log('API Configuration:', {
   API_BASE_URL,
@@ -77,3 +79,12 @@ console.log('API Configuration:', {
   isNetworkAccess,
   environment: import.meta.env.MODE
 });
+
+
+export const getImageUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (path.startsWith('data:')) return path; // for base64
+  if (path.startsWith('/')) return `${IMAGE_BASE_URL}${path}`;
+  return `${IMAGE_BASE_URL}/${path}`;
+};

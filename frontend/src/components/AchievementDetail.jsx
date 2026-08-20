@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { useParams, useNavigate } from 'react-router-dom';
 import achievementService from '../services/achievementService';
 import { authService } from '../services/authService';
@@ -156,13 +157,13 @@ const AchievementDetail = () => {
               <div className="rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
                 {/\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
                   <AchievementVideoPreview
-                    src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+                    src={achievement.image.startsWith('/') ? getImageUrl(achievement.image) : achievement.image}
                     className="h-64 w-full rounded-lg sm:h-80"
                     videoClassName="h-64 w-full rounded-lg object-cover sm:h-80"
                   />
                 ) : (
                   <img
-                    src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+                    src={achievement.image.startsWith('/') ? getImageUrl(achievement.image) : achievement.image}
                     alt={achievement.title}
                     className="w-full h-auto object-cover"
                     style={{

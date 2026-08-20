@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
@@ -1218,7 +1219,7 @@ const DonatePage = () => {
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-200">
             {campaign.image && (
               <img
-                src={campaign.image.startsWith('/') ? `${IMAGE_BASE_URL}${campaign.image}` : campaign.image}
+                src={campaign.image.startsWith('/') ? getImageUrl(campaign.image) : campaign.image}
                 alt={campaign.purpose}
                 className="w-full h-52 object-cover"
               />

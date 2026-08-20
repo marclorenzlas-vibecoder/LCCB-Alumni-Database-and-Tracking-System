@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { realtimeClient } from '../services/realtimeClient';
 import { authService } from '../services/authService';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
@@ -274,7 +275,7 @@ const LiveDonationToast = () => {
                 <img
                   src={
                     t.senderProfileImage.startsWith('/')
-                      ? `${IMAGE_BASE_URL}${t.senderProfileImage}`
+                      ? getImageUrl(t.senderProfileImage)
                       : t.senderProfileImage
                   }
                   alt=""

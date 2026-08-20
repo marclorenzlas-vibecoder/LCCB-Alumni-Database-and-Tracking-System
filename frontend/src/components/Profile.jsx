@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { authService } from '../services/authService';
 import careerService from '../services/careerService';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
@@ -434,7 +435,7 @@ const Profile = () => {
       }
 
       if (updatedUser.profile_image) {
-        setProfileImagePreview(`${IMAGE_BASE_URL}${updatedUser.profile_image}`);
+        setProfileImagePreview(getImageUrl(updatedUser.profile_image));
       }
 
     } catch (error) {
@@ -499,7 +500,7 @@ const Profile = () => {
       setPrivacySettings(normalizePrivacySettings(userData.alumni || {}));
       setEducationHistory(syncedEducationHistory);
       if (userData.profile_image) {
-        setProfileImagePreview(`${IMAGE_BASE_URL}${userData.profile_image}`);
+        setProfileImagePreview(getImageUrl(userData.profile_image));
       }
       // Fetch latest alumni details (including social links) from API
       if (userData.alumni?.id) {
@@ -967,7 +968,7 @@ const Profile = () => {
                   <div className="relative">
                     <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full opacity-75 blur group-hover:opacity-100 transition duration-300"></div>
                     <img 
-                      src={`${IMAGE_BASE_URL}${user.profile_image}`} 
+                      src={getImageUrl(user.profile_image)} 
                       alt={user.username || 'User'} 
                       className="relative w-20 h-20 rounded-full object-cover border-3 border-white shadow-2xl ring-3 ring-blue-400/50"
                     />

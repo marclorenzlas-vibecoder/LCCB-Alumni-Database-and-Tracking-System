@@ -5,6 +5,7 @@ const { authenticateToken } = require("../middleware/auth");
 const { buildChangeSet, recordActivity } = require("../services/activityLogService");
 const prisma = require('../config/prisma');
 const router = express.Router();
+const { uploadToSupabase } = require('../services/storageService');
 
 const isStaffRequest = (req) => {
   const role = String(req.user?.role || '').toUpperCase();
@@ -123,15 +124,7 @@ if (!fs.existsSync(achievementsDir)) {
   fs.mkdirSync(achievementsDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, achievementsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "achievement-" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -172,9 +165,7 @@ router.post(
       }
 
       const mediaFile = req.files?.find(f => f.fieldname === 'image' || f.fieldname === 'video');
-      const mediaPath = mediaFile
-        ? `/uploads/achievements/${mediaFile.filename}`
-        : null;
+      const mediaPath = mediaFile ? await uploadToSupabase(mediaFile, 'achievements') : null;
 
       const createData = {
         title: title.trim(),
@@ -262,7 +253,7 @@ router.put(
       // Add media path if uploaded
       const mediaFile = req.files?.find(f => f.fieldname === 'image' || f.fieldname === 'video');
       if (mediaFile) {
-        updateData.image = `/uploads/achievements/${mediaFile.filename}`;
+        updateData.image = await uploadToSupabase(mediaFile, 'achievements');
 
         // Delete old image if exists
         if (oldAchievement?.image) {

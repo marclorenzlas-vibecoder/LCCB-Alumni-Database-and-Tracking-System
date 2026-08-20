@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import UserLayout from './UserLayout';
@@ -52,7 +53,7 @@ const ManageUsers = () => {
   const normalizeUsername = (value) => String(value || '').trim().toLowerCase();
   const resolveProfileImage = (imagePath) => {
     if (!imagePath) return '';
-    return String(imagePath).startsWith('http') ? imagePath : `${IMAGE_BASE_URL}${imagePath}`;
+    return String(imagePath).startsWith('http') ? imagePath : getImageUrl(imagePath);
   };
 
   const fetchUsers = async () => {

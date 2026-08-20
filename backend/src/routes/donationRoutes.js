@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../config/prisma');
 const router = express.Router();
+const { uploadToSupabase } = require('../services/storageService');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -15,15 +16,7 @@ if (!fs.existsSync(donationsDir)) {
   fs.mkdirSync(donationsDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, donationsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'donation-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -715,7 +708,7 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
 
     const imageFile = req.files?.image?.[0] || null;
     const qrImageFile = req.files?.qr_image?.[0] || null;
-    const imagePath = imageFile ? `/uploads/donations/${imageFile.filename}` : null;
+    const imagePath = imageFile ? await uploadToSupabase(imageFile, 'donations') : null;
 
     const { cleanDescription, meta } = parseDescriptionMeta(description || '');
     meta.donationMode = 'both';
@@ -876,7 +869,7 @@ router.post('/:id/contribute', flexibleAuthMiddleware, uploadContributionFiles, 
     const mergedMeta = { ...existingData.meta, ...meta };
     const itemImageFiles = Array.isArray(req.files) ? req.files : (req.files?.images || []);
     const paymentScreenshotFile = Array.isArray(req.files) ? null : (req.files?.payment_screenshot?.[0] || null);
-    const paymentScreenshotPath = paymentScreenshotFile ? `/uploads/donations/${paymentScreenshotFile.filename}` : '';
+    const paymentScreenshotPath = paymentScreenshotFile ? await uploadToSupabase(paymentScreenshotFile, 'donations') : '';
     const paymentMethodLabel = String(meta.paymentMethod || extractLineValue(cleanDescription, 'Payment method') || '').toLowerCase();
     const requiresPaymentScreenshot = donationType === 'money'
       && (paymentMethodLabel.includes('gcash') || paymentMethodLabel.includes('maya'));
@@ -897,7 +890,7 @@ router.post('/:id/contribute', flexibleAuthMiddleware, uploadContributionFiles, 
     // Store uploaded images
     const uploadedImagePaths = [];
     if (itemImageFiles.length > 0) {
-      const paths = itemImageFiles.map((f) => `/uploads/donations/${f.filename}`);
+      const paths = await Promise.all(itemImageFiles.map(async (f) => await uploadToSupabase(f, 'donations')));
       if (donationType === 'item') {
         mergedMeta.itemImagePaths = paths;
       } else {
@@ -1073,7 +1066,7 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
             fs.unlinkSync(oldQrPath);
           }
         }
-        mergedMeta.qrImagePath = `/uploads/donations/${qrImageFile.filename}`;
+        mergedMeta.qrImagePath = await uploadToSupabase(qrImageFile, 'donations');
       }
 
       const clean = description !== undefined ? incoming.cleanDescription : existing.cleanDescription;
@@ -1084,7 +1077,7 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
     // Add image path if uploaded
     const imageFile = req.files?.image?.[0] || null;
     if (imageFile) {
-      updateData.image = `/uploads/donations/${imageFile.filename}`;
+      updateData.image = await uploadToSupabase(imageFile, 'donations');
       
       // Delete old image if exists
       if (oldDonation?.image) {

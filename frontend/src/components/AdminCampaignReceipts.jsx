@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { useNavigate, useParams } from 'react-router-dom';
 import donationService from '../services/donationService';
 import UserLayout from './UserLayout';
@@ -28,7 +29,7 @@ const formatDateLong = (raw) => {
 
 const resolveImage = (path) => {
   if (!path) return null;
-  return path.startsWith('/') ? `${IMAGE_BASE_URL}${path}` : path;
+  return path.startsWith('/') ? getImageUrl(path) : path;
 };
 
 // ─── Donor Avatar ────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import UserLayout from './UserLayout';
@@ -305,7 +306,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   const getImageSrc = (imagePath) => {
     if (!imagePath) return '';
     if (/^https?:\/\//i.test(imagePath)) return imagePath;
-    return `${IMAGE_BASE_URL}${imagePath}`;
+    return getImageUrl(imagePath);
   };
 
   const renderProgramUsageAlumni = (alumni = [], tone = 'using') => {

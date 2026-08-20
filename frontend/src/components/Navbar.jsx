@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { getImageUrl } from '../config/apiBaseUrl';
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import AlumniLogo from "../assets/alumnilogo2.png";
@@ -16,7 +17,7 @@ const getNotificationImageSrc = (notification) => {
   if (!imagePath) return "";
   return imagePath.startsWith("http")
     ? imagePath
-    : `${IMAGE_BASE_URL}${imagePath}`;
+    : getImageUrl(imagePath);
 };
 
 const getNotificationInitial = (notification) => {
@@ -1207,7 +1208,7 @@ const Navbar = () => {
                   >
                     {user?.profile_image ? (
                       <img
-                        src={`${IMAGE_BASE_URL}${user.profile_image}`}
+                        src={getImageUrl(user.profile_image)}
                         alt={user?.username || "User"}
                         className="h-7 w-7 rounded-none object-cover border border-white shadow-sm"
                       />
@@ -1241,7 +1242,7 @@ const Navbar = () => {
                           <div className="app-navbar-dropdown-icon overflow-hidden bg-white">
                             {user?.profile_image ? (
                               <img
-                                src={`${IMAGE_BASE_URL}${user.profile_image}`}
+                                src={getImageUrl(user.profile_image)}
                                 alt={user?.username || "User"}
                                 className="h-full w-full object-cover"
                               />

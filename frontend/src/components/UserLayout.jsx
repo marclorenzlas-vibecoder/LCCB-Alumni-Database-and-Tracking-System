@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { getImageUrl } from '../config/apiBaseUrl';
 import { useLocation, useNavigate } from "react-router-dom";
 import AlumniLogo from "../assets/alumnilogo2.png";
 import Navbar from "./Navbar";
@@ -100,7 +101,7 @@ const getProfileImageSrc = (user) => {
   if (!imagePath) return "";
   return imagePath.startsWith("http")
     ? imagePath
-    : `${IMAGE_BASE_URL}${imagePath}`;
+    : getImageUrl(imagePath);
 };
 
 const getUserInitials = (user) => {

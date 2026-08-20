@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import donationService from '../services/donationService';
@@ -121,7 +122,7 @@ function DonationCard({ donation, isTeacher, isAdminDonationPage, donationStats,
         <img
           src={
             donation.image
-              ? (donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image)
+              ? (donation.image.startsWith('/') ? getImageUrl(donation.image) : donation.image)
               : 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Donation+Campaign'
           }
           alt={donation.purpose}
@@ -535,7 +536,7 @@ const Donations = () => {
 
     if (meta.qrImagePath) {
       return {
-        qrData: meta.qrImagePath.startsWith('/') ? `${IMAGE_BASE_URL}${meta.qrImagePath}` : meta.qrImagePath,
+        qrData: meta.qrImagePath.startsWith('/') ? getImageUrl(meta.qrImagePath) : meta.qrImagePath,
         ...paymentDetails
       };
     }

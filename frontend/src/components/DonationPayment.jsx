@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { useNavigate, useLocation } from 'react-router-dom';
 import gcashLogo from '../assets/gcash.jpeg';
 import paymayaLogo from '../assets/paymaya.jpeg';
@@ -171,7 +172,7 @@ const DonationPayment = () => {
               <img
                 src={
                   donation.image 
-                    ? (donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image)
+                    ? (donation.image.startsWith('/') ? getImageUrl(donation.image) : donation.image)
                     : 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Donation+Campaign'
                 }
                 alt={donation.purpose}

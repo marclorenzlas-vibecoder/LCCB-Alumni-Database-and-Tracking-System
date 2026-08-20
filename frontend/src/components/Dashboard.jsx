@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { Link } from 'react-router-dom';
 import UserLayout from './UserLayout';
 import AlumniService from '../services/alumniService';
@@ -6,7 +7,7 @@ import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
 const resolveImageUrl = (imagePath) => {
   if (!imagePath) return '';
-  return String(imagePath).startsWith('http') ? imagePath : `${IMAGE_BASE_URL}${imagePath}`;
+  return String(imagePath).startsWith('http') ? imagePath : getImageUrl(imagePath);
 };
 
 const getInitials = (firstName = '', lastName = '') =>

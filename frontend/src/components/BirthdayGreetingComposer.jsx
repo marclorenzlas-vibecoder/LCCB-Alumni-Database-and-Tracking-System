@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { createPortal } from 'react-dom';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { authService } from '../services/authService';
@@ -17,7 +18,7 @@ const getInitials = (name = '') =>
 
 const resolveImageUrl = (imagePath) => {
   if (!imagePath) return '';
-  return String(imagePath).startsWith('http') ? imagePath : `${IMAGE_BASE_URL}${imagePath}`;
+  return String(imagePath).startsWith('http') ? imagePath : getImageUrl(imagePath);
 };
 
 const formatBirthdayDate = (dateValue) => {

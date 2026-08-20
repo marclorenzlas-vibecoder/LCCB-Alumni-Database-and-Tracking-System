@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { useNavigate } from 'react-router-dom';
 import eventService from '../services/eventService';
 import { realtimeClient } from '../services/realtimeClient';
@@ -981,7 +982,7 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
         <img
           src={
             event.image
-              ? (event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image)
+              ? (event.image.startsWith('/') ? getImageUrl(event.image) : event.image)
               : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=250&fit=crop'
           }
           alt={event.name}

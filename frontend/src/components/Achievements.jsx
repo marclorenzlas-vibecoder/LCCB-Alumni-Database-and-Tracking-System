@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import achievementService from '../services/achievementService';
 import { realtimeClient } from '../services/realtimeClient';
@@ -54,14 +55,14 @@ function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
         {achievement.image ? (
           /\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image) ? (
             <AchievementVideoPreview
-              src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+              src={achievement.image.startsWith('/') ? getImageUrl(achievement.image) : achievement.image}
               className="h-full w-full"
               videoClassName="h-full w-full object-cover"
               muted
             />
           ) : (
             <img
-              src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
+              src={achievement.image.startsWith('/') ? getImageUrl(achievement.image) : achievement.image}
               alt={achievement.title}
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />

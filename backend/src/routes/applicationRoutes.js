@@ -8,21 +8,14 @@ const notificationService = require('../services/notificationService');
 const { authenticateToken } = require('../middleware/auth');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { inferProgramAlignment } = require('../utils/programAlignment');
+const { uploadToSupabase } = require('../services/storageService');
 
 const applicationsDir = path.join(__dirname, '../../uploads/applications');
 if (!fs.existsSync(applicationsDir)) {
   fs.mkdirSync(applicationsDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, applicationsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'resume-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -139,7 +132,7 @@ router.post('/', authenticateToken, runResumeUpload, async (req, res) => {
       contact_number
     } = req.body;
 
-    const uploadedResumeUrl = req.file ? `/uploads/applications/${req.file.filename}` : null;
+    const uploadedResumeUrl = req.file ? await uploadToSupabase(req.file, 'resumes') : null;
     const finalResumeUrl = uploadedResumeUrl || resume_url || null;
     const applicationMeta = buildApplicationMeta({ contact_method, contact_email, contact_number });
 

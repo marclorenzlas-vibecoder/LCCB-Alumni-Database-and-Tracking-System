@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import alumniService from '../services/alumniService';
 import achievementService from '../services/achievementService';
@@ -95,7 +96,7 @@ const getOfficerImageSrc = (alumni) => {
       return imagePath;
     }
 
-    return `${IMAGE_BASE_URL}${imagePath}`;
+    return getImageUrl(imagePath);
   }
 
   const name = encodeURIComponent(getPersonName(alumni));

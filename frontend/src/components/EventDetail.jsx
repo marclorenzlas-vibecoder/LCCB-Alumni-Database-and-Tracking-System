@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { getImageUrl } from '../config/apiBaseUrl';
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import eventService from "../services/eventService";
@@ -48,7 +49,7 @@ const EventDetail = () => {
   const getProfileImageSrc = (alumni) => {
     const img = alumni?.profile_image;
     if (!img) return getAvatarFallbackUrl(alumni);
-    return img.startsWith("/") ? `${IMAGE_BASE_URL}${img}` : img;
+    return img.startsWith("/") ? getImageUrl(img) : img;
   };
 
   useEffect(() => {
@@ -427,7 +428,7 @@ const EventDetail = () => {
       {event.image && (
         <div className="relative h-[300px] md:h-[400px] w-full overflow-hidden">
           <img
-            src={`${IMAGE_BASE_URL}${event.image}`}
+            src={getImageUrl(event.image)}
             alt={event.name}
             className="w-full h-full object-cover"
           />
@@ -1016,7 +1017,7 @@ const EventDetail = () => {
                           onClick={() => openLightbox(index)}
                         >
                           <img
-                            src={`${IMAGE_BASE_URL}${photo.image}`}
+                            src={getImageUrl(photo.image)}
                             alt={`Gallery ${index + 1}`}
                             className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
                           />
@@ -1024,7 +1025,7 @@ const EventDetail = () => {
                         </div>
                         <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100">
                           <a
-                            href={`${IMAGE_BASE_URL}${photo.image}`}
+                            href={getImageUrl(photo.image)}
                             download
                             onClick={(e) => e.stopPropagation()}
                             className="flex h-7 w-7 items-center justify-center rounded-md bg-black/55 text-white transition hover:bg-black/75"
@@ -1182,7 +1183,7 @@ const EventDetail = () => {
             )}
 
             <img
-              src={`${IMAGE_BASE_URL}${gallery[lightboxIndex].image}`}
+              src={getImageUrl(gallery[lightboxIndex].image)}
               alt={`Gallery ${lightboxIndex + 1}`}
               className="max-w-[90vw] max-h-[85vh] object-contain rounded-sm"
             />

@@ -26,15 +26,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -916,7 +908,7 @@ router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async 
     if (normalizedUsername) updateData.username = normalizedUsername;
     if (normalizedEmail) updateData.email = normalizedEmail;
     if (req.file) {
-      updateData.profile_image = `/uploads/profiles/${req.file.filename}`;
+      updateData.profile_image = await uploadToSupabase(req.file, 'profiles');
     }
 
     // Check if user is teacher or regular user
@@ -988,7 +980,7 @@ router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async 
           }
         }
         if (req.file) {
-          alumniUpdateData.profile_image = `/uploads/profiles/${req.file.filename}`;
+          alumniUpdateData.profile_image = updateData.profile_image;
         }
 
         const teacherEmail = normalizedEmail || updatedUser.email;
@@ -1133,7 +1125,7 @@ router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async 
         }
         // Also update profile_image in alumni table when user uploads new image
         if (req.file) {
-          alumniUpdateData.profile_image = `/uploads/profiles/${req.file.filename}`;
+          alumniUpdateData.profile_image = updateData.profile_image;
         }
         
         // Find existing alumni record by user_id or email (user_id is preferred but may not exist)

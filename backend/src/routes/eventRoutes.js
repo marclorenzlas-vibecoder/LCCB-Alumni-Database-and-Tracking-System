@@ -8,6 +8,7 @@ const notificationService = require('../services/notificationService');
 const { authenticateToken, teacherAuthMiddleware } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
+const { uploadToSupabase } = require('../services/storageService');
 
 // ensure uploads/events exists
 const eventsDir = path.join(__dirname, '../../uploads/events');
@@ -47,15 +48,7 @@ const getAuthenticatedAlumniId = async (req) => {
   return null;
 };
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, eventsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'event-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -140,7 +133,7 @@ router.post('/', teacherAuthMiddleware, runUpload, async (req, res) => {
       });
     }
 
-    const imagePath = req.file ? `/uploads/events/${req.file.filename}` : null;
+    const imagePath = req.file ? await uploadToSupabase(req.file, 'events') : null;
     const shouldNotify = sendNotification === 'true' || sendNotification === true;
     const batchValue = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch) : null;
 
@@ -219,15 +212,7 @@ router.put('/:id', teacherAuthMiddleware, runUpload, async (req, res) => {
     
     // Add image path if uploaded
     if (req.file) {
-      updateData.image = `/uploads/events/${req.file.filename}`;
-      
-      // Delete old image if exists
-      if (oldEvent?.image) {
-        const oldImagePath = path.join(__dirname, '../../', oldEvent.image);
-        if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath);
-        }
-      }
+      updateData.image = await uploadToSupabase(req.file, 'events');
     }
 
     const event = await prisma.event.update({
@@ -480,19 +465,7 @@ router.get('/:id/check-attendance/:alumniId', authenticateToken, async (req, res
 // ===== EVENT GALLERY ROUTES =====
 
 // Setup multer for gallery photos
-const galleryStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const galleryDir = path.join(__dirname, '../../uploads/events/gallery');
-    if (!fs.existsSync(galleryDir)) {
-      fs.mkdirSync(galleryDir, { recursive: true });
-    }
-    cb(null, galleryDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'gallery-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+const galleryStorage = multer.memoryStorage();
 
 const galleryUpload = multer({
   storage: galleryStorage,
@@ -570,16 +543,17 @@ router.post('/:id/gallery', authenticateToken, galleryUpload.array('images', 20)
     const uploadedBy = role === 'ALUMNI' && req.user.id ? Number(req.user.id) : null;
 
     const galleryPhotos = await Promise.all(
-      req.files.map(file => 
-        prisma.event_gallery.create({
+      req.files.map(async file => {
+        const publicUrl = await uploadToSupabase(file, 'events/gallery');
+        return prisma.event_gallery.create({
           data: {
             event_id: eventId,
-            image: `/uploads/events/gallery/${file.filename}`,
+            image: publicUrl,
             caption: null,
             uploaded_by: uploadedBy
           }
-        })
-      )
+        });
+      })
     );
 
     res.status(201).json(galleryPhotos);

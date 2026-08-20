@@ -1,6 +1,7 @@
 // Alumni Data Service
 // This service handles all alumni data operations through API calls
 import { API_BASE_URL, IMAGE_BASE_URL } from "../config/apiBaseUrl";
+import { getImageUrl } from '../config/apiBaseUrl';
 
 const API_URL = `${API_BASE_URL}/alumni`;
 
@@ -52,7 +53,7 @@ class AlumniService {
   normalizeAlumniRecord(alumnus) {
     let profileImageUrl = alumnus.profile_image || alumnus.profileImage || "";
     if (profileImageUrl && !profileImageUrl.startsWith("http")) {
-      profileImageUrl = `${IMAGE_BASE_URL}${profileImageUrl}`;
+      profileImageUrl = getImageUrl(profileImageUrl);
     }
 
     const educationHistory = this.normalizeEducationHistory(
@@ -275,7 +276,7 @@ class AlumniService {
       let profileImageUrl =
         newAlumni.profile_image || newAlumni.profileImage || "";
       if (profileImageUrl && !profileImageUrl.startsWith("http")) {
-        profileImageUrl = `${IMAGE_BASE_URL}${profileImageUrl}`;
+        profileImageUrl = getImageUrl(profileImageUrl);
       }
       const educationHistory = this.normalizeEducationHistory(
         newAlumni.educationHistory || newAlumni.education_history,
@@ -416,7 +417,7 @@ class AlumniService {
       let profileImageUrl =
         updatedAlumni.profile_image || updatedAlumni.profileImage || "";
       if (profileImageUrl && !profileImageUrl.startsWith("http")) {
-        profileImageUrl = `${IMAGE_BASE_URL}${profileImageUrl}`;
+        profileImageUrl = getImageUrl(profileImageUrl);
       }
       const educationHistory = this.normalizeEducationHistory(
         updatedAlumni.educationHistory || updatedAlumni.education_history,

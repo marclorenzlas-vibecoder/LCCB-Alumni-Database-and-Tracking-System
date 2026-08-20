@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getImageUrl } from '../config/apiBaseUrl';
 import { Link, useNavigate } from 'react-router-dom';
 import eventService from '../services/eventService';
 import achievementService from '../services/achievementService';
@@ -17,7 +18,7 @@ function AchievementHomeCard({ achievement }) {
   const titleRef = useRef(null);
   const [descLines, setDescLines] = useState(4);
   const achievementMediaSrc = achievement.image
-    ? achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image
+    ? achievement.image.startsWith('/') ? getImageUrl(achievement.image) : achievement.image
     : '';
   const isAchievementVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(achievement.image || '');
 
@@ -116,7 +117,7 @@ function EventHomeCard({ event }) {
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
       {event.image ? (
         <img
-          src={event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image}
+          src={event.image.startsWith('/') ? getImageUrl(event.image) : event.image}
           alt={event.name}
           className="w-full h-40 object-cover"
         />
@@ -190,7 +191,7 @@ function DonationHomeCard({ donation, formatAmount }) {
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
       {donation.image ? (
         <img
-          src={donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image}
+          src={donation.image.startsWith('/') ? getImageUrl(donation.image) : donation.image}
           alt={donation.purpose}
           className="w-full h-40 object-cover"
         />
