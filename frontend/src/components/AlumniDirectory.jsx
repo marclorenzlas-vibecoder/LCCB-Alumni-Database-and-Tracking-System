@@ -254,6 +254,7 @@ const AlumniDirectory = () => {
   const [userStatuses, setUserStatuses] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isPageChanging, setIsPageChanging] = useState(false);
 
   // Filters / search / sorting
   const [searchTerm, setSearchTerm] = useState('');
@@ -272,6 +273,7 @@ const AlumniDirectory = () => {
   const addCourseMenuRef = useRef(null);
   const alumniListRef = useRef(null);
   const paginationRef = useRef(null);
+  const changePageTimeoutRef = useRef(null);
 
   // Viewing / editing / adding
   const [showViewModal, setShowViewModal] = useState(false);
@@ -333,6 +335,29 @@ const AlumniDirectory = () => {
   const [educationHistory, setEducationHistory] = useState([createEducationEntry()]);
 
   const filterCourseSections = useMemo(() => buildRegisterCourseSections(selectedLevel), [selectedLevel]);
+
+  const myAlumniRecord = useMemo(() => {
+    return alumni.find((a) => isOwnerOfRecord(a));
+  }, [alumni, currentUser]);
+
+  const myBatches = useMemo(() => {
+    if (!myAlumniRecord) return [];
+    const batches = [];
+    if (myAlumniRecord.batch) {
+      batches.push(Number(myAlumniRecord.batch));
+    }
+    if (myAlumniRecord.educationHistory) {
+      myAlumniRecord.educationHistory.forEach((edu) => {
+        if (edu.batch) {
+          const bNum = Number(edu.batch);
+          if (!batches.includes(bNum)) {
+            batches.push(bNum);
+          }
+        }
+      });
+    }
+    return batches;
+  }, [myAlumniRecord]);
 
   // Education history helpers
   const handleEducationHistoryChange = (index, field, value) => {
@@ -406,6 +431,32 @@ const AlumniDirectory = () => {
   const baseFilteredAlumni = useMemo(() => {
     let data = [...alumni];
 
+    // Filter by batch scope ONLY if the user is a regular alumni and NOT currently searching
+    if (!isTeacher && !searchTerm.trim()) {
+      data = data.filter((a) => {
+        // Always show the user's own profile in the directory list
+        if (isOwnerOfRecord(a)) return true;
+
+        // Check if the other alumnus shares any batch with myBatches
+        const itemBatches = [];
+        if (a.batch) {
+          itemBatches.push(Number(a.batch));
+        }
+        if (a.educationHistory) {
+          a.educationHistory.forEach((edu) => {
+            if (edu.batch) {
+              const bNum = Number(edu.batch);
+              if (!itemBatches.includes(bNum)) {
+                itemBatches.push(bNum);
+              }
+            }
+          });
+        }
+
+        return itemBatches.some((b) => myBatches.includes(b));
+      });
+    }
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       data = data.filter((a) =>
@@ -424,7 +475,7 @@ const AlumniDirectory = () => {
     }
 
     return data;
-  }, [alumni, searchTerm, selectedLevel, selectedGroup]);
+  }, [alumni, searchTerm, selectedLevel, selectedGroup, isTeacher, myBatches]);
 
   // Derived batches from currently matching alumni only
   const batches = useMemo(() => {
@@ -525,12 +576,29 @@ const AlumniDirectory = () => {
 
     if (normalizedPage === currentPage) return;
 
+    if (changePageTimeoutRef.current) {
+      clearTimeout(changePageTimeoutRef.current);
+    }
+
+    setIsPageChanging(true);
     setCurrentPage(normalizedPage);
 
     requestAnimationFrame(() => {
       alumniListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+
+    changePageTimeoutRef.current = setTimeout(() => {
+      setIsPageChanging(false);
+    }, 400);
   };
+
+  useEffect(() => {
+    return () => {
+      if (changePageTimeoutRef.current) {
+        clearTimeout(changePageTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Load batch officers when a batch is selected
   useEffect(() => {
@@ -1776,34 +1844,32 @@ const AlumniDirectory = () => {
           </div>
         )}
         <div className="grid auto-rows-[104px] content-start items-stretch gap-3 px-4 py-4 sm:px-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-          {loading && (
+          {(loading || isPageChanging) && (
             <>
               {Array.from({ length: 12 }).map((_, index) => (
-                <div key={`skel-${index}`} className="alumni-directory-card flex h-full min-h-[104px] w-full items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-2.5 shadow-sm animate-pulse">
-                  <div className="h-12 w-12 shrink-0 rounded-full bg-slate-200"></div>
-                  <div className="flex-1 space-y-2 py-1">
-                    <div className="h-4 w-3/4 rounded bg-slate-200"></div>
-                    <div className="h-3 w-5/6 rounded bg-slate-200"></div>
+                <div key={`skel-${index}`} className="flex h-full min-h-[104px] w-full items-center gap-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm animate-pulse">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="h-14 w-14 shrink-0 rounded-full bg-slate-200"></div>
+                    <div className="flex-1 space-y-2.5 py-1 min-w-0">
+                      <div className="h-4 w-1/2 rounded bg-slate-200"></div>
+                      <div className="flex gap-2">
+                        <div className="h-3.5 w-16 rounded bg-slate-200"></div>
+                        <div className="h-3.5 w-20 rounded bg-slate-200"></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
             </>
           )}
-          {error && !loading && (
+          {error && !loading && !isPageChanging && (
             <div className="col-span-full rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-600">{error}</div>
           )}
-          {!loading && !error && filteredAlumni.length === 0 && (
+          {!loading && !isPageChanging && !error && filteredAlumni.length === 0 && (
             <div className="col-span-full rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">No alumni found.</div>
           )}
-          {!loading && !error && paginatedAlumni.map(a => {
+          {!loading && !isPageChanging && !error && paginatedAlumni.map(a => {
             const fullName = `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'Unnamed Alumni';
-            const courseText = fieldIsPublic(a, 'isCoursePublic', 'is_course_public')
-              ? (a.course || 'Course not provided')
-              : 'Course hidden';
-            const levelText = fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public')
-              ? getLevelLabel(a.level)
-              : 'Level hidden';
-            const educationSummary = [courseText, levelText].filter(Boolean).join(' \u00b7 ');
             const userStatus = userStatuses[getAlumniChatUserId(a)];
             const isOnline = Boolean(userStatus?.online);
 
@@ -1812,7 +1878,7 @@ const AlumniDirectory = () => {
                 key={a.id}
                 role="button"
                 tabIndex={0}
-                className="alumni-directory-card group flex h-full min-h-[104px] w-full cursor-pointer items-center gap-3 rounded-lg border-[0.5px] border-slate-200/80 bg-white px-3.5 py-2.5 text-left shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/80 hover:bg-slate-50 hover:shadow-[0_16px_34px_-22px_rgba(15,23,42,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+                className="alumni-directory-card group flex h-full min-h-[104px] w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-100 bg-white p-4 text-left shadow-[0_4px_20px_-10px_rgba(15,23,42,0.05)] transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-gradient-to-br hover:from-white hover:to-blue-50/10 hover:shadow-[0_20px_35px_-15px_rgba(37,99,235,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
                 onClick={() => openViewModal(a)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1821,19 +1887,50 @@ const AlumniDirectory = () => {
                   }
                 }}
               >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="h-12 w-12 shrink-0">
+                <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                  <div className="relative h-14 w-14 shrink-0">
                     <img
                       src={a.profileImage || getInitialAvatarSrc(a.firstName, a.lastName, 96)}
                       onError={(event) => handleProfileImageError(event, a.firstName, a.lastName, 96)}
                       alt={fullName}
-                      title={`${fullName} - ${isOnline ? 'Online' : 'Offline'}`}
-                      className={`avatar alumni-list-avatar h-12 w-12 rounded-full object-cover ${isOnline ? 'online' : 'offline'}`}
+                      className="h-14 w-14 rounded-full object-cover border border-slate-200/80 shadow-sm"
                     />
+                    {isOnline ? (
+                      <span className="absolute bottom-0 right-0 flex h-3.5 w-3.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white bg-green-500"></span>
+                      </span>
+                    ) : (
+                      <span className="absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full border-2 border-white bg-slate-300" />
+                    )}
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-gray-950 sm:text-base" title={fullName}>{fullName}</h3>
-                    <p className="mt-0.5 truncate text-xs font-medium leading-snug text-slate-600 sm:text-sm" title={educationSummary}>{educationSummary}</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors sm:text-base" title={fullName}>{fullName}</h3>
+                    {fieldIsPublic(a, 'isCoursePublic', 'is_course_public') && a.course ? (
+                      <p className="truncate text-xs font-semibold text-slate-500 mt-0.5" title={a.course}>
+                        {a.course}
+                      </p>
+                    ) : (
+                      <p className="text-xs font-medium text-slate-400 mt-0.5 italic">
+                        Course hidden
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {fieldIsPublic(a, 'isEducationHistoryPublic', 'is_education_history_public') && a.level ? (
+                        <span className="inline-flex items-center rounded bg-slate-50 border border-slate-200/60 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 uppercase tracking-wide">
+                          {getLevelLabel(a.level)}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded bg-slate-50 border border-slate-200/60 px-1.5 py-0.5 text-[9px] font-medium text-slate-400">
+                          Level hidden
+                        </span>
+                      )}
+                      {a.batch && (
+                        <span className="inline-flex items-center rounded bg-amber-50/80 border border-amber-100/50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 uppercase tracking-wide">
+                          Batch {a.batch}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

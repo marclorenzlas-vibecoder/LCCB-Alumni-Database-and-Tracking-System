@@ -393,6 +393,40 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
   const insets = useSafeAreaInsets();
   const currentUserId = getSystemUserId(user);
 
+  const isOwnerOfRecord = (record) => {
+    if (!record || !user) return false;
+    const userId = record.user_id || record.userId || record.user?.id;
+    if (userId && currentUserId && Number(userId) === Number(currentUserId)) return true;
+    if (user.email && record.email && String(user.email).toLowerCase() === String(record.email).toLowerCase()) return true;
+    return false;
+  };
+
+  const myAlumniRecord = useMemo(() => {
+    return list.find((a) => isOwnerOfRecord(a));
+  }, [list, user, currentUserId]);
+
+  const myBatches = useMemo(() => {
+    if (!myAlumniRecord) return [];
+    const batches = [];
+    if (myAlumniRecord.batch) {
+      batches.push(Number(myAlumniRecord.batch));
+    }
+    const history = getEducationHistory(myAlumniRecord);
+    history.forEach((edu) => {
+      if (edu.batch) {
+        const bNum = Number(edu.batch);
+        if (!batches.includes(bNum)) {
+          batches.push(bNum);
+        }
+      }
+    });
+    return batches;
+  }, [myAlumniRecord]);
+
+  const isTeacher = useMemo(() => {
+    return Boolean(user?.email && String(user.email).toLowerCase().endsWith('@lccbonline.com'));
+  }, [user]);
+
   useEffect(() => {
     if (!currentUserId) {
       setConversationSummaries({});
@@ -540,7 +574,32 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return list.filter((item) => {
+
+    // Default batch filter for regular alumni when not searching
+    let baseList = list;
+    if (!isTeacher && !q) {
+      baseList = list.filter((item) => {
+        if (isOwnerOfRecord(item)) return true;
+
+        const itemBatches = [];
+        if (item.batch) {
+          itemBatches.push(Number(item.batch));
+        }
+        const history = getEducationHistory(item);
+        history.forEach((edu) => {
+          if (edu.batch) {
+            const bNum = Number(edu.batch);
+            if (!itemBatches.includes(bNum)) {
+              itemBatches.push(bNum);
+            }
+          }
+        });
+
+        return itemBatches.some((b) => myBatches.includes(b));
+      });
+    }
+
+    return baseList.filter((item) => {
       const history = getEducationHistory(item);
       const primaryEducation = getPrimaryEducation(item);
       const levels = history.length > 0 ? history.map((entry) => normalizeLevel(entry.level)) : [normalizeLevel(primaryEducation.level)];
@@ -563,7 +622,7 @@ export default function AlumniDirectoryScreen({ navigation, user }) {
 
       return matchesQuery && matchesLevel && matchesBatch && matchesGroup;
     });
-  }, [list, query, selectedBatch, selectedLevel, selectedGroup]);
+  }, [list, query, selectedBatch, selectedLevel, selectedGroup, isTeacher, myBatches, user, currentUserId]);
 
   const groupLabelMap = useMemo(() => {
     const map = {};

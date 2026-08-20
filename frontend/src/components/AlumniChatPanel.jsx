@@ -41,6 +41,49 @@ const formatChatTime = (timestamp) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+const formatChatSeparatorDate = (timestamp) => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  
+  if (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  ) {
+    return 'Today';
+  }
+  
+  if (
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate()
+  ) {
+    return 'Yesterday';
+  }
+  
+  return date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const isDifferentDay = (timestamp1, timestamp2) => {
+  if (!timestamp1 || !timestamp2) return true;
+  const d1 = new Date(timestamp1);
+  const d2 = new Date(timestamp2);
+  return (
+    d1.getFullYear() !== d2.getFullYear() ||
+    d1.getMonth() !== d2.getMonth() ||
+    d1.getDate() !== d2.getDate()
+  );
+};
+
 const formatLastActive = (status) => {
   if (status?.online) return 'Online';
   if (!status?.lastActive) return 'Offline';
@@ -1061,62 +1104,73 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
                     <div className="space-y-3">
                       {messages.map((message, index) => {
                         const isOwn = String(message.senderId) === String(currentUserId);
-                        const nextMessage = messages[index + 1];
-                        const isLastInGroup = !nextMessage || String(nextMessage.senderId) !== String(message.senderId);
-                        const showStatus = isOwn && (message.status === 'error' || message.status === 'sending' || isLastInGroup);
+                        const isLatestMessage = index === messages.length - 1;
+                        const showStatus = isOwn && (message.status === 'error' || message.status === 'sending' || isLatestMessage);
+
+                        const prevMessage = messages[index - 1];
+                        const showDateSeparator = !prevMessage || isDifferentDay(prevMessage.timestamp, message.timestamp);
 
                         return (
-                          <div key={message.id} className="flex flex-col">
-                            {/* Timestamp centered, animated on click */}
-                            <div className={`overflow-hidden transition-all duration-300 ease-in-out flex justify-center w-full ${clickedMessageId === message.id ? 'max-h-6 opacity-100 mt-2 mb-1' : 'max-h-0 opacity-0 mt-0 mb-0'}`}>
-                              <span className="text-[11px] text-slate-500 font-medium">
-                                {formatChatTime(message.timestamp)}
-                              </span>
-                            </div>
-
-                            {/* Message Bubble */}
-                            <div className={`lccb-chat-message flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                              <div
-                                onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
-                                className={`cursor-pointer max-w-[78%] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-all ${
-                                  isOwn
-                                    ? 'rounded-br-md bg-blue-700 text-white hover:bg-blue-800'
-                                    : 'rounded-bl-md border border-slate-200 bg-white text-slate-900 hover:bg-slate-50'
-                                }`}
-                              >
-                                <p className="whitespace-pre-wrap break-words">{message.text || message.message}</p>
-                              </div>
-                            </div>
-
-                            {/* Message Status */}
-                            {showStatus && (
-                              <div className={`flex justify-end overflow-hidden transition-all duration-300 ease-in-out max-h-6 opacity-100 mt-0.5`}>
-                                <span className="text-[10px] text-slate-400 italic flex items-center gap-1">
-                                  {message.status === 'error' ? (
-                                    <span className="text-red-500 not-italic flex items-center gap-1" title="Error sending message">
-                                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                                      Error
-                                    </span>
-                                  ) : message.status === 'sending' ? (
-                                    <span className="flex items-center gap-1">
-                                      <svg className="h-3 w-3 text-slate-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
-                                      Sending...
-                                    </span>
-                                  ) : (message.is_read || message.isRead) ? (
-                                    <span className="text-blue-500 not-italic flex items-center gap-1" title="Read">
-                                      <svg className="h-3 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 6 7 17 2 12"></polyline><polyline points="22 6 11 17 9.5 15.5"></polyline></svg>
-                                      Read
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center gap-1" title="Sent">
-                                      <svg className="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                      Sent
-                                    </span>
-                                  )}
+                          <React.Fragment key={message.id}>
+                            {showDateSeparator && (
+                              <div className="flex justify-center my-4 select-none">
+                                <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                                  {formatChatSeparatorDate(message.timestamp)}
                                 </span>
                               </div>
                             )}
-                          </div>
+                            <div className="flex flex-col">
+                              {/* Timestamp centered, animated on click */}
+                              <div className={`overflow-hidden transition-all duration-300 ease-in-out flex justify-center w-full ${clickedMessageId === message.id ? 'max-h-6 opacity-100 mt-2 mb-1' : 'max-h-0 opacity-0 mt-0 mb-0'}`}>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  {formatChatTime(message.timestamp)}
+                                </span>
+                              </div>
+
+                              {/* Message Bubble */}
+                              <div className={`lccb-chat-message flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                                <div
+                                  onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                  className={`cursor-pointer max-w-[78%] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-all ${
+                                    isOwn
+                                      ? 'rounded-br-md bg-blue-700 text-white hover:bg-blue-800'
+                                      : 'rounded-bl-md border border-slate-200 bg-white text-slate-900 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <p className="whitespace-pre-wrap break-words">{message.text || message.message}</p>
+                                </div>
+                              </div>
+
+                              {/* Message Status */}
+                              {showStatus && (
+                                <div className={`flex justify-end overflow-hidden transition-all duration-300 ease-in-out max-h-6 opacity-100 mt-0.5`}>
+                                  <span className="text-[10px] text-slate-400 italic flex items-center gap-1">
+                                    {message.status === 'error' ? (
+                                      <span className="text-red-500 not-italic flex items-center gap-1" title="Error sending message">
+                                        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                        Error
+                                      </span>
+                                    ) : message.status === 'sending' ? (
+                                      <span className="flex items-center gap-1">
+                                        <svg className="h-3 w-3 text-slate-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+                                        Sending...
+                                      </span>
+                                    ) : (message.is_read || message.isRead) ? (
+                                      <span className="text-blue-500 not-italic flex items-center gap-1" title="Read">
+                                        <svg className="h-3 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 6 7 17 2 12"></polyline><polyline points="22 6 11 17 9.5 15.5"></polyline></svg>
+                                        Read
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1" title="Sent">
+                                        <svg className="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        Sent
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </React.Fragment>
                         );
                       })}
                       <div ref={messagesEndRef} />

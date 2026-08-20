@@ -624,37 +624,6 @@ const AdminDashboard = ({ pendingOnly = false }) => {
           );
         })()}
 
-        {!pendingOnly && (
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="mb-4 flex-shrink-0">
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Registrations</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Registration Status Overview</h2>
-              <p className="mt-2 text-sm text-slate-500">A compact snapshot of current registration outcomes.</p>
-            </div>
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-3">
-              {approvalStatusData.map((entry) => {
-                const total = approvalStatusData.reduce((sum, item) => sum + item.value, 0) || 1;
-                const percentage = Math.round((entry.value / total) * 100);
-
-                return (
-                  <div key={entry.name} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-6">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{entry.name}</div>
-                        <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{formatCount(entry.value)}</div>
-                      </div>
-                      <span className="mt-1 inline-flex h-3.5 w-3.5 rounded-full ring-2 ring-white shadow-sm" style={{ backgroundColor: entry.color }} />
-                    </div>
-                    <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full shadow-sm" style={{ width: `${percentage}%`, backgroundColor: entry.color }} />
-                    </div>
-                    <div className="mt-3 text-xs text-slate-600">{percentage}% of all registrations</div>
-                  </div>
-                );
-              })}
-            </div>
-        </section>
-        )}
 
         {!pendingOnly && (
         <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
