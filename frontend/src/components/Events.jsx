@@ -268,6 +268,7 @@ const Events = () => {
         try {
           await eventService.deleteEvent(id);
           setEvents(prev => prev.filter(e => e.id !== id));
+          toast.success('Event deleted successfully');
           setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
           console.error('Error deleting event:', err);

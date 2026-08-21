@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import alumniService from '../services/alumniService';
 import { authService } from '../services/authService';
+import { toast } from 'react-toastify';
+import ConfirmModal from './ConfirmModal';
 
 const levelLabelMap = {
   INTEGRATED_SCHOOL: 'Integrated School',
@@ -44,6 +46,147 @@ const AlumniProfile = () => {
   const [reportEvidenceFile, setReportEvidenceFile] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportStatusMessage, setReportStatusMessage] = useState('');
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    dateOfBirth: '',
+    contactNumber: '',
+    course: '',
+    graduationYear: '',
+    currentPosition: '',
+    company: '',
+    location: '',
+    bio: '',
+    linkedin: '',
+    skills: '',
+    profileImageFile: null,
+    profileImagePreview: ''
+  });
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'danger'
+  });
+
+  const user = authService.getCurrentUser();
+  const loggedInAlumniId = Number(user?.alumni?.id || user?.alumniId || 0);
+  const profileId = Number(profile?.id || id || 0);
+  const isOwner = loggedInAlumniId === profileId;
+  const isTeacher = authService.isTeacher();
+  const canEdit = isTeacher;
+  const canDelete = isTeacher;
+
+  const handleEditFormChange = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'profileImage' && files && files[0]) {
+      const file = files[0];
+      setEditForm(prev => ({
+        ...prev,
+        profileImageFile: file,
+        profileImagePreview: URL.createObjectURL(file)
+      }));
+    } else {
+      setEditForm(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+  };
+
+  const openEditModal = () => {
+    if (!profile) return;
+    setEditForm({
+      firstName: profile.firstName || profile.first_name || '',
+      lastName: profile.lastName || profile.last_name || '',
+      email: profile.email || '',
+      dateOfBirth: profile.dateOfBirth ? new Date(profile.dateOfBirth).toISOString().split('T')[0] : (profile.date_of_birth ? new Date(profile.date_of_birth).toISOString().split('T')[0] : ''),
+      contactNumber: profile.contactNumber || profile.contact_number || '',
+      course: profile.course || '',
+      graduationYear: profile.graduationYear || profile.graduation_year || '',
+      currentPosition: profile.currentPosition || profile.current_job || '',
+      company: profile.company || '',
+      location: profile.location || '',
+      bio: profile.bio || '',
+      linkedin: profile.linkedin || profile.socialLinks?.linkedin || '',
+      skills: parsedSkills.join(', '),
+      profileImageFile: null,
+      profileImagePreview: profile.profileImage || profile.profile_image || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        email: editForm.email,
+        dateOfBirth: editForm.dateOfBirth || null,
+        contactNumber: editForm.contactNumber,
+        course: editForm.course,
+        graduationYear: editForm.graduationYear ? parseInt(editForm.graduationYear, 10) : null,
+        currentPosition: editForm.currentPosition,
+        company: editForm.company,
+        location: editForm.location,
+        bio: editForm.bio,
+        skills: editForm.skills
+      };
+
+      if (editForm.linkedin) {
+        payload.linkedin = editForm.linkedin;
+      }
+
+      let updated;
+      if (editForm.profileImageFile) {
+        const formData = new FormData();
+        Object.entries(payload).forEach(([k, v]) => {
+          if (v !== undefined && v !== null) {
+            formData.append(k, v);
+          }
+        });
+        formData.append('profileImage', editForm.profileImageFile);
+        updated = await alumniService.updateAlumni(id, formData);
+      } else {
+        updated = await alumniService.updateAlumni(id, payload);
+      }
+
+      setProfile(updated);
+      setShowEditModal(false);
+      toast.success('Profile updated successfully!');
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      toast.error(err.message || 'Failed to update profile');
+    }
+  };
+
+  const handleDeleteAlumniClick = () => {
+    if (!profile) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Alumni Profile',
+      message: `Are you sure you want to delete ${profile.firstName || ''} ${profile.lastName || ''}'s profile? This action cannot be undone.`,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await alumniService.deleteAlumni(id);
+          toast.success('Alumni profile deleted successfully');
+          setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
+          navigate('/alumni');
+        } catch (err) {
+          console.error('Error deleting alumni:', err);
+          toast.error(err.message || 'Failed to delete alumni profile');
+          setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
+        }
+      }
+    });
+  };
 
   const handleReportDeceasedSubmit = async (event) => {
     event.preventDefault();
@@ -709,6 +852,24 @@ const AlumniProfile = () => {
                     {showReportForm ? 'Hide Report Form' : 'Report Deceased'}
                   </button>
                 )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={openEditModal}
+                    className="px-4 h-10 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium"
+                  >
+                    Edit
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteAlumniClick}
+                    className="px-4 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -811,17 +972,232 @@ const AlumniProfile = () => {
         </div>
 
         {/* Back to Directory */}
-        <div className="text-center mb-8">
-          <button 
-            onClick={() => navigate('/alumni')}
-            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Alumni Directory
-          </button>
-        </div>
+        {/* Edit Alumni Modal */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-4 z-10 flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-semibold text-gray-900">Edit Alumni Profile</h3>
+                  <p className="mt-1 text-sm text-gray-500">Update the profile information</p>
+                </div>
+                <button 
+                  onClick={() => setShowEditModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form onSubmit={handleEditSubmit} className="p-8 space-y-6">
+                {/* Photo Upload & Basic Details */}
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 bg-gray-50 rounded-lg p-6 relative">
+                  <div className="shrink-0">
+                    <div className="relative group">
+                      <img 
+                        src={editForm.profileImagePreview || `https://ui-avatars.com/api/?name=${editForm.firstName}+${editForm.lastName}&background=random`} 
+                        alt="Profile Preview" 
+                        className="h-28 w-28 rounded-full object-cover border-4 border-white shadow-lg" 
+                      />
+                      <label 
+                        htmlFor="profile-upload" 
+                        className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-3 cursor-pointer hover:bg-blue-700 transition-all shadow-lg z-[1]" 
+                        title="Change profile picture"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                        </svg>
+                      </label>
+                      <input 
+                        id="profile-upload" 
+                        type="file" 
+                        name="profileImage" 
+                        accept="image/*" 
+                        onChange={handleEditFormChange} 
+                        className="hidden" 
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                      <input 
+                        type="text" 
+                        name="firstName" 
+                        value={editForm.firstName} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                      <input 
+                        type="text" 
+                        name="lastName" 
+                        value={editForm.lastName} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                        required 
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input 
+                        type="email" 
+                        name="email" 
+                        value={editForm.email} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                      <input 
+                        type="date" 
+                        name="dateOfBirth" 
+                        value={editForm.dateOfBirth} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
+                      <input 
+                        type="text" 
+                        name="contactNumber" 
+                        value={editForm.contactNumber} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Academic & Professional Info */}
+                <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+                  <h4 className="text-lg font-medium text-gray-900">Academic & Professional</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Course / Program</label>
+                      <input 
+                        type="text" 
+                        name="course" 
+                        value={editForm.course} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Graduation Year</label>
+                      <input 
+                        type="number" 
+                        name="graduationYear" 
+                        value={editForm.graduationYear} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                        placeholder="YYYY" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Current Job Title</label>
+                      <input 
+                        type="text" 
+                        name="currentPosition" 
+                        value={editForm.currentPosition} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+                      <input 
+                        type="text" 
+                        name="company" 
+                        value={editForm.company} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                      <input 
+                        type="text" 
+                        name="location" 
+                        value={editForm.location} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn Profile Link</label>
+                      <input 
+                        type="text" 
+                        name="linkedin" 
+                        value={editForm.linkedin} 
+                        onChange={handleEditFormChange} 
+                        className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                        placeholder="https://linkedin.com/in/username"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                    <textarea 
+                      name="bio" 
+                      value={editForm.bio} 
+                      onChange={handleEditFormChange} 
+                      rows="3" 
+                      className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Skills (Comma-separated)</label>
+                    <textarea 
+                      name="skills" 
+                      value={editForm.skills} 
+                      onChange={handleEditFormChange} 
+                      rows="2" 
+                      className="mt-1 block w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                      placeholder="React, Node.js, SQL"
+                    />
+                  </div>
+                </div>
+
+                {/* Footer buttons */}
+                <div className="flex justify-end gap-3 border-t border-gray-200 pt-5">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowEditModal(false)} 
+                    className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+          type={confirmModal.type}
+        />
       </div>
     </div>
   );

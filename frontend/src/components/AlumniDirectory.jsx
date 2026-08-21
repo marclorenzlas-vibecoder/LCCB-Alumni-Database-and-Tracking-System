@@ -733,6 +733,7 @@ const AlumniDirectory = () => {
       };
       const created = await alumniService.addAlumni(payload);
       setAlumni(prev => [created, ...prev]);
+      toast.success('Alumni added successfully!');
       setShowAddModal(false);
       setNewAlumni(blankAlumni);
       setEducationHistory([createEducationEntry()]);
@@ -747,6 +748,7 @@ const AlumniDirectory = () => {
     if (!editingAlumni) return;
     try {
       let payload = { ...newAlumni };
+      let updated;
       // If a new file selected, use FormData
       if (newAlumni.profileImageFile) {
         const formData = new FormData();
@@ -754,12 +756,16 @@ const AlumniDirectory = () => {
           if (k === 'profileImageFile' && v) formData.append('profileImage', v);
           else if (v !== undefined && v !== null && k !== 'profileImage') formData.append(k, v);
         });
-        const updated = await alumniService.updateAlumni(editingAlumni.id, formData);
+        updated = await alumniService.updateAlumni(editingAlumni.id, formData);
         setAlumni(prev => prev.map(a => a.id === editingAlumni.id ? updated : a));
       } else {
-        const updated = await alumniService.updateAlumni(editingAlumni.id, payload);
+        updated = await alumniService.updateAlumni(editingAlumni.id, payload);
         setAlumni(prev => prev.map(a => a.id === editingAlumni.id ? updated : a));
       }
+      if (viewingAlumni && viewingAlumni.id === editingAlumni.id) {
+        setViewingAlumni(updated);
+      }
+      toast.success('Alumni updated successfully!');
       setShowEditModal(false);
       setEditingAlumni(null);
       setNewAlumni(blankAlumni);
@@ -797,6 +803,55 @@ const AlumniDirectory = () => {
       setAchievements([]);
       setCareers([]);
     }
+  };
+
+  const startEditAlumni = (alumnus) => {
+    setEditingAlumni(alumnus);
+    setNewAlumni({
+      firstName: alumnus.firstName || alumnus.first_name || '',
+      lastName: alumnus.lastName || alumnus.last_name || '',
+      email: alumnus.email || '',
+      dateOfBirth: alumnus.dateOfBirth ? alumnus.dateOfBirth.split('T')[0] : (alumnus.date_of_birth ? alumnus.date_of_birth.split('T')[0] : ''),
+      contactNumber: alumnus.contactNumber || alumnus.contact_number || '',
+      course: alumnus.course || '',
+      graduationYear: alumnus.graduationYear || alumnus.graduation_year || '',
+      currentPosition: alumnus.currentPosition || alumnus.current_position || '',
+      company: alumnus.company || '',
+      location: alumnus.location || '',
+      skills: Array.isArray(alumnus.skills) ? alumnus.skills.join(', ') : (alumnus.skills || ''),
+      profileImage: alumnus.profileImage || alumnus.profile_image || '',
+      profileImageFile: null,
+      educationHistory: alumnus.educationHistory || alumnus.education_history || []
+    });
+    setEducationHistory(
+      alumnus.educationHistory && alumnus.educationHistory.length > 0 
+        ? alumnus.educationHistory.map(entry => ({ level: entry.level, batch: entry.batch }))
+        : [createEducationEntry()]
+    );
+    setShowEditModal(true);
+  };
+
+  const handleDeleteAlumni = (alumnus) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Alumni Profile',
+      message: `Are you sure you want to delete ${alumnus.firstName || ''} ${alumnus.lastName || ''}'s profile? This action cannot be undone.`,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await alumniService.deleteAlumni(alumnus.id);
+          setAlumni(prev => prev.filter(a => a.id !== alumnus.id));
+          toast.success('Alumni profile deleted successfully');
+          setShowViewModal(false);
+          setViewingAlumni(null);
+          setConfirmModal(m => ({ ...m, isOpen: false }));
+        } catch (err) {
+          console.error('Error deleting alumni:', err);
+          toast.error(err.message || 'Failed to delete alumni profile');
+          setConfirmModal(m => ({ ...m, isOpen: false }));
+        }
+      }
+    });
   };
 
   const isOwnAlumniProfile = (record) => {
@@ -1016,6 +1071,22 @@ const AlumniDirectory = () => {
                 >
                   Back to Directory
                 </button>
+                {isTeacher && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => startEditAlumni(viewingAlumni)}
+                      className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-full hover:bg-sky-700 transition-colors shadow-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteAlumni(viewingAlumni)}
+                      className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-full hover:bg-red-700 transition-colors shadow-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
               {/* Avatar + Name + Info */}
               <div className="relative px-5 sm:px-8 pt-4 pb-8">
@@ -1401,7 +1472,7 @@ const AlumniDirectory = () => {
 
         {/* Edit Alumni Modal */}
         {showEditModal && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-[110]">
             <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-4 z-10">
                 <h3 className="text-2xl font-semibold text-gray-900">Edit Alumni Profile</h3>

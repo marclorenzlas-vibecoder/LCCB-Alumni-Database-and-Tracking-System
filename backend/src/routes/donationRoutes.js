@@ -713,7 +713,7 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
     const { cleanDescription, meta } = parseDescriptionMeta(description || '');
     meta.donationMode = 'both';
     if (qrImageFile) {
-      meta.qrImagePath = `/uploads/donations/${qrImageFile.filename}`;
+      meta.qrImagePath = await uploadToSupabase(qrImageFile, 'donations');
     }
     const descriptionWithMeta = buildDescriptionWithMeta(cleanDescription, meta);
 
@@ -727,15 +727,11 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
         image: imagePath,
         category: category ? category.trim() : null,
         goal: goal ? parseFloat(goal) : null,
-        donation_type: 'both'
+        donation_type: 'both',
+        accepts_money: true,
+        accepts_items: true
       }
     });
-
-    await prisma.$executeRaw`
-      UPDATE donation
-      SET accepts_money = 1, accepts_items = 1, donation_type = 'both'
-      WHERE id = ${donation.id}
-    `;
 
     await recordActivity({
       req,
@@ -1052,6 +1048,8 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
     if (category !== undefined) updateData.category = category ? category.trim() : null;
     if (goal !== undefined) updateData.goal = goal ? parseFloat(goal) : null;
     updateData.donation_type = 'both';
+    updateData.accepts_money = true;
+    updateData.accepts_items = true;
 
     if (description !== undefined || req.files?.qr_image?.[0]) {
       const incoming = parseDescriptionMeta(description !== undefined ? description : (oldDonation.description || ''));
@@ -1093,11 +1091,7 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
       data: updateData
     });
 
-    await prisma.$executeRaw`
-      UPDATE donation
-      SET accepts_money = 1, accepts_items = 1, donation_type = 'both'
-      WHERE id = ${Number(id)}
-    `;
+
 
     await recordActivity({
       req,
