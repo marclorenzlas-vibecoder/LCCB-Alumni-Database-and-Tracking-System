@@ -711,7 +711,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
         } flex h-[min(680px,calc(100vh-40px))] w-[min(900px,calc(100vw-40px))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl`}
       >
         <div className="lccb-chat-panel-content flex h-full w-full">
-          <aside className="flex w-80 shrink-0 flex-col border-r border-slate-200 bg-slate-50">
+          <aside className={`flex flex-col border-r border-slate-200 bg-slate-50 md:w-80 md:shrink-0 ${selectedContact ? 'hidden md:flex' : 'w-full'}`}>
             <div className="border-b border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -1009,10 +1009,20 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
             </div>
           </aside>
 
-          <main key={selectedChatId || 'empty-chat'} className="lccb-chat-conversation flex min-w-0 flex-1 flex-col bg-white">
+          <main key={selectedChatId || 'empty-chat'} className={`lccb-chat-conversation flex min-w-0 flex-col bg-white md:flex-1 ${selectedContact ? 'w-full' : 'hidden md:flex'}`}>
             {selectedContact ? (
               <>
                 <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedContactId('')}
+                    className="mr-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 md:hidden"
+                    aria-label="Back to conversations"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
                   <ContactAvatar contact={selectedContact} status={statuses[selectedContact.userId]} />
                   <div className="min-w-0">
                     <h4 className="truncate text-sm font-bold text-slate-950">{selectedContact.displayName}</h4>

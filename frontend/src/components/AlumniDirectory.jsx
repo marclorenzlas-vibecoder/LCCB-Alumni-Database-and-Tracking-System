@@ -9,6 +9,7 @@ import officerService from '../services/officerService';
 import { authService } from '../services/authService';
 import ConfirmModal from './ConfirmModal';
 import FilterMenu from './FilterMenu';
+import MobileFilterButton from './MobileFilterButton';
 import UserLayout from './UserLayout';
 import AlumniChatPanel from './AlumniChatPanel';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
@@ -1828,10 +1829,36 @@ const AlumniDirectory = () => {
             {/* Row 2: Filter Dropdowns + Actions */}
             <div className="alumni-admin-filter-row flex w-full flex-wrap items-center gap-2 xl:flex-nowrap">
               <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
-                <FilterMenu
-                  menuRef={levelMenuRef}
-                  isOpen={showLevelMenu}
-                  setIsOpen={setShowLevelMenu}
+                <div className="hidden md:block">
+                  <FilterMenu
+                    menuRef={levelMenuRef}
+                    isOpen={showLevelMenu}
+                    setIsOpen={setShowLevelMenu}
+                    buttonLabel="All Levels"
+                    selectedLabel={getLevelLabel(selectedLevel)}
+                    selectedValue={selectedLevel}
+                    icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5zm0 8l7.5-4.167V15L12 20l-7.5-5.167V6.833L12 11zm0 2.25L7.5 12v2.5L12 17l4.5-2.5V12L12 13.25z" /></svg>}
+                    sections={[{ key: 'levels', title: 'Levels', items: sharedLevelOptions.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label })) }]}
+                    onSelect={(value) => {
+                      setSelectedLevel((prev) => {
+                        const nextLevel = prev === value ? '' : value;
+                        const nextSections = buildRegisterCourseSections(nextLevel);
+                        const groupStillAvailable = nextSections.some((section) =>
+                          section.items.some((item) => item.value === selectedGroup)
+                        );
+                        if (!groupStillAvailable) {
+                          setSelectedGroup('');
+                        }
+                        return nextLevel;
+                      });
+                      setShowLevelMenu(false);
+                    }}
+                    panelTitle="All Levels"
+                    panelWidthClass="alumni-admin-level-filter"
+                    alignClass="right-0"
+                  />
+                </div>
+                <MobileFilterButton
                   buttonLabel="All Levels"
                   selectedLabel={getLevelLabel(selectedLevel)}
                   selectedValue={selectedLevel}
@@ -1849,45 +1876,64 @@ const AlumniDirectory = () => {
                       }
                       return nextLevel;
                     });
-                    setShowLevelMenu(false);
                   }}
                   panelTitle="All Levels"
-                  panelWidthClass="alumni-admin-level-filter"
-                  alignClass="right-0"
                 />
-                <FilterMenu
-                  menuRef={batchMenuRef}
-                  isOpen={showBatchMenu}
-                  setIsOpen={setShowBatchMenu}
+                <div className="hidden md:block">
+                  <FilterMenu
+                    menuRef={batchMenuRef}
+                    isOpen={showBatchMenu}
+                    setIsOpen={setShowBatchMenu}
+                    buttonLabel="All Batches"
+                    selectedLabel={selectedBatch ? String(selectedBatch) : 'All Batches'}
+                    selectedValue={selectedBatch}
+                    icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a1 1 0 011-1h8a1 1 0 011 1v2H5V4zm0 4h10v7a1 1 0 01-1 1H6a1 1 0 01-1-1V8zm3 2a1 1 0 100 2h4a1 1 0 100-2H8z" /></svg>}
+                    sections={[{ key: 'batches', title: 'Batches', items: [...batches.map((batch) => ({ value: String(batch), label: String(batch) }))] }]}
+                    onSelect={(value) => {
+                      setSelectedBatch((prev) => (prev === value ? '' : value));
+                      setShowBatchMenu(false);
+                    }}
+                    panelTitle="All Batches"
+                    panelWidthClass="alumni-admin-batch-filter"
+                    alignClass="right-0"
+                  />
+                </div>
+                <MobileFilterButton
                   buttonLabel="All Batches"
                   selectedLabel={selectedBatch ? String(selectedBatch) : 'All Batches'}
                   selectedValue={selectedBatch}
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a1 1 0 011-1h8a1 1 0 011 1v2H5V4zm0 4h10v7a1 1 0 01-1 1H6a1 1 0 01-1-1V8zm3 2a1 1 0 100 2h4a1 1 0 100-2H8z" /></svg>}
                   sections={[{ key: 'batches', title: 'Batches', items: [...batches.map((batch) => ({ value: String(batch), label: String(batch) }))] }]}
-                  onSelect={(value) => {
-                    setSelectedBatch((prev) => (prev === value ? '' : value));
-                    setShowBatchMenu(false);
-                  }}
+                  onSelect={(value) => setSelectedBatch((prev) => (prev === value ? '' : value))}
                   panelTitle="All Batches"
-                  panelWidthClass="alumni-admin-batch-filter"
-                  alignClass="right-0"
                 />
-                <FilterMenu
-                  menuRef={groupMenuRef}
-                  isOpen={showGroupMenu}
-                  setIsOpen={setShowGroupMenu}
+                <div className="hidden md:block">
+                  <FilterMenu
+                    menuRef={groupMenuRef}
+                    isOpen={showGroupMenu}
+                    setIsOpen={setShowGroupMenu}
+                    buttonLabel="All Program"
+                    selectedLabel={getGroupLabel(selectedGroup)}
+                    selectedValue={selectedGroup}
+                    icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
+                    sections={filterCourseSections}
+                    onSelect={(value) => {
+                      setSelectedGroup((prev) => (prev === value ? '' : value));
+                      setShowGroupMenu(false);
+                    }}
+                    panelTitle={selectedLevel ? `${getLevelLabel(selectedLevel)} Programs` : 'All Program'}
+                    panelWidthClass="alumni-admin-program-filter"
+                    alignClass="right-0"
+                  />
+                </div>
+                <MobileFilterButton
                   buttonLabel="All Program"
                   selectedLabel={getGroupLabel(selectedGroup)}
                   selectedValue={selectedGroup}
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
                   sections={filterCourseSections}
-                  onSelect={(value) => {
-                    setSelectedGroup((prev) => (prev === value ? '' : value));
-                    setShowGroupMenu(false);
-                  }}
+                  onSelect={(value) => setSelectedGroup((prev) => (prev === value ? '' : value))}
                   panelTitle={selectedLevel ? `${getLevelLabel(selectedLevel)} Programs` : 'All Program'}
-                  panelWidthClass="alumni-admin-program-filter"
-                  alignClass="right-0"
                 />
                 {isTeacher && batchOfficersButton}
               </div>

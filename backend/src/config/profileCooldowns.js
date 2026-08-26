@@ -1,0 +1,25 @@
+module.exports = {
+  username: 30,
+  email: 30,
+  firstName: 30,
+  middleName: 30,
+  lastName: 30,
+  studentId: 30,
+  level: 30,
+  course: 30,
+  batch: 30,
+  graduationYear: 30,
+  currentPosition: 30,
+  company: 30,
+  location: 30,
+  contactNumber: 30,
+  skills: 30,
+  dateOfBirth: 30,
+  profileImage: 0, // No cooldown restriction
+  education_INTEGRATED_SCHOOL: 30,
+  education_NIGHT_HIGH: 30,
+  education_SENIOR_HIGH: 30,
+  education_COLLEGE: 30,
+  education_ETEEAP: 30,
+  education_GRAD_SCHOOL: 30
+};

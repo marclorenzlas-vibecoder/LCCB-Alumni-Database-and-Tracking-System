@@ -3,6 +3,7 @@ import careerService from '../services/careerService';
 import { authService } from '../services/authService';
 import ConfirmModal from './ConfirmModal';
 import FilterMenu from './FilterMenu';
+import MobileFilterButton from './MobileFilterButton';
 import UserLayout from './UserLayout';
 import { toast } from 'react-toastify';
 import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
@@ -342,62 +343,106 @@ const Employment = () => {
 
             {/* Filter Dropdowns */}
             <div className="flex flex-wrap items-center gap-3">
-              <FilterMenu
-                menuRef={locationMenuRef}
-                isOpen={showLocationMenu}
-                setIsOpen={setShowLocationMenu}
+              <div className="hidden md:block">
+                <FilterMenu
+                  menuRef={locationMenuRef}
+                  isOpen={showLocationMenu}
+                  setIsOpen={setShowLocationMenu}
+                  buttonLabel="Location"
+                  selectedLabel={selectedLocationLabel}
+                  selectedValues={selectedLocations}
+                  multiSelect
+                  icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                  sections={locationSections}
+                  onSelect={(value) => {
+                    setSelectedLocations(prev => 
+                      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+                    );
+                  }}
+                  panelTitle=""
+                  panelWidthClass="w-56"
+                  alignClass="right-0"
+                />
+              </div>
+              <MobileFilterButton
                 buttonLabel="Location"
                 selectedLabel={selectedLocationLabel}
                 selectedValues={selectedLocations}
                 multiSelect
                 icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
                 sections={locationSections}
-                onSelect={(value) => {
-                  setSelectedLocations(prev => 
-                    prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-                  );
-                }}
-                panelTitle=""
-                panelWidthClass="w-56"
-                alignClass="right-0"
+                onSelect={() => {}}
+                onApply={(values) => setSelectedLocations(values)}
+                onClear={() => setSelectedLocations([])}
+                panelTitle="Location"
               />
-              <FilterMenu
-                menuRef={departmentMenuRef}
-                isOpen={showDepartmentMenu}
-                setIsOpen={setShowDepartmentMenu}
+
+              <div className="hidden md:block">
+                <FilterMenu
+                  menuRef={departmentMenuRef}
+                  isOpen={showDepartmentMenu}
+                  setIsOpen={setShowDepartmentMenu}
+                  buttonLabel="Department"
+                  selectedLabel={selectedDepartmentLabel}
+                  selectedValues={selectedDepartments}
+                  multiSelect
+                  icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
+                  sections={departmentSections}
+                  onSelect={(value) => {
+                    setSelectedDepartments(prev => 
+                      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+                    );
+                  }}
+                  panelTitle=""
+                  panelWidthClass="w-56"
+                  alignClass="right-0"
+                />
+              </div>
+              <MobileFilterButton
                 buttonLabel="Department"
                 selectedLabel={selectedDepartmentLabel}
                 selectedValues={selectedDepartments}
                 multiSelect
                 icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
                 sections={departmentSections}
-                onSelect={(value) => {
-                  setSelectedDepartments(prev => 
-                    prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-                  );
-                }}
-                panelTitle=""
-                panelWidthClass="w-56"
-                alignClass="right-0"
+                onSelect={() => {}}
+                onApply={(values) => setSelectedDepartments(values)}
+                onClear={() => setSelectedDepartments([])}
+                panelTitle="Department"
               />
-              <FilterMenu
-                menuRef={workTypeMenuRef}
-                isOpen={showWorkTypeMenu}
-                setIsOpen={setShowWorkTypeMenu}
+
+              <div className="hidden md:block">
+                <FilterMenu
+                  menuRef={workTypeMenuRef}
+                  isOpen={showWorkTypeMenu}
+                  setIsOpen={setShowWorkTypeMenu}
+                  buttonLabel="Work type"
+                  selectedLabel={selectedWorkTypeLabel}
+                  selectedValues={selectedWorkTypes}
+                  multiSelect
+                  icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  sections={workTypeSections}
+                  onSelect={(value) => {
+                    setSelectedWorkTypes(prev => 
+                      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+                    );
+                  }}
+                  panelTitle=""
+                  panelWidthClass="w-56"
+                  alignClass="right-0"
+                />
+              </div>
+              <MobileFilterButton
                 buttonLabel="Work type"
                 selectedLabel={selectedWorkTypeLabel}
                 selectedValues={selectedWorkTypes}
                 multiSelect
                 icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 sections={workTypeSections}
-                onSelect={(value) => {
-                  setSelectedWorkTypes(prev => 
-                    prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-                  );
-                }}
-                panelTitle=""
-                panelWidthClass="w-56"
-                alignClass="right-0"
+                onSelect={() => {}}
+                onApply={(values) => setSelectedWorkTypes(values)}
+                onClear={() => setSelectedWorkTypes([])}
+                panelTitle="Work Type"
               />
               {activeFilterCount > 0 && (
                 <button

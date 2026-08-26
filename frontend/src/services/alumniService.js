@@ -132,16 +132,58 @@ class AlumniService {
   async getAllAlumni() {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_URL}?all=true`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
       const data = await response.json();
-      return data.map((alumnus) => this.normalizeAlumniRecord(alumnus));
+      const list = Array.isArray(data) ? data : (data.alumni || []);
+      return list.map((alumnus) => this.normalizeAlumniRecord(alumnus));
     } catch (error) {
       console.error("Error loading alumni:", error);
+      throw error;
+    }
+  }
+
+  async getAlumniPaginated({ page = 1, limit = 30, search = '', level = '', batch = '', course = '' } = {}) {
+    try {
+      const token = localStorage.getItem("token");
+      const queryParams = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        search: String(search),
+        level: String(level),
+        batch: String(batch),
+        course: String(course)
+      });
+      const response = await fetch(`${API_URL}?${queryParams.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      const data = await response.json();
+      
+      const normalizedData = Array.isArray(data)
+        ? {
+            alumni: data,
+            totalAlumni: data.length,
+            totalPages: 1,
+            currentPage: 1,
+            hasNextPage: false,
+            hasPrevPage: false,
+            availableBatches: []
+          }
+        : data;
+
+      return {
+        ...normalizedData,
+        alumni: (normalizedData.alumni || []).map((alumnus) => this.normalizeAlumniRecord(alumnus))
+      };
+    } catch (error) {
+      console.error("Error loading alumni paginated:", error);
       throw error;
     }
   }

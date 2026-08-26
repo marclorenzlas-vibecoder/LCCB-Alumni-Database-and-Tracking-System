@@ -5,6 +5,7 @@ import eventService from '../services/eventService';
 import { realtimeClient } from '../services/realtimeClient';
 import ConfirmModal from './ConfirmModal';
 import FilterMenu from './FilterMenu';
+import MobileFilterButton from './MobileFilterButton';
 import { authService } from '../services/authService';
 import UserLayout from './UserLayout';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
@@ -501,10 +502,32 @@ const Events = () => {
 
           {/* Filter Dropdowns */}
           <div className="flex flex-wrap items-center gap-3">
-            <FilterMenu
-              menuRef={batchMenuRef}
-              isOpen={showBatchMenu}
-              setIsOpen={setOnlyBatchMenuOpen}
+            <div className="hidden md:block">
+              <FilterMenu
+                menuRef={batchMenuRef}
+                isOpen={showBatchMenu}
+                setIsOpen={setOnlyBatchMenuOpen}
+                buttonLabel="All Batch"
+                selectedLabel={
+                  selectedBatchFilter === ''
+                    ? 'All Batch'
+                    : selectedBatchFilter === 'open'
+                      ? 'Open to All'
+                      : `Batch ${selectedBatchFilter}`
+                }
+                selectedValue={selectedBatchFilter}
+                icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                sections={batchMenuSections}
+                onSelect={(value) => {
+                  setSelectedBatchFilter(value);
+                  setShowBatchMenu(false);
+                }}
+                panelTitle="All Batch"
+                panelWidthClass="w-56"
+                alignClass="right-0"
+              />
+            </div>
+            <MobileFilterButton
               buttonLabel="All Batch"
               selectedLabel={
                 selectedBatchFilter === ''
@@ -516,49 +539,66 @@ const Events = () => {
               selectedValue={selectedBatchFilter}
               icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
               sections={batchMenuSections}
-              onSelect={(value) => {
-                setSelectedBatchFilter(value);
-                setShowBatchMenu(false);
-              }}
+              onSelect={(value) => setSelectedBatchFilter(value)}
               panelTitle="All Batch"
-              panelWidthClass="w-56"
-              alignClass="right-0"
             />
 
-            <FilterMenu
-              menuRef={statusMenuRef}
-              isOpen={showStatusMenu}
-              setIsOpen={setOnlyStatusMenuOpen}
+            <div className="hidden md:block">
+              <FilterMenu
+                menuRef={statusMenuRef}
+                isOpen={showStatusMenu}
+                setIsOpen={setOnlyStatusMenuOpen}
+                buttonLabel="Status"
+                selectedLabel={selectedStatus === 'upcoming' ? 'Upcoming' : selectedStatus === 'current' ? 'Happening Today' : selectedStatus === 'past' ? 'Past Events' : 'All Statuses'}
+                selectedValue={selectedStatus}
+                icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>}
+                sections={statusMenuSections}
+                onSelect={(value) => {
+                  setSelectedStatus(value);
+                  setShowStatusMenu(false);
+                }}
+                panelTitle="All Statuses"
+                panelWidthClass="w-56"
+                alignClass="right-0"
+              />
+            </div>
+            <MobileFilterButton
               buttonLabel="Status"
               selectedLabel={selectedStatus === 'upcoming' ? 'Upcoming' : selectedStatus === 'current' ? 'Happening Today' : selectedStatus === 'past' ? 'Past Events' : 'All Statuses'}
               selectedValue={selectedStatus}
               icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>}
               sections={statusMenuSections}
-              onSelect={(value) => {
-                setSelectedStatus(value);
-                setShowStatusMenu(false);
-              }}
-              panelTitle="All Statuses"
-              panelWidthClass="w-56"
-              alignClass="right-0"
+              onSelect={(value) => setSelectedStatus(value)}
+              panelTitle="Statuses"
             />
 
-            <FilterMenu
-              menuRef={sortMenuRef}
-              isOpen={showSortMenu}
-              setIsOpen={setOnlySortMenuOpen}
+            <div className="hidden md:block">
+              <FilterMenu
+                menuRef={sortMenuRef}
+                isOpen={showSortMenu}
+                setIsOpen={setOnlySortMenuOpen}
+                buttonLabel="Sort By"
+                selectedLabel={sortBy === 'date' ? 'Date' : sortBy === 'name' ? 'Name' : 'Attendees'}
+                selectedValue={sortBy}
+                icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm3 7h12v2H6v-2zm3 7h6v2H9v-2z" /></svg>}
+                sections={sortMenuSections}
+                onSelect={(value) => {
+                  setSortBy(value);
+                  setShowSortMenu(false);
+                }}
+                panelTitle="Sort By"
+                panelWidthClass="w-56"
+                alignClass="right-0"
+              />
+            </div>
+            <MobileFilterButton
               buttonLabel="Sort By"
               selectedLabel={sortBy === 'date' ? 'Date' : sortBy === 'name' ? 'Name' : 'Attendees'}
               selectedValue={sortBy}
               icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm3 7h12v2H6v-2zm3 7h6v2H9v-2z" /></svg>}
               sections={sortMenuSections}
-              onSelect={(value) => {
-                setSortBy(value);
-                setShowSortMenu(false);
-              }}
+              onSelect={(value) => setSortBy(value)}
               panelTitle="Sort By"
-              panelWidthClass="w-56"
-              alignClass="right-0"
             />
 
             {(selectedBatchFilter || selectedStatus) && (

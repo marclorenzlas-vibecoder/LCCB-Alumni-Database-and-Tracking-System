@@ -7,6 +7,22 @@ const prisma = require('../config/prisma');
 const router = express.Router();
 const { uploadToSupabase } = require('../services/storageService');
 
+const genderNeutralize = (text) => {
+  if (!text) return text;
+  return text
+    .replace(/\b([Ss])he\s+has\b/g, (match, s) => s === 'S' ? 'They have' : 'they have')
+    .replace(/\b([Ss])he\s+is\b/g, (match, s) => s === 'S' ? 'They are' : 'they are')
+    .replace(/\b([Ss])he\s+was\b/g, (match, s) => s === 'S' ? 'They were' : 'they were')
+    .replace(/\b([Ss])he\b/g, (match, s) => s === 'S' ? 'They' : 'they')
+    .replace(/\b([Hh])erself\b/g, (match, h) => h === 'H' ? 'Themselves' : 'themselves')
+    .replace(/\b([Hh])er\s+own\b/g, (match, h) => h === 'H' ? 'Their own' : 'their own')
+    .replace(/\b([Hh])er\s+(experience|dedication|clinical|business|operations|market|contributions|success|professional|reputation|achievements|network|accomplishments|work|career|peers|communities|well-being|audiences|preventative|clinical)\b/gi, (match, h, word) => {
+      const possessive = h.toUpperCase() === h ? 'Their' : 'their';
+      return `${possessive} ${word}`;
+    })
+    .replace(/\b([Hh])er\b/g, (match, h) => h === 'H' ? 'Them' : 'them');
+};
+
 const isStaffRequest = (req) => {
   const role = String(req.user?.role || '').toUpperCase();
   return role === 'TEACHER' || role === 'ADMIN';
@@ -171,7 +187,7 @@ router.post(
         title: title.trim(),
         category: category ? category.trim() : null,
         image: mediaPath,
-        description: description ? description.trim() : null,
+        description: description ? genderNeutralize(description.trim()) : null,
         date: date ? new Date(date) : null,
       };
 
@@ -247,7 +263,7 @@ router.put(
       if (category !== undefined)
         updateData.category = category ? category.trim() : null;
       if (description !== undefined)
-        updateData.description = description ? description.trim() : null;
+        updateData.description = description ? genderNeutralize(description.trim()) : null;
       if (date !== undefined) updateData.date = date ? new Date(date) : null;
 
       // Add media path if uploaded

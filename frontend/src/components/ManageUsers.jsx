@@ -4,6 +4,7 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import UserLayout from './UserLayout';
 import FilterMenu from './FilterMenu';
+import MobileFilterButton from './MobileFilterButton';
 
 const userFilterOptions = [
   { value: 'ALL', label: 'All Users' },
@@ -253,22 +254,33 @@ const ManageUsers = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full sm:w-64 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
                 />
-                <FilterMenu
-                  menuRef={statusMenuRef}
-                  isOpen={showStatusMenu}
-                  setIsOpen={setShowStatusMenu}
+                <div className="hidden md:block w-full sm:w-44">
+                  <FilterMenu
+                    menuRef={statusMenuRef}
+                    isOpen={showStatusMenu}
+                    setIsOpen={setShowStatusMenu}
+                    buttonLabel="All Users"
+                    selectedLabel={userFilterOptions.find((option) => option.value === filterStatus)?.label || 'All Users'}
+                    selectedValue={filterStatus}
+                    icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a4 4 0 100 8 4 4 0 000-8zM3 17a7 7 0 0114 0 1 1 0 01-1 1H4a1 1 0 01-1-1z" /></svg>}
+                    sections={[{ key: 'users', title: 'Users', items: userFilterOptions }]}
+                    onSelect={(value) => {
+                      setFilterStatus(value);
+                      setShowStatusMenu(false);
+                    }}
+                    panelTitle="User Status"
+                    panelWidthClass="w-full"
+                    alignClass="right-0"
+                  />
+                </div>
+                <MobileFilterButton
                   buttonLabel="All Users"
                   selectedLabel={userFilterOptions.find((option) => option.value === filterStatus)?.label || 'All Users'}
                   selectedValue={filterStatus}
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a4 4 0 100 8 4 4 0 000-8zM3 17a7 7 0 0114 0 1 1 0 01-1 1H4a1 1 0 01-1-1z" /></svg>}
                   sections={[{ key: 'users', title: 'Users', items: userFilterOptions }]}
-                  onSelect={(value) => {
-                    setFilterStatus(value);
-                    setShowStatusMenu(false);
-                  }}
+                  onSelect={(value) => setFilterStatus(value)}
                   panelTitle="User Status"
-                  panelWidthClass="w-full sm:w-44"
-                  alignClass="right-0"
                 />
               </div>
             </div>

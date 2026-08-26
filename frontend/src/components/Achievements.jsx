@@ -10,6 +10,7 @@ import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { Link } from 'react-router-dom';
 import AchievementVideoPreview from './AchievementVideoPreview';
 import FilterMenu from './FilterMenu';
+import MobileFilterButton from './MobileFilterButton';
 import CardSkeleton from './CardSkeleton';
 
 const ACHIEVEMENT_CATEGORIES = ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
@@ -530,40 +531,62 @@ const Achievements = () => {
 
           {/* Filter Dropdowns */}
           <div className="flex flex-wrap items-center gap-3">
-            <FilterMenu
-              menuRef={categoryMenuRef}
-              isOpen={showCategoryMenu}
-              setIsOpen={setOnlyCategoryMenuOpen}
+            <div className="hidden md:block">
+              <FilterMenu
+                menuRef={categoryMenuRef}
+                isOpen={showCategoryMenu}
+                setIsOpen={setOnlyCategoryMenuOpen}
+                buttonLabel="Category"
+                selectedLabel={selectedCategory === 'All' ? 'All Categories' : selectedCategory}
+                selectedValue={selectedCategory}
+                icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
+                sections={categoryMenuSections}
+                onSelect={(value) => {
+                  setSelectedCategory(value);
+                  setShowCategoryMenu(false);
+                }}
+                panelTitle="Categories"
+                panelWidthClass="w-64"
+                alignClass="left-0"
+              />
+            </div>
+            <MobileFilterButton
               buttonLabel="Category"
               selectedLabel={selectedCategory === 'All' ? 'All Categories' : selectedCategory}
               selectedValue={selectedCategory}
               icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
               sections={categoryMenuSections}
-              onSelect={(value) => {
-                setSelectedCategory(value);
-                setShowCategoryMenu(false);
-              }}
+              onSelect={(value) => setSelectedCategory(value)}
               panelTitle="Categories"
-              panelWidthClass="w-64"
-              alignClass="left-0"
             />
 
-            <FilterMenu
-              menuRef={yearMenuRef}
-              isOpen={showYearMenu}
-              setIsOpen={setOnlyYearMenuOpen}
+            <div className="hidden md:block">
+              <FilterMenu
+                menuRef={yearMenuRef}
+                isOpen={showYearMenu}
+                setIsOpen={setOnlyYearMenuOpen}
+                buttonLabel="Year"
+                selectedLabel={selectedYear === 'All' ? 'All Years' : selectedYear}
+                selectedValue={selectedYear}
+                icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                sections={yearMenuSections}
+                onSelect={(value) => {
+                  setSelectedYear(value);
+                  setShowYearMenu(false);
+                }}
+                panelTitle="Years"
+                panelWidthClass="w-48"
+                alignClass="left-0"
+              />
+            </div>
+            <MobileFilterButton
               buttonLabel="Year"
               selectedLabel={selectedYear === 'All' ? 'All Years' : selectedYear}
               selectedValue={selectedYear}
               icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
               sections={yearMenuSections}
-              onSelect={(value) => {
-                setSelectedYear(value);
-                setShowYearMenu(false);
-              }}
+              onSelect={(value) => setSelectedYear(value)}
               panelTitle="Years"
-              panelWidthClass="w-48"
-              alignClass="left-0"
             />
 
             {(selectedCategory !== 'All' || selectedYear !== 'All') && (

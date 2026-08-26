@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node src/index.js",
+    "dev": "nodemon src/index.js",
     "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-mysql.ps1 -RootPassword root -DbName alumni",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:session-limiter": "node scripts/test-login-logout-session-count.js",

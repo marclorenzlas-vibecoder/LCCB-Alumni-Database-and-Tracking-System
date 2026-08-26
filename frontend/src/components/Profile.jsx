@@ -358,6 +358,77 @@ const Profile = () => {
     onConfirm: async () => {}
   });
 
+  const [cooldowns, setCooldowns] = useState({});
+
+  const fetchCooldowns = async (targetUserId) => {
+    if (!targetUserId) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/auth/profile-cooldown-status/${targetUserId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCooldowns(data || {});
+      }
+    } catch (error) {
+      console.error('Error fetching profile cooldowns:', error);
+    }
+  };
+
+  const isFieldDisabled = (fieldName) => {
+    const status = cooldowns[fieldName];
+    return status ? !status.editable : false;
+  };
+
+  const renderUnlockMessage = (fieldName) => {
+    const status = cooldowns[fieldName];
+    if (status && !status.editable && status.availableAt) {
+      const dateStr = new Date(status.availableAt).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      return (
+        <p className="mt-1.5 text-xs font-medium text-amber-600 flex items-center gap-1.5 bg-amber-50 border border-amber-200/50 rounded-lg px-2.5 py-1 w-fit">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          Locked: Edit again on {dateStr}
+        </p>
+      );
+    }
+    
+    // For editable fields that are subject to cooldown (all except profileImage)
+    const hasCooldown = fieldName !== 'profileImage';
+    if (hasCooldown) {
+      const hasBeenEdited = status && status.lastChangedAt;
+      let helperText = 'Never edited. Updates to this field are restricted to once every 30 days.';
+      
+      if (hasBeenEdited) {
+        const lastDateStr = new Date(status.lastChangedAt).toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        helperText = `Last updated on ${lastDateStr}. Updates to this field are restricted to once every 30 days.`;
+      }
+
+      return (
+        <p className={`mt-1 text-[11px] flex items-center gap-1 font-normal ${hasBeenEdited ? 'text-blue-600' : 'text-gray-400'}`}>
+          <svg className={`w-3.5 h-3.5 ${hasBeenEdited ? 'text-blue-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {helperText}
+        </p>
+      );
+    }
+    
+    return null;
+  };
+
   const togglePrivacy = (key) => {
     if (!isEditing) return;
     setPrivacySettings((prev) => {
@@ -409,6 +480,7 @@ const Profile = () => {
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
       window.dispatchEvent(new CustomEvent(PROFILE_UPDATED_EVENT, { detail: updatedUser }));
+      fetchCooldowns(targetUserId);
 
       if (!isEditing) {
         setFormData((prev) => ({
@@ -507,6 +579,7 @@ const Profile = () => {
         fetchLatestAlumniDetails(userData.alumni.id);
         loadCareerHistory(userData.alumni.id);
       }
+      fetchCooldowns(userData.id);
     }
 
     // Listen for alumni directory updates via localStorage
@@ -791,7 +864,39 @@ const Profile = () => {
       setPrivacySettings(privacySettings);
       setIsEditing(false);
       setProfileImageFile(null);
-      toast.success('Profile updated successfully!');
+
+      fetchCooldowns(user.id);
+
+      if (data.blockedFields && Object.keys(data.blockedFields).length > 0) {
+        const fieldLabels = {
+          username: 'Username',
+          email: 'Email',
+          firstName: 'First Name',
+          middleName: 'Middle Name',
+          lastName: 'Last Name',
+          studentId: 'Student ID',
+          level: 'Level',
+          course: 'Course',
+          batch: 'Batch',
+          graduationYear: 'Graduation Year',
+          currentPosition: 'Current Position',
+          company: 'Company',
+          location: 'Location',
+          contactNumber: 'Contact Number',
+          skills: 'Skills',
+          dateOfBirth: 'Date of Birth',
+          education_INTEGRATED_SCHOOL: 'Integrated School History',
+          education_NIGHT_HIGH: 'Night High History',
+          education_SENIOR_HIGH: 'Senior High History',
+          education_COLLEGE: 'College History',
+          education_ETEEAP: 'ETEEAP History',
+          education_GRAD_SCHOOL: 'Grad School History'
+        };
+        const blockedNames = Object.keys(data.blockedFields).map(f => fieldLabels[f] || f).join(', ');
+        toast.warning(`Some changes were skipped due to active cooldown: ${blockedNames}`);
+      } else {
+        toast.success('Profile updated successfully!');
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to update profile');
     } finally {
@@ -1128,9 +1233,11 @@ const Profile = () => {
                     name="username"
                     value={formData.username}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                     required
+                    disabled={isFieldDisabled('username')}
                   />
+                  {renderUnlockMessage('username')}
                 </div>
 
                 <div>
@@ -1149,9 +1256,11 @@ const Profile = () => {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                     required
+                    disabled={isFieldDisabled('email')}
                   />
+                  {renderUnlockMessage('email')}
                 </div>
 
                 <div>
@@ -1171,8 +1280,10 @@ const Profile = () => {
                     value={formData.contactNumber}
                     onChange={handleChange}
                     placeholder="e.g., 0917 123 4567"
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    disabled={isFieldDisabled('contactNumber')}
                   />
+                  {renderUnlockMessage('contactNumber')}
                 </div>
               </div>
 
@@ -1190,8 +1301,10 @@ const Profile = () => {
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('firstName')}
                     />
+                    {renderUnlockMessage('firstName')}
                   </div>
 
                   <div>
@@ -1203,8 +1316,10 @@ const Profile = () => {
                       name="middleName"
                       value={formData.middleName}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('middleName')}
                     />
+                    {renderUnlockMessage('middleName')}
                   </div>
 
                   <div>
@@ -1216,8 +1331,10 @@ const Profile = () => {
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('lastName')}
                     />
+                    {renderUnlockMessage('lastName')}
                   </div>
 
                   <div>
@@ -1237,29 +1354,33 @@ const Profile = () => {
                       value={formData.studentId}
                       onChange={handleChange}
                       placeholder="Optional"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('studentId')}
                     />
+                    {renderUnlockMessage('studentId')}
                   </div>
 
-                      <div>
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Date of Birth
-                          </label>
-                          <PrivacyToggle
-                            label="Date of birth"
-                            isPublic={privacySettings.isDateOfBirthPublic}
-                            onToggle={() => togglePrivacy('isDateOfBirthPublic')}
-                          />
-                        </div>
-                        <input
-                          type="date"
-                          name="dateOfBirth"
-                          value={formData.dateOfBirth}
-                          onChange={handleChange}
-                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                        />
-                      </div>
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Date of Birth
+                      </label>
+                      <PrivacyToggle
+                        label="Date of birth"
+                        isPublic={privacySettings.isDateOfBirthPublic}
+                        onToggle={() => togglePrivacy('isDateOfBirthPublic')}
+                      />
+                    </div>
+                    <input
+                      type="date"
+                      name="dateOfBirth"
+                      value={formData.dateOfBirth}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('dateOfBirth')}
+                    />
+                    {renderUnlockMessage('dateOfBirth')}
+                  </div>
 
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
@@ -1278,8 +1399,10 @@ const Profile = () => {
                       value={formData.course}
                       onChange={handleChange}
                       placeholder="e.g., Bachelor of Science in Computer Science"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('course')}
                     />
+                    {renderUnlockMessage('course')}
                   </div>
 
                   <div>
@@ -1301,8 +1424,10 @@ const Profile = () => {
                       min="1990"
                       max="2030"
                       placeholder="e.g., 2026"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('graduationYear')}
                     />
+                    {renderUnlockMessage('graduationYear')}
                   </div>
 
                   <div>
@@ -1322,8 +1447,10 @@ const Profile = () => {
                       value={formData.currentPosition}
                       onChange={handleChange}
                       placeholder="e.g., Software Engineer"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('currentPosition')}
                     />
+                    {renderUnlockMessage('currentPosition')}
                   </div>
 
                   <div>
@@ -1343,8 +1470,10 @@ const Profile = () => {
                       value={formData.company}
                       onChange={handleChange}
                       placeholder="e.g., Tech Corp"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('company')}
                     />
+                    {renderUnlockMessage('company')}
                   </div>
 
                   <div>
@@ -1364,8 +1493,10 @@ const Profile = () => {
                       value={formData.location}
                       onChange={handleChange}
                       placeholder="e.g., Manila, Philippines"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      disabled={isFieldDisabled('location')}
                     />
+                    {renderUnlockMessage('location')}
                   </div>
                 </div>
 
@@ -1388,49 +1519,78 @@ const Profile = () => {
                     </button>
                   </div>
                   <div className="space-y-3">
-                    {educationHistory.map((entry, index) => (
-                      <div key={`edu-${index}`} className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
-                          <select
-                            value={entry.level}
-                            onChange={(e) => handleEducationHistoryChange(index, 'level', e.target.value)}
-                            className="app-select"
-                          >
-                            <option value="">Select Level</option>
-                            <option value="INTEGRATED_SCHOOL">Integrated School</option>
-                            <option value="NIGHT_HIGH">Night High</option>
-                            <option value="SENIOR_HIGH">Senior High</option>
-                            <option value="COLLEGE">College</option>
-                            <option value="ETEEAP">ETEEAP</option>
-                            <option value="GRAD_SCHOOL">Grad School</option>
-                          </select>
+                    {educationHistory.map((entry, index) => {
+                      const isEduLocked = entry.level ? isFieldDisabled('education_' + entry.level) : false;
+                      return (
+                        <div key={`edu-${index}`} className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
+                            <select
+                              value={entry.level}
+                              onChange={(e) => handleEducationHistoryChange(index, 'level', e.target.value)}
+                              className="app-select disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                              disabled={isEduLocked}
+                            >
+                              <option value="">Select Level</option>
+                              <option value="INTEGRATED_SCHOOL" disabled={entry.level !== 'INTEGRATED_SCHOOL' && isFieldDisabled('education_INTEGRATED_SCHOOL')}>
+                                Integrated School {entry.level !== 'INTEGRATED_SCHOOL' && isFieldDisabled('education_INTEGRATED_SCHOOL') && ' (Locked)'}
+                              </option>
+                              <option value="NIGHT_HIGH" disabled={entry.level !== 'NIGHT_HIGH' && isFieldDisabled('education_NIGHT_HIGH')}>
+                                Night High {entry.level !== 'NIGHT_HIGH' && isFieldDisabled('education_NIGHT_HIGH') && ' (Locked)'}
+                              </option>
+                              <option value="SENIOR_HIGH" disabled={entry.level !== 'SENIOR_HIGH' && isFieldDisabled('education_SENIOR_HIGH')}>
+                                Senior High {entry.level !== 'SENIOR_HIGH' && isFieldDisabled('education_SENIOR_HIGH') && ' (Locked)'}
+                              </option>
+                              <option value="COLLEGE" disabled={entry.level !== 'COLLEGE' && isFieldDisabled('education_COLLEGE')}>
+                                College {entry.level !== 'COLLEGE' && isFieldDisabled('education_COLLEGE') && ' (Locked)'}
+                              </option>
+                              <option value="ETEEAP" disabled={entry.level !== 'ETEEAP' && isFieldDisabled('education_ETEEAP')}>
+                                ETEEAP {entry.level !== 'ETEEAP' && isFieldDisabled('education_ETEEAP') && ' (Locked)'}
+                              </option>
+                              <option value="GRAD_SCHOOL" disabled={entry.level !== 'GRAD_SCHOOL' && isFieldDisabled('education_GRAD_SCHOOL')}>
+                                Grad School {entry.level !== 'GRAD_SCHOOL' && isFieldDisabled('education_GRAD_SCHOOL') && ' (Locked)'}
+                              </option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Batch</label>
+                            <select
+                              value={entry.batch}
+                              onChange={(e) => handleEducationHistoryChange(index, 'batch', e.target.value)}
+                              className="app-select disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                              disabled={isEduLocked}
+                            >
+                              <option value="">Select Batch</option>
+                              {batches.map((batch) => (
+                                <option key={`batch-option-${batch}`} value={batch}>{batch}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-0">
+                            <div>
+                              {entry.level ? (
+                                renderUnlockMessage('education_' + entry.level)
+                              ) : (
+                                <p className="text-[11px] text-gray-400 flex items-center gap-1 font-normal">
+                                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  Never edited. Updates to this field are restricted to once every 30 days.
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => !isEduLocked && removeEducationHistoryEntry(index)}
+                              className={`text-xs font-semibold ${isEduLocked ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-700'}`}
+                              disabled={isEduLocked}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Batch</label>
-                          <select
-                            value={entry.batch}
-                            onChange={(e) => handleEducationHistoryChange(index, 'batch', e.target.value)}
-                            className="app-select"
-                          >
-                            <option value="">Select Batch</option>
-                            {batches.map((batch) => (
-                              <option key={`batch-option-${batch}`} value={batch}>{batch}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex items-end justify-between gap-3">
-                          <div className="text-xs text-gray-500">The primary entry follows your graduation year for a consistent class year.</div>
-                          <button
-                            type="button"
-                            onClick={() => removeEducationHistoryEntry(index)}
-                            className="text-xs text-red-600 hover:text-red-700"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1598,8 +1758,10 @@ const Profile = () => {
                     onChange={handleChange}
                     rows="4"
                     placeholder="List your skills (e.g., JavaScript, React, Node.js, etc.)"
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors resize-none"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors resize-none disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    disabled={isFieldDisabled('skills')}
                   />
+                  {renderUnlockMessage('skills')}
                 </div>
 
                 {/* Social Links Section */}

@@ -370,10 +370,10 @@ const EventDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-sm text-gray-500">Loading event details...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900"></div>
+          <p className="mt-4 text-gray-600 font-medium">Loading event details...</p>
         </div>
       </div>
     );

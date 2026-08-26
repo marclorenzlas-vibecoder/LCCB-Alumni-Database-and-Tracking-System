@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE_URL } from '../config/apiBaseUrl';
 import FilterMenu from './FilterMenu';
+import MobileFilterButton from './MobileFilterButton';
 import UserLayout from './UserLayout';
 
 const actionFilterOptions = [
@@ -247,22 +248,33 @@ const ActivityLogs = () => {
                 <div className="flex min-w-[260px] flex-1 items-center gap-2 sm:flex-none">
                   <span className="w-14 shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Action</span>
                   <div className="min-w-0 flex-1">
-                    <FilterMenu
-                      menuRef={actionMenuRef}
-                      isOpen={showActionMenu}
-                      setIsOpen={setShowActionMenu}
+                    <div className="hidden md:block">
+                      <FilterMenu
+                        menuRef={actionMenuRef}
+                        isOpen={showActionMenu}
+                        setIsOpen={setShowActionMenu}
+                        buttonLabel="All actions"
+                        selectedLabel={actionFilterOptions.find((option) => option.value === actionFilter)?.label || 'All actions'}
+                        selectedValue={actionFilter}
+                        icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M7 12h10m-7 6h4" /></svg>}
+                        sections={[{ key: 'actions', title: 'Actions', items: actionFilterOptions }]}
+                        onSelect={(value) => {
+                          setActionFilter(value);
+                          setShowActionMenu(false);
+                        }}
+                        panelTitle="All actions"
+                        panelWidthClass="w-full"
+                        alignClass="left-0"
+                      />
+                    </div>
+                    <MobileFilterButton
                       buttonLabel="All actions"
                       selectedLabel={actionFilterOptions.find((option) => option.value === actionFilter)?.label || 'All actions'}
                       selectedValue={actionFilter}
                       icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M7 12h10m-7 6h4" /></svg>}
                       sections={[{ key: 'actions', title: 'Actions', items: actionFilterOptions }]}
-                      onSelect={(value) => {
-                        setActionFilter(value);
-                        setShowActionMenu(false);
-                      }}
+                      onSelect={(value) => setActionFilter(value)}
                       panelTitle="All actions"
-                      panelWidthClass="w-full"
-                      alignClass="left-0"
                     />
                   </div>
                 </div>

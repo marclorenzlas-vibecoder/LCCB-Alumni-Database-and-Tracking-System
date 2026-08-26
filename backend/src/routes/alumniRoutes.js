@@ -258,6 +258,33 @@ router.get("/", softAuth, async (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');
     const isStaff = isStaffViewer(req.user);
+    const reqUserId = req.user?.id;
+
+    // 1. Fetch user's own batches for batch scope restriction
+    let userBatches = [];
+    if (reqUserId) {
+      const userAlumni = await prisma.alumni.findFirst({
+        where: { user_id: reqUserId }
+      });
+      if (userAlumni) {
+        if (userAlumni.batch) {
+          userBatches.push(userAlumni.batch);
+        }
+        try {
+          const eduHistory = await prisma.$queryRawUnsafe(
+            `SELECT batch FROM alumni_education_history WHERE alumni_id = $1`,
+            userAlumni.id
+          );
+          for (const row of eduHistory) {
+            if (row.batch && !userBatches.includes(row.batch)) {
+              userBatches.push(row.batch);
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to load user education history batches:', err.message);
+        }
+      }
+    }
 
     const where = {
       NOT: {
@@ -267,12 +294,89 @@ router.get("/", softAuth, async (req, res) => {
         ],
       },
       // Non-staff callers only see public profiles.
-      // is_public: null is treated as public (default when field was not yet set).
       ...(!isStaff && {
         OR: [{ is_public: true }, { is_public: null }],
       }),
     };
 
+    const search = req.query.search ? String(req.query.search).trim() : '';
+
+    // Apply batch scope restriction ONLY if regular alumni and no active search term
+    if (!isStaff && !search) {
+      let sharingAlumniIds = [];
+      if (userBatches.length > 0) {
+        try {
+          const rows = await prisma.$queryRawUnsafe(
+            `SELECT DISTINCT alumni_id FROM alumni_education_history WHERE batch IN (${userBatches.map((_, i) => '$' + (i + 1)).join(',')})`,
+            ...userBatches
+          );
+          sharingAlumniIds = rows.map(r => r.alumni_id);
+        } catch (err) {
+          console.warn('Failed to load sharing alumni ids:', err.message);
+        }
+      }
+      where.OR = [
+        ...(reqUserId ? [{ user_id: reqUserId }] : []),
+        { batch: { in: userBatches } },
+        { id: { in: sharingAlumniIds } }
+      ];
+    }
+
+    // Apply specific filters
+    const level = req.query.level;
+    const batch = req.query.batch;
+    const course = req.query.course;
+
+    if (level) {
+      where.level = level;
+    }
+    if (batch) {
+      where.batch = parseInt(batch, 10);
+    }
+    if (course) {
+      where.course = course;
+    }
+
+    // Apply search query conditions
+    if (search) {
+      const term = search.toLowerCase();
+      where.AND = [
+        {
+          OR: [
+            { first_name: { contains: term, mode: 'insensitive' } },
+            { last_name: { contains: term, mode: 'insensitive' } },
+            { course: { contains: term, mode: 'insensitive' } },
+            { email: { contains: term, mode: 'insensitive' } },
+            { company: { contains: term, mode: 'insensitive' } },
+            { location: { contains: term, mode: 'insensitive' } },
+            ...(!isNaN(parseInt(term, 10)) ? [
+              { graduation_year: parseInt(term, 10) },
+              { batch: parseInt(term, 10) }
+            ] : [])
+          ]
+        }
+      ];
+    }
+
+    // 2. Count total matches
+    const totalAlumni = await prisma.alumni.count({ where });
+
+    const isAll = req.query.all === 'true';
+
+    // 3. Pagination calculation
+    let limit = parseInt(req.query.limit, 10) || 30;
+    if (limit <= 0) limit = 30;
+    if (!isAll && limit > 50) limit = 50; // Cap max limit at 50
+
+    let page = parseInt(req.query.page, 10) || 1;
+    if (page <= 0) page = 1;
+
+    const totalPages = Math.ceil(totalAlumni / limit) || 1;
+    if (page > totalPages) page = totalPages;
+
+    const skip = (page - 1) * limit;
+
+    // 4. Fetch the records
     const alumni = await prisma.alumni.findMany({
       where,
       include: {
@@ -284,6 +388,13 @@ router.get("/", softAuth, async (req, res) => {
         },
         social_link: true,
       },
+      orderBy: {
+        id: 'desc'
+      },
+      ...(isAll ? {} : {
+        skip,
+        take: limit
+      })
     });
 
     const historyByAlumniId = await getEducationHistoryByAlumniIds(
@@ -308,7 +419,30 @@ router.get("/", softAuth, async (req, res) => {
       };
     });
 
-    res.json(payload);
+    // 5. Unique batches calculation for the filter dropdown
+    const batchWhere = { ...where };
+    delete batchWhere.batch;
+
+    const uniqueBatches = await prisma.alumni.findMany({
+      where: batchWhere,
+      select: { batch: true },
+      distinct: ['batch']
+    });
+
+    const availableBatches = uniqueBatches
+      .map(item => item.batch)
+      .filter(b => b !== null && b !== undefined)
+      .sort((a, b) => a - b);
+
+    res.json({
+      alumni: payload,
+      totalAlumni,
+      totalPages,
+      currentPage: page,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+      availableBatches
+    });
   } catch (error) {
     console.error("Error fetching alumni:", error);
     res.status(500).json({ error: "Failed to fetch alumni" });

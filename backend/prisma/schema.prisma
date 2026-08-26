@@ -496,3 +496,17 @@ model chat_messages {
   created_at         DateTime?           @default(now()) @db.Timestamptz(6)
   chat_conversations chat_conversations? @relation(fields: [chat_id], references: [chat_id], onDelete: Cascade)
 }
+
+model profile_change_log {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  field_name String
+  old_value  String?
+  new_value  String?
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+  @@index([field_name])
+  @@map("profile_change_logs")
+}
+

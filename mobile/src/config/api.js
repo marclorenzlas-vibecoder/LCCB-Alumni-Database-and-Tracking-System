@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 
-const FALLBACK_HOST = '192.168.0.39';
+const FALLBACK_HOST = '192.168.5.248';
 const FALLBACK_PORT = '5001';
 
 const getBaseUrl = () => {

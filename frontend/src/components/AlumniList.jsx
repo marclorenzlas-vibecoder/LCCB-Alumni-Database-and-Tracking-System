@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config/apiBaseUrl';
 import UserLayout from './UserLayout';
+import MobileFilterButton from './MobileFilterButton';
 
 const AlumniList = () => {
   const [alumniList, setAlumniList] = useState([]);
@@ -156,13 +157,30 @@ const AlumniList = () => {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
-            className="app-select"
+            className="app-select hidden md:block"
           >
             <option value="">All Years</option>
             <option value="2023">Class of 2023</option>
             <option value="2024">Class of 2024</option>
             <option value="2025">Class of 2025</option>
           </select>
+          <MobileFilterButton
+            buttonLabel="All Years"
+            selectedLabel={selectedYear ? `Class of ${selectedYear}` : 'All Years'}
+            selectedValue={selectedYear}
+            icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+            sections={[{
+              key: 'years',
+              items: [
+                { value: '', label: 'All Years' },
+                { value: '2023', label: 'Class of 2023' },
+                { value: '2024', label: 'Class of 2024' },
+                { value: '2025', label: 'Class of 2025' }
+              ]
+            }]}
+            onSelect={(value) => setSelectedYear(value)}
+            panelTitle="Class of Year"
+          />
         </div>
 
         {loading ? (

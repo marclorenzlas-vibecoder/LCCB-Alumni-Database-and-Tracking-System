@@ -344,13 +344,13 @@ const Home = () => {
         />
         <div className="home-hero__overlay absolute inset-0" aria-hidden="true" />
         
-        <div className="relative px-8 lg:px-16 pt-32 pb-20 z-10">
+        <div className="relative px-4 sm:px-8 lg:px-16 pt-32 pb-20 z-10">
           <div className="text-center max-w-4xl mx-auto">
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-tight">
+            <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-tight">
               Welcome to LCCB <br />
               <span className="text-blue-200">Alumni Network</span>
             </h1>
-            <p className="text-xl md:text-2xl text-blue-100 mb-12 leading-relaxed">
+            <p className="text-base sm:text-xl md:text-2xl text-blue-100 mb-12 leading-relaxed">
               Connect, grow, and stay updated with your fellow LCCB alumni. Our platform helps you maintain professional connections, discover career opportunities, and stay informed about alumni events.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 mb-20 justify-center">
