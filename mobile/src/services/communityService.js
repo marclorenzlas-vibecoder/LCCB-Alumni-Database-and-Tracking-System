@@ -2,8 +2,9 @@ import apiClient from './apiClient';
 
 export const communityService = {
   async getAllAlumni() {
-    const response = await apiClient.get('/alumni');
-    return response.data;
+    const response = await apiClient.get('/alumni?all=true');
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.alumni || []);
   },
 
   async getAlumniById(alumniId) {
