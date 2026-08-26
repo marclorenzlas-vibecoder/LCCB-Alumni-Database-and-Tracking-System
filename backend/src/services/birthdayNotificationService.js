@@ -1,8 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const notificationService = require('./notificationService');
 const { broadcastUpdate } = require('./realtimeService');
 
-const prisma = new PrismaClient();
+
 
 const normalizeBirthdayNotificationVisibility = (value) => {
   const normalized = String(value || 'PUBLIC').trim().toUpperCase();

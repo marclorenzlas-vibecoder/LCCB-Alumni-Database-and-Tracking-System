@@ -1,6 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const { broadcastUpdate } = require('./realtimeService');
-const prisma = new PrismaClient();
+
 
 /**
  * Create notifications for users who have enabled notifications

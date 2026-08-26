@@ -19,7 +19,7 @@ const alumniListRoutes = require('./routes/alumniListRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const configRoutes = require('./routes/configRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('./config/prisma');
 const eventStatusService = require('./services/eventStatusService');
 const birthdayNotificationService = require('./services/birthdayNotificationService');
 const { initRealtime } = require('./services/realtimeService');
@@ -37,7 +37,7 @@ console.log('Environment variables loaded:', {
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5001;
-const prisma = new PrismaClient();
+
 
 // Restore strict CORS for credentialed requests from frontend
 // Support both development (localhost) and production (custom domain)

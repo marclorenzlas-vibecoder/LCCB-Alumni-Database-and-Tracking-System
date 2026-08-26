@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
 const { tryEnter } = require('../services/activeUserLimiter');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const EXPIRED_TOKEN_GRACE_SECONDS = Number(process.env.JWT_EXPIRED_GRACE_SECONDS || 7 * 24 * 60 * 60);
 
-const prisma = new PrismaClient();
+
 
 const BLOCK_CACHE_TTL_MS = Number(process.env.AUTH_BLOCK_CACHE_TTL_MS || 5000);
 const blockStatusCache = new Map(); // userId -> { value: boolean, expiresAt: number }

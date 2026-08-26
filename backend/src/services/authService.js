@@ -1,9 +1,9 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const { broadcastUpdate } = require('./realtimeService');
 
-const prisma = new PrismaClient();
+
 
 const PRIVACY_NOTICE_VERSION = '2026-07-26';
 const DIRECTORY_SAFE_PRIVACY_FLAGS = {
