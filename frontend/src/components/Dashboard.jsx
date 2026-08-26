@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import UserLayout from './UserLayout';
+import AlumniService from '../services/alumniService';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
+  const [todayBirthdays, setTodayBirthdays] = useState([]);
+  const [isUserBirthday, setIsUserBirthday] = useState(false);
   const [stats, setStats] = useState({
     totalAlumni: '2,500+',
     activeMembers: '1,200+',
@@ -17,84 +21,142 @@ const Dashboard = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const alumniService = new AlumniService();
+    const loadBirthdays = async () => {
+      try {
+        const result = await alumniService.getBirthdayAlumniToday();
+        setTodayBirthdays(Array.isArray(result.birthdays) ? result.birthdays : []);
+        setIsUserBirthday(Boolean(result.isYourBirthday));
+      } catch (error) {
+        console.error('Failed to load birthday alumni', error);
+      }
+    };
+
+    loadBirthdays();
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
-      {/* Welcome Section */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Welcome back, {user?.firstName || 'Alumni'}! 👋
-        </h1>
-        <p className="text-gray-600 mt-2">
-          Here's what's happening in your alumni network
-        </p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-blue-50 rounded-lg p-6">
-          <div className="text-blue-600 text-2xl font-bold">{stats.totalAlumni}</div>
-          <div className="text-blue-900">Total Alumni</div>
-        </div>
-        <div className="bg-green-50 rounded-lg p-6">
-          <div className="text-green-600 text-2xl font-bold">{stats.activeMembers}</div>
-          <div className="text-green-900">Active Members</div>
-        </div>
-        <div className="bg-purple-50 rounded-lg p-6">
-          <div className="text-purple-600 text-2xl font-bold">{stats.upcomingEvents}</div>
-          <div className="text-purple-900">Upcoming Events</div>
-        </div>
-        <div className="bg-orange-50 rounded-lg p-6">
-          <div className="text-orange-600 text-2xl font-bold">{stats.newConnections}</div>
-          <div className="text-orange-900">New Connections</div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-          <div className="space-y-4">
-            <Link to="/profile" className="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100">
-              <span className="flex items-center">
-                <span className="text-xl mr-3">👤</span>
-                Update Your Profile
-              </span>
-            </Link>
-            <Link to="/events" className="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100">
-              <span className="flex items-center">
-                <span className="text-xl mr-3">📅</span>
-                View Upcoming Events
-              </span>
-            </Link>
-            <Link to="/alumni" className="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100">
-              <span className="flex items-center">
-                <span className="text-xl mr-3">🔍</span>
-                Find Alumni
-              </span>
-            </Link>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-          <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <div className="font-medium">New Event Announced</div>
-              <div className="text-sm text-gray-600">Annual Alumni Reunion 2024</div>
+    <UserLayout>
+      <div className="bg-slate-50 p-4 sm:p-6 lg:p-8">
+        <div className="grid gap-6">
+          <section className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-slate-500">Welcome back,</p>
+                <h1 className="text-3xl font-semibold text-slate-900">
+                  {user?.firstName || 'Alumni'} — your network is thriving.
+                </h1>
+                <p className="mt-2 text-sm text-slate-600 max-w-xl">
+                  Discover new connections, see what’s happening next, and keep your profile ready for the next opportunity.
+                </p>
+              </div>
+              <div className="rounded-3xl bg-slate-900 p-4 text-white sm:w-[260px]">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Today’s highlight</p>
+                <p className="mt-3 text-lg font-semibold">3 new events added</p>
+                <p className="mt-2 text-sm text-slate-300">Check the latest community activities and RSVP to what interests you.</p>
+              </div>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <div className="font-medium">Profile Update</div>
-              <div className="text-sm text-gray-600">2 new alumni completed their profiles</div>
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+            {(isUserBirthday || todayBirthdays.length > 0) && (
+              <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm lg:col-span-2">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Birthday spotlight</p>
+                    <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+                      {isUserBirthday ? `Happy birthday, ${user?.firstName || 'Alumni'}!` : 'Today’s birthdays'}
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {isUserBirthday
+                        ? 'Celebrate with your alumni community today.'
+                        : `${todayBirthdays.length} alumni have a birthday today.`}
+                    </p>
+                  </div>
+                  <div className="rounded-3xl bg-slate-900/95 p-4 text-white">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Birthday feed</p>
+                    <p className="mt-3 text-xl font-semibold">{todayBirthdays.length}</p>
+                    <p className="mt-2 text-sm text-slate-300">currently celebrating</p>
+                  </div>
+                </div>
+                {todayBirthdays.length > 0 && (
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {todayBirthdays.slice(0, 6).map((card) => (
+                      <div key={card.id} className="rounded-3xl border border-slate-200 p-4">
+                        <p className="text-sm font-semibold text-slate-900">{card.firstName} {card.lastName}</p>
+                        <p className="mt-2 text-sm text-slate-500">Birthday today</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
+                <div className="text-sm uppercase tracking-[0.2em] text-slate-500">Growth</div>
+                <div className="mt-6 text-4xl font-semibold text-slate-900">{stats.totalAlumni}</div>
+                <div className="mt-2 text-sm text-slate-600">Alumni on the network</div>
+              </div>
+              <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
+                <div className="text-sm uppercase tracking-[0.2em] text-slate-500">Engagement</div>
+                <div className="mt-6 text-4xl font-semibold text-slate-900">{stats.activeMembers}</div>
+                <div className="mt-2 text-sm text-slate-600">Members active this week</div>
+              </div>
+              <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
+                <div className="text-sm uppercase tracking-[0.2em] text-slate-500">Events</div>
+                <div className="mt-6 text-4xl font-semibold text-slate-900">{stats.upcomingEvents}</div>
+                <div className="mt-2 text-sm text-slate-600">Upcoming events ready to join</div>
+              </div>
+              <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
+                <div className="text-sm uppercase tracking-[0.2em] text-slate-500">Connections</div>
+                <div className="mt-6 text-4xl font-semibold text-slate-900">{stats.newConnections}</div>
+                <div className="mt-2 text-sm text-slate-600">New relationships formed</div>
+              </div>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <div className="font-medium">New Job Opportunity</div>
-              <div className="text-sm text-gray-600">Senior Developer position at Tech Corp</div>
+
+            <div className="grid gap-4">
+              <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 p-6 text-white shadow-sm">
+                <div className="text-sm uppercase tracking-[0.2em] text-slate-300">Action plan</div>
+                <h2 className="mt-3 text-2xl font-semibold">Keep your profile spotlight-ready</h2>
+                <p className="mt-3 text-sm text-slate-300">Complete these quick actions to increase visibility and stay connected with the alumni community.</p>
+                <div className="mt-6 space-y-3">
+                  <Link to="/profile" className="block rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/20">
+                    Update profile & bio
+                  </Link>
+                  <Link to="/events" className="block rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/20">
+                    Explore upcoming events
+                  </Link>
+                  <Link to="/alumni" className="block rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/20">
+                    Find and message alumni
+                  </Link>
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Recent highlights</p>
+                    <h2 className="mt-3 text-xl font-semibold text-slate-900">Community pulse</h2>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase text-emerald-800">Live</span>
+                </div>
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Annual Reunion details posted</p>
+                    <p className="mt-1 text-sm text-slate-600">See the full agenda and invite your classmates.</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Top alumni spotlight</p>
+                    <p className="mt-1 text-sm text-slate-600">A new mentorship program opened for recent graduates.</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
         </div>
       </div>
-    </div>
+    </UserLayout>
   );
 };
 

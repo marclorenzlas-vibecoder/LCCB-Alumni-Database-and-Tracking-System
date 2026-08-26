@@ -3,11 +3,71 @@ import { useParams, Link } from 'react-router-dom';
 import alumniService from '../services/alumniService';
 import { authService } from '../services/authService';
 
+const levelLabelMap = {
+  INTEGRATED_SCHOOL: 'Integrated School',
+  NIGHT_HIGH: 'Night High',
+  SENIOR_HIGH: 'Senior High',
+  COLLEGE: 'College',
+  ETEEAP: 'ETEEAP',
+  GRAD_SCHOOL: 'Grad School',
+  SENIOR_HIGH_SCHOOL: 'Senior High School',
+  HIGH_SCHOOL: 'High School'
+};
+
+const formatLevelLabel = (value) => {
+  if (!value) return '';
+  return levelLabelMap[value] || value;
+};
+
+const formatDateOfBirth = (value) => {
+  if (!value) return 'Not provided';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not provided';
+
+  return date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
 const AlumniProfile = () => {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState('overview');
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportEvidenceLink, setReportEvidenceLink] = useState('');
+  const [reportEvidenceFile, setReportEvidenceFile] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportStatusMessage, setReportStatusMessage] = useState('');
+
+  const handleReportDeceasedSubmit = async (event) => {
+    event.preventDefault();
+    setReportLoading(true);
+    setReportStatusMessage('');
+
+    try {
+      await alumniService.reportDeceased(id, {
+        reason: reportReason,
+        evidenceLink: reportEvidenceLink,
+        evidenceFile: reportEvidenceFile
+      });
+
+      setReportStatusMessage('Your report was submitted successfully and is pending admin review.');
+      setShowReportForm(false);
+      setReportReason('');
+      setReportEvidenceLink('');
+      setReportEvidenceFile(null);
+    } catch (error) {
+      console.error('Error submitting deceased report:', error);
+      setReportStatusMessage(error.message || 'Unable to submit report at this time.');
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   // Load profile data based on ID
   useEffect(() => {
@@ -29,6 +89,7 @@ const AlumniProfile = () => {
             company: 'N/A',
             location: 'N/A',
             email: 'N/A',
+            dateOfBirth: null,
             skills: [],
             profileImage: 'https://via.placeholder.com/150x150/9CA3AF/FFFFFF?text=Profile',
             bio: 'This alumni profile could not be found.',
@@ -86,6 +147,7 @@ const AlumniProfile = () => {
     ...profile,
     batch: profile.batch || `${(profile.graduationYear || 2020) - 4}-${profile.graduationYear || 2020}`,
     level: profile.level || '',
+    dateOfBirth: profile.dateOfBirth || profile.date_of_birth || null,
     contactNumber: profile.contactNumber || 'Not provided',
     currentJob: profile.currentPosition || profile.currentJob || 'Not specified',
     bio: profile.bio || `${profile.firstName || 'Alumni'} ${profile.lastName || ''} graduated from LCCB in ${profile.graduationYear || 'N/A'} with a degree in ${profile.course || 'N/A'}${profile.currentPosition ? `. Currently working as ${profile.currentPosition}` : ''}${profile.company ? ` at ${profile.company}` : ''}.`,
@@ -175,6 +237,30 @@ const AlumniProfile = () => {
         <p className="text-gray-700 leading-relaxed">{displayProfile.bio}</p>
       </div>
 
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-4">Personal Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center space-x-3">
+            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <div>
+              <p className="text-sm text-gray-500">Birthday</p>
+              <p className="text-gray-700">{formatDateOfBirth(displayProfile.dateOfBirth)}</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v11.494m-5.045-9.243a7.5 7.5 0 019.09 0M4.477 15.26a11.25 11.25 0 0115.046 0M2.25 12a15.75 15.75 0 0119.5 0" />
+            </svg>
+            <div>
+              <p className="text-sm text-gray-500">Level</p>
+              <p className="text-gray-700">{formatLevelLabel(displayProfile.level) || 'Not provided'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Contact Information (Teachers/Admin only) */}
       {authService.isTeacher() && (
         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -207,24 +293,40 @@ const AlumniProfile = () => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Social Links</h3>
         <div className="flex space-x-4">
-          <a href={displayProfile.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-blue-900 hover:text-blue-800">
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-            </svg>
-            <span>LinkedIn</span>
-          </a>
-          <a href={displayProfile.socialLinks.github} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-gray-600 hover:text-gray-800">
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-            </svg>
-            <span>GitHub</span>
-          </a>
-          <a href={displayProfile.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-blue-400 hover:text-blue-600">
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-            </svg>
-            <span>Twitter</span>
-          </a>
+          {Object.entries(displayProfile.socialLinks || {})
+            .filter(([_, url]) => url && url !== '#')
+            .map(([key, url]) => {
+              if (!url) return null;
+              switch (key.toLowerCase()) {
+                case 'linkedin':
+                  return (
+                    <a key={key} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-blue-900 hover:text-blue-800">
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                      </svg>
+                      <span>LinkedIn</span>
+                    </a>
+                  );
+                case 'github':
+                  return (
+                    <a key={key} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-gray-600 hover:text-gray-800">
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                      </svg>
+                      <span>GitHub</span>
+                    </a>
+                  );
+                default:
+                  return (
+                    <a key={key} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-gray-600 hover:text-gray-800">
+                      <span className="capitalize">{key}</span>
+                    </a>
+                  );
+              }
+            })}
+          {(!displayProfile.socialLinks || Object.entries(displayProfile.socialLinks || {}).filter(([_, url]) => url && url !== '#').length === 0) && (
+            <p className="text-gray-500">No social links provided.</p>
+          )}
         </div>
       </div>
 
@@ -455,54 +557,142 @@ const AlumniProfile = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Profile Header */}
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <div className="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-6">
-            <div className="relative">
-              <img 
-                src={displayProfile.profileImage} 
-                alt={`${displayProfile.firstName} ${displayProfile.lastName}`}
-                className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
-              />
-              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-green-500 rounded-full border-4 border-white"></div>
-            </div>
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                {displayProfile.firstName} {displayProfile.lastName}
-              </h1>
-              <p className="text-xl text-gray-600 mb-2">
-                {displayProfile.currentJob} at {displayProfile.company}
-              </p>
-              <p className="text-gray-500 mb-4">
-                {displayProfile.course}, Class of {displayProfile.graduationYear} • {displayProfile.location}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-                  {displayProfile.course}
-                </span>
-                {displayProfile.level && (
-                  <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm rounded-full">
-                    {displayProfile.level === 'COLLEGE' ? 'College' : displayProfile.level === 'HIGH_SCHOOL' ? 'High School' : displayProfile.level === 'SENIOR_HIGH_SCHOOL' ? 'Senior High School' : displayProfile.level}
-                  </span>
-                )}
-                <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
-                  Batch {displayProfile.batch}
-                </span>
-                <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
-                  {displayProfile.graduationYear} Graduate
-                </span>
+        {/* Profile Header (with cover banner and improved layout) */}
+        <div className="bg-white rounded-lg shadow-lg mb-8 overflow-hidden">
+          <div className="h-40 bg-gray-200">
+            <img
+              src={displayProfile.coverImage}
+              alt="Cover image"
+              className="w-full h-full object-cover"
+              onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/800x200/93C5FD/ffffff?text=Cover+Image'; }}
+            />
+          </div>
+          <div className="p-8 pt-0">
+            <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
+              <div className="relative -mt-20 md:mt-0">
+                <img
+                  src={displayProfile.profileImage}
+                  alt={`${displayProfile.firstName} ${displayProfile.lastName}`}
+                  className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
+                  onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent((displayProfile.firstName || '') + ' ' + (displayProfile.lastName || ''))}&background=ffffff&color=1e40af`; }}
+                />
+                <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full ring-2 ring-white"></div>
               </div>
-            </div>
-            <div className="flex space-x-3">
-              <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                Connect
-              </button>
-              <button className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                Message
-              </button>
+              <div className="flex-1 text-center md:text-left">
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">
+                  {displayProfile.firstName} {displayProfile.lastName}
+                </h1>
+                <p className="text-lg text-gray-700 mb-1">
+                  {displayProfile.currentJob}{displayProfile.company ? ` at ${displayProfile.company}` : ''}
+                </p>
+                <p className="text-gray-500 mb-4 text-sm">
+                  {displayProfile.course}{displayProfile.graduationYear ? `, Class of ${displayProfile.graduationYear}` : ''}{displayProfile.location ? ` • ${displayProfile.location}` : ''}
+                </p>
+                <div className="flex flex-wrap justify-center md:justify-start gap-2">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                    {displayProfile.course}
+                  </span>
+                  {displayProfile.level && (
+                    <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm rounded-full">
+                      {formatLevelLabel(displayProfile.level)}
+                    </span>
+                  )}
+                  <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
+                    Batch {displayProfile.batch}
+                  </span>
+                  <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
+                    {displayProfile.graduationYear} Graduate
+                  </span>
+                  <span className={`px-3 py-1 text-sm rounded-full ${displayProfile.status === 'DECEASED' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                    {displayProfile.status === 'DECEASED' ? 'Deceased' : 'Living'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-3 sm:space-y-0">
+                <button className="px-4 h-10 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                  Connect
+                </button>
+                <button className="px-4 h-10 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                  Message
+                </button>
+                {authService.isLoggedIn() && displayProfile.status !== 'DECEASED' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReportForm((prev) => !prev)}
+                    className="px-4 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    {showReportForm ? 'Hide Report Form' : 'Report Deceased'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
+        {authService.isLoggedIn() && displayProfile.status !== 'DECEASED' && (
+          <div className="bg-white rounded-lg shadow-sm mb-8 p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Report this alumni as deceased</h2>
+                <p className="text-sm text-gray-500">Submit a report with context or evidence so an administrator can review and update the record.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReportForm((prev) => !prev)}
+                className="inline-flex items-center rounded-md bg-red-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
+              >
+                {showReportForm ? 'Hide Report Details' : 'Open Report Form'}
+              </button>
+            </div>
+
+            {showReportForm && (
+              <form onSubmit={handleReportDeceasedSubmit} className="mt-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Reason for report</label>
+                  <textarea
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    rows={4}
+                    className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="Describe what led you to believe this alumni is deceased"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Evidence link (optional)</label>
+                  <input
+                    type="url"
+                    value={reportEvidenceLink}
+                    onChange={(e) => setReportEvidenceLink(e.target.value)}
+                    className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="Add a public post, news article, or document link"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Evidence file (optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setReportEvidenceFile(e.target.files?.[0] || null)}
+                    className="mt-2 block w-full text-sm text-gray-700"
+                  />
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="submit"
+                    disabled={reportLoading}
+                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 transition-colors"
+                  >
+                    {reportLoading ? 'Submitting…' : 'Submit Report'}
+                  </button>
+                  {reportStatusMessage && (
+                    <p className="text-sm text-gray-700">{reportStatusMessage}</p>
+                  )}
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* Navigation Tabs */}
         <div className="bg-white rounded-lg shadow-sm mb-8">

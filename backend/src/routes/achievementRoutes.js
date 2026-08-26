@@ -1,5 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { broadcastUpdate } = require('../services/realtimeService');
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -105,6 +106,11 @@ router.post('/', upload.single('image'), async (req, res) => {
       }
     });
 
+    broadcastUpdate('achievement.created', {
+      achievementId: achievement.id,
+      alumniId: achievement.alumni_id
+    });
+
     res.status(201).json(achievement);
   } catch (error) {
     console.error('Error creating achievement:', error);
@@ -154,6 +160,11 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       }
     });
 
+    broadcastUpdate('achievement.updated', {
+      achievementId: achievement.id,
+      alumniId: achievement.alumni_id
+    });
+
     res.json(achievement);
   } catch (error) {
     console.error('Error updating achievement:', error);
@@ -181,6 +192,11 @@ router.delete('/:id', async (req, res) => {
     // Delete the achievement
     await prisma.achievement.delete({
       where: { id: parseInt(id) }
+    });
+
+    broadcastUpdate('achievement.deleted', {
+      achievementId: parseInt(id),
+      alumniId: achievementToDelete.alumni_id
     });
 
     // Delete the image file if it exists

@@ -1,17 +1,69 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 
-const API_URL = 'http://localhost:5001/api/applications';
+const API_URL = `${API_BASE_URL}/applications`;
+
+const normalizeToken = (value) => {
+  if (!value || typeof value !== 'string') return null;
+
+  let token = value.trim();
+  token = token.replace(/^Bearer\s+/i, '').trim();
+  token = token.replace(/^Bearer\s+/i, '').trim();
+  token = token.replace(/^['\"]+|['\"]+$/g, '').trim();
+
+  if (!token || token.toLowerCase() === 'undefined' || token.toLowerCase() === 'null') {
+    return null;
+  }
+
+  return token;
+};
+
+const getAuthHeaders = () => {
+  const storedToken = localStorage.getItem('token');
+  const token = normalizeToken(storedToken);
+
+  if (storedToken && token && storedToken !== token) {
+    localStorage.setItem('token', token);
+  }
+
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 const applicationService = {
   // Submit a job application
-  applyToJob: async (jobId, alumniId, coverLetter = '', resumeUrl = '') => {
+  applyToJob: async (jobId, alumniId, coverLetter = '', resumeUrl = '', resumeFiles = null, contactMethod = '', contactEmail = '', contactNumber = '') => {
     try {
-      const response = await axios.post(API_URL, {
-        job_posting_id: jobId,
-        applicant_id: alumniId,
-        cover_letter: coverLetter,
-        resume_url: resumeUrl
+      const headers = getAuthHeaders();
+      const formData = new FormData();
+      formData.append('job_posting_id', String(jobId));
+      formData.append('applicant_id', String(alumniId));
+      formData.append('cover_letter', coverLetter);
+
+      if (resumeUrl) {
+        formData.append('resume_url', resumeUrl);
+      }
+
+      if (resumeFiles) {
+        // resumeFiles can be a single File or an array of Files
+        if (Array.isArray(resumeFiles)) {
+          resumeFiles.forEach((file) => {
+            formData.append('resume_files[]', file);
+          });
+        } else {
+          formData.append('resume_files[]', resumeFiles);
+        }
+      }
+
+      if (contactMethod) formData.append('contact_method', contactMethod);
+      if (contactEmail) formData.append('contact_email', contactEmail);
+      if (contactNumber) formData.append('contact_number', contactNumber);
+
+      const response = await axios.post(API_URL, formData, {
+        headers: {
+          ...headers
+        }
       });
+
       return response.data;
     } catch (error) {
       console.error('Error applying to job:', error);
@@ -22,7 +74,9 @@ const applicationService = {
   // Get all applications for a specific job (for employer)
   getJobApplications: async (jobId) => {
     try {
-      const response = await axios.get(`${API_URL}/job/${jobId}`);
+      const response = await axios.get(`${API_URL}/job/${jobId}`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching job applications:', error);
@@ -33,7 +87,9 @@ const applicationService = {
   // Get all applications by a specific alumni
   getAlumniApplications: async (alumniId) => {
     try {
-      const response = await axios.get(`${API_URL}/alumni/${alumniId}`);
+      const response = await axios.get(`${API_URL}/alumni/${alumniId}`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching alumni applications:', error);
@@ -44,7 +100,9 @@ const applicationService = {
   // Get a specific application by ID
   getApplicationById: async (applicationId) => {
     try {
-      const response = await axios.get(`${API_URL}/${applicationId}`);
+      const response = await axios.get(`${API_URL}/${applicationId}`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching application:', error);
@@ -58,6 +116,8 @@ const applicationService = {
       const response = await axios.patch(`${API_URL}/${applicationId}/status`, {
         status,
         notes
+      }, {
+        headers: getAuthHeaders()
       });
       return response.data;
     } catch (error) {
@@ -69,7 +129,9 @@ const applicationService = {
   // Withdraw/delete an application
   withdrawApplication: async (applicationId) => {
     try {
-      const response = await axios.delete(`${API_URL}/${applicationId}`);
+      const response = await axios.delete(`${API_URL}/${applicationId}`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       console.error('Error withdrawing application:', error);
@@ -80,7 +142,9 @@ const applicationService = {
   // Check if alumni has applied to a specific job
   checkApplication: async (jobId, alumniId) => {
     try {
-      const response = await axios.get(`${API_URL}/check/${jobId}/${alumniId}`);
+      const response = await axios.get(`${API_URL}/check/${jobId}/${alumniId}`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       console.error('Error checking application:', error);

@@ -1,9 +1,80 @@
 // Alumni Data Service
 // This service handles all alumni data operations through API calls
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
-const API_URL = 'http://localhost:5001/api/alumni';
+const API_URL = `${API_BASE_URL}/alumni`;
 
 class AlumniService {
+  getAvatarFallbackUrl(firstName, lastName) {
+    const fullName = `${firstName || ''} ${lastName || ''}`.trim() || 'Alumni';
+    const encodedName = encodeURIComponent(fullName);
+    return `https://ui-avatars.com/api/?name=${encodedName}&background=2563eb&color=ffffff&size=160`;
+  }
+
+  formatDateForInput(dateValue) {
+    if (!dateValue) return null;
+
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return date.toISOString().slice(0, 10);
+  }
+
+  normalizeEducationHistory(raw) {
+    if (!Array.isArray(raw)) return [];
+
+    return raw
+      .map((entry) => ({
+        level: entry?.level || '',
+        batch: entry?.batch ?? '',
+        graduationYear: entry?.graduationYear ?? entry?.graduation_year ?? ''
+      }))
+      .filter((entry) => entry.level);
+  }
+
+  normalizeAlumniRecord(alumnus) {
+    let profileImageUrl = alumnus.profile_image || alumnus.profileImage || '';
+    if (profileImageUrl && !profileImageUrl.startsWith('http')) {
+      profileImageUrl = `${IMAGE_BASE_URL}${profileImageUrl}`;
+    }
+
+    const educationHistory = this.normalizeEducationHistory(
+      alumnus.educationHistory || alumnus.education_history
+    );
+
+    const firstName = alumnus.first_name || alumnus.firstName || alumnus.user?.username || '';
+    const lastName = alumnus.last_name || alumnus.lastName || '';
+    const status = alumnus.status || 'LIVING';
+
+    return {
+      id: alumnus.id.toString(),
+      student_id: alumnus.student_id || alumnus.studentId || '',
+      firstName,
+      lastName,
+      middleName: alumnus.middle_name || alumnus.middleName || '',
+      graduationYear: alumnus.graduation_year || alumnus.graduationYear || '',
+      level: alumnus.level || '',
+      batch: alumnus.batch || '',
+      course: alumnus.course || '',
+      currentPosition: alumnus.current_position || alumnus.currentPosition || '',
+      company: alumnus.company || '',
+      location: alumnus.location || '',
+      contactNumber: alumnus.contact_number || alumnus.contactNumber || '',
+      email: alumnus.email || alumnus.user?.email || '',
+      username: alumnus.user?.username || '',
+      dateOfBirth: this.formatDateForInput(alumnus.date_of_birth || alumnus.dateOfBirth),
+      date_of_birth: alumnus.date_of_birth || alumnus.dateOfBirth || null,
+      skills: alumnus.skills || '',
+      educationHistory,
+      social_link: alumnus.social_link || alumnus.socialLink || [],
+      profileImage: profileImageUrl || this.getAvatarFallbackUrl(firstName, lastName),
+      bio: alumnus.bio || '',
+      status,
+      isPublic: alumnus.is_public !== undefined ? alumnus.is_public : true,
+      isVerified: alumnus.is_verified !== undefined ? alumnus.is_verified : false
+    };
+  }
+
   // Get all alumni
   async getAllAlumni() {
     try {
@@ -12,41 +83,7 @@ class AlumniService {
         throw new Error('Network response was not ok');
       }
       const data = await response.json();
-      
-      // Transform the data to match our frontend structure
-      return data.map(alumnus => {
-        // Handle profile image URL
-        let profileImageUrl = alumnus.profile_image || alumnus.profileImage || '';
-        console.log('Processing alumni:', alumnus.id, 'Original image:', profileImageUrl);
-        
-        if (profileImageUrl && !profileImageUrl.startsWith('http')) {
-          // If it's a relative path, prepend the backend URL
-          profileImageUrl = `http://localhost:5001${profileImageUrl}`;
-          console.log('Converted to full URL:', profileImageUrl);
-        }
-        
-        return {
-          id: alumnus.id.toString(),
-          student_id: alumnus.student_id || alumnus.studentId || '',
-          firstName: alumnus.first_name || alumnus.firstName || '',
-          lastName: alumnus.last_name || alumnus.lastName || '',
-          middleName: alumnus.middle_name || alumnus.middleName || '',
-          graduationYear: alumnus.graduation_year || alumnus.graduationYear || '',
-          level: alumnus.level || '',
-          batch: alumnus.batch || '',
-          course: alumnus.course || '',
-          currentPosition: alumnus.current_position || alumnus.currentPosition || '',
-          company: alumnus.company || '',
-          location: alumnus.location || '',
-          contactNumber: alumnus.contact_number || alumnus.contactNumber || '',
-          email: alumnus.email || alumnus.user?.email || '',
-          skills: alumnus.skills || '',
-          profileImage: profileImageUrl || 'https://via.placeholder.com/150x150/9CA3AF/FFFFFF?text=Profile',
-          bio: alumnus.bio || '',
-          isPublic: alumnus.is_public !== undefined ? alumnus.is_public : true,
-          isVerified: alumnus.is_verified !== undefined ? alumnus.is_verified : false
-        };
-      });
+      return data.map((alumnus) => this.normalizeAlumniRecord(alumnus));
     } catch (error) {
       console.error('Error loading alumni:', error);
       throw error;
@@ -64,8 +101,10 @@ class AlumniService {
         const formData = new FormData();
         formData.append('email', alumniData.email || '');
         formData.append('firstName', alumniData.firstName ? alumniData.firstName.trim() : '');
+        formData.append('middleName', alumniData.middleName ? alumniData.middleName.trim() : '');
         formData.append('lastName', alumniData.lastName ? alumniData.lastName.trim() : '');
         formData.append('graduationYear', alumniData.graduationYear ? alumniData.graduationYear.toString() : '');
+        formData.append('dateOfBirth', alumniData.dateOfBirth || '');
         formData.append('course', alumniData.course ? alumniData.course.trim() : '');
         formData.append('currentPosition', alumniData.currentPosition ? alumniData.currentPosition.trim() : '');
         formData.append('company', alumniData.company ? alumniData.company.trim() : '');
@@ -73,6 +112,7 @@ class AlumniService {
         formData.append('contactNumber', alumniData.contactNumber ? alumniData.contactNumber.trim() : '');
         formData.append('level', alumniData.level || '');
         formData.append('batch', alumniData.batch ? String(alumniData.batch) : '');
+        formData.append('educationHistory', JSON.stringify(alumniData.educationHistory || []));
         formData.append('skills', Array.isArray(alumniData.skills) ? alumniData.skills.join(', ') : alumniData.skills || '');
         formData.append('profileImage', alumniData.profileImageFile);
         
@@ -89,10 +129,13 @@ class AlumniService {
         const backendData = {
           email: alumniData.email || '',
           firstName: alumniData.firstName ? alumniData.firstName.trim() : '',
+          middleName: alumniData.middleName ? alumniData.middleName.trim() : '',
           lastName: alumniData.lastName ? alumniData.lastName.trim() : '',
           graduationYear: alumniData.graduationYear ? parseInt(alumniData.graduationYear) : null,
+          dateOfBirth: alumniData.dateOfBirth || null,
           level: alumniData.level || null,
           batch: alumniData.batch ? parseInt(alumniData.batch) : null,
+          educationHistory: this.normalizeEducationHistory(alumniData.educationHistory || []),
           course: alumniData.course ? alumniData.course.trim() : '',
           currentPosition: alumniData.currentPosition ? alumniData.currentPosition.trim() : '',
           company: alumniData.company ? alumniData.company.trim() : '',
@@ -126,16 +169,25 @@ class AlumniService {
       // Transform the response to match frontend format
       let profileImageUrl = newAlumni.profile_image || newAlumni.profileImage || '';
       if (profileImageUrl && !profileImageUrl.startsWith('http')) {
-        profileImageUrl = `http://localhost:5001${profileImageUrl}`;
+        profileImageUrl = `${IMAGE_BASE_URL}${profileImageUrl}`;
       }
+      const educationHistory = this.normalizeEducationHistory(
+        newAlumni.educationHistory || newAlumni.education_history
+      );
+      const firstName = newAlumni.first_name || newAlumni.firstName || '';
+      const lastName = newAlumni.last_name || newAlumni.lastName || '';
       
       return {
         id: newAlumni.id.toString(),
-        firstName: newAlumni.first_name || newAlumni.firstName || '',
-        lastName: newAlumni.last_name || newAlumni.lastName || '',
+        firstName,
+        middleName: newAlumni.middle_name || newAlumni.middleName || '',
+        lastName,
         graduationYear: newAlumni.graduation_year || newAlumni.graduationYear || '',
+        dateOfBirth: this.formatDateForInput(newAlumni.date_of_birth || newAlumni.dateOfBirth),
+        date_of_birth: newAlumni.date_of_birth || newAlumni.dateOfBirth || null,
         level: newAlumni.level || '',
         batch: newAlumni.batch || '',
+        educationHistory,
         course: newAlumni.course || '',
         currentPosition: newAlumni.current_position || newAlumni.currentPosition || '',
         company: newAlumni.company || '',
@@ -147,7 +199,7 @@ class AlumniService {
             newAlumni.skills.split(',').map(s => s.trim()) : 
             newAlumni.skills) : 
           [],
-        profileImage: profileImageUrl || 'https://via.placeholder.com/150x150/9CA3AF/FFFFFF?text=Profile',
+        profileImage: profileImageUrl || this.getAvatarFallbackUrl(firstName, lastName),
         isPublic: newAlumni.is_public,
         isVerified: newAlumni.is_verified
       };
@@ -176,10 +228,13 @@ class AlumniService {
       
         const backendData = {
           firstName: alumniData.firstName ? alumniData.firstName.trim() : undefined,
+          middleName: alumniData.middleName ? alumniData.middleName.trim() : undefined,
           lastName: alumniData.lastName ? alumniData.lastName.trim() : undefined,
           graduationYear: alumniData.graduationYear ? parseInt(alumniData.graduationYear) : undefined,
+          dateOfBirth: alumniData.dateOfBirth !== undefined ? alumniData.dateOfBirth : undefined,
           level: alumniData.level !== undefined ? alumniData.level : undefined,
           batch: alumniData.batch !== undefined ? parseInt(alumniData.batch) : undefined,
+          educationHistory: this.normalizeEducationHistory(alumniData.educationHistory || []),
           course: alumniData.course ? alumniData.course.trim() : undefined,
           currentPosition: alumniData.currentPosition ? alumniData.currentPosition.trim() : undefined,
           company: alumniData.company ? alumniData.company.trim() : undefined,
@@ -215,17 +270,25 @@ class AlumniService {
       // Transform the response to match frontend format
       let profileImageUrl = updatedAlumni.profile_image || updatedAlumni.profileImage || '';
       if (profileImageUrl && !profileImageUrl.startsWith('http')) {
-        profileImageUrl = `http://localhost:5001${profileImageUrl}`;
+        profileImageUrl = `${IMAGE_BASE_URL}${profileImageUrl}`;
       }
+      const educationHistory = this.normalizeEducationHistory(
+        updatedAlumni.educationHistory || updatedAlumni.education_history
+      );
+      const firstName = updatedAlumni.first_name || updatedAlumni.firstName || '';
+      const lastName = updatedAlumni.last_name || updatedAlumni.lastName || '';
       
       return {
         id: updatedAlumni.id.toString(),
-        firstName: updatedAlumni.first_name || updatedAlumni.firstName || '',
-        lastName: updatedAlumni.last_name || updatedAlumni.lastName || '',
+        firstName,
+        lastName,
         middleName: updatedAlumni.middle_name || updatedAlumni.middleName || '',
         graduationYear: updatedAlumni.graduation_year || updatedAlumni.graduationYear || '',
+        dateOfBirth: this.formatDateForInput(updatedAlumni.date_of_birth || updatedAlumni.dateOfBirth),
+        date_of_birth: updatedAlumni.date_of_birth || updatedAlumni.dateOfBirth || null,
         level: updatedAlumni.level || '',
         batch: updatedAlumni.batch || '',
+        educationHistory,
         course: updatedAlumni.course || '',
         currentPosition: updatedAlumni.current_position || updatedAlumni.currentPosition || '',
         company: updatedAlumni.company || '',
@@ -233,7 +296,7 @@ class AlumniService {
         contactNumber: updatedAlumni.contact_number || updatedAlumni.contactNumber || '',
         email: updatedAlumni.email || updatedAlumni.user?.email || '',
         skills: updatedAlumni.skills || '',
-        profileImage: profileImageUrl || 'https://via.placeholder.com/150x150/9CA3AF/FFFFFF?text=Profile',
+        profileImage: profileImageUrl || this.getAvatarFallbackUrl(firstName, lastName),
         bio: updatedAlumni.bio || '',
         isPublic: updatedAlumni.is_public !== undefined ? updatedAlumni.is_public : true,
         isVerified: updatedAlumni.is_verified !== undefined ? updatedAlumni.is_verified : false
@@ -267,11 +330,65 @@ class AlumniService {
   // Get alumni by ID
   async getAlumniById(id) {
     try {
-      const allAlumni = await this.getAllAlumni();
-      return allAlumni.find(alumnus => alumnus.id === id);
+      const response = await fetch(`${API_URL}/${id}`);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const alumnus = await response.json();
+      return this.normalizeAlumniRecord(alumnus);
     } catch (error) {
       console.error('Error getting alumni by ID:', error);
       return null;
+    }
+  }
+
+  // Get today birthday alumni
+  async getBirthdayAlumniToday() {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/birthdays/today`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : undefined
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch birthday alumni');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching birthday alumni:', error);
+      return { birthdays: [], isYourBirthday: false };
+    }
+  }
+
+  // Report an alumni as deceased
+  async reportDeceased(id, reportData) {
+    try {
+      const formData = new FormData();
+      if (reportData.reason) formData.append('reason', reportData.reason.trim());
+      if (reportData.evidenceLink) formData.append('evidenceLink', reportData.evidenceLink.trim());
+      if (reportData.evidenceFile) formData.append('evidence', reportData.evidenceFile);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/${id}/report-deceased`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to submit deceased report');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error reporting deceased alumni:', error);
+      throw error;
     }
   }
 

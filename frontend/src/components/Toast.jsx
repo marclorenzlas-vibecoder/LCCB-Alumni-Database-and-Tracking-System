@@ -10,10 +10,10 @@ const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
   }, [duration, onClose]);
 
   const typeStyles = {
-    success: 'bg-green-500 text-white',
-    error: 'bg-red-500 text-white',
-    info: 'bg-blue-500 text-white',
-    warning: 'bg-yellow-500 text-white'
+    success: 'bg-green-600 text-white border border-green-500/40',
+    error: 'bg-red-600 text-white border border-red-500/40',
+    info: 'bg-blue-600 text-white border border-blue-500/40',
+    warning: 'bg-amber-500 text-white border border-amber-400/40'
   };
 
   const icons = {
@@ -41,14 +41,16 @@ const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-slide-in">
-      <div className={`${typeStyles[type]} px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px] max-w-md`}>
-        <div className="flex-shrink-0">
+      <div className={`${typeStyles[type]} px-5 py-4 rounded-xl shadow-xl flex items-center gap-3 min-w-[300px] max-w-md backdrop-blur-sm`}>
+        <div className="flex-shrink-0 flex items-center justify-center">
           {icons[type]}
         </div>
-        <p className="flex-1 text-sm font-medium">{message}</p>
+        <p className="flex-1 text-sm font-semibold leading-5 text-center">
+          {message}
+        </p>
         <button
           onClick={onClose}
-          className="flex-shrink-0 ml-2 text-white hover:text-gray-200 transition-colors"
+          className="flex-shrink-0 ml-2 text-white/90 hover:text-white transition-colors flex items-center justify-center"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />

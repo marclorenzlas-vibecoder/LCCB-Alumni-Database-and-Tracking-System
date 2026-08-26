@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import applicationService from '../services/applicationService';
 import careerService from '../services/careerService';
 import Toast from './Toast';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
 
 /**
  * JobApplications Component - Application Management for Teachers
@@ -29,6 +30,32 @@ const JobApplications = () => {
   const [showCoverLetterModal, setShowCoverLetterModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [toast, setToast] = useState(null);
+
+  const getStatusToast = (status) => {
+    const statusConfig = {
+      REVIEWED: {
+        message: 'Application marked as reviewed successfully!',
+        type: 'info'
+      },
+      SHORTLISTED: {
+        message: 'Application shortlisted successfully!',
+        type: 'warning'
+      },
+      ACCEPTED: {
+        message: 'Application accepted successfully!',
+        type: 'success'
+      },
+      REJECTED: {
+        message: 'Application rejected successfully!',
+        type: 'error'
+      }
+    };
+
+    return statusConfig[status] || {
+      message: `Application status updated to ${status} successfully!`,
+      type: 'success'
+    };
+  };
 
   useEffect(() => {
     fetchJobAndApplications();
@@ -80,7 +107,8 @@ const JobApplications = () => {
         window.refreshApplicationStatus();
       }
       
-      setToast({ message: `Application status updated to ${newStatus} successfully!`, type: 'success' });
+      const statusToast = getStatusToast(newStatus);
+      setToast(statusToast);
     } catch (error) {
       console.error('Error updating status:', error);
       const errorMsg = error.response?.data?.error || error.message || 'Failed to update application status';
@@ -103,6 +131,26 @@ const JobApplications = () => {
     ? applications 
     : applications.filter(app => app.status === filterStatus);
 
+  const getResumeLink = (application) => {
+    if (!application?.resume_url) return null;
+    return `${API_BASE_URL}/applications/${application.id}/resume`;
+  };
+
+  const getPreferredContact = (application) => {
+    if (application?.contact_method === 'phone') return 'Phone';
+    if (application?.contact_method === 'email') return 'Email';
+    return application?.applicant?.contact_number ? 'Phone / Email' : 'Email';
+  };
+
+  const actionButtonBaseClass = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60';
+  const actionButtonVariants = {
+    blue: 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-700 focus:ring-blue-100',
+    indigo: 'bg-indigo-600 shadow-indigo-600/20 hover:bg-indigo-700 focus:ring-indigo-100',
+    amber: 'bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 focus:ring-amber-100',
+    emerald: 'bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-700 focus:ring-emerald-100',
+    red: 'bg-red-600 shadow-red-600/20 hover:bg-red-700 focus:ring-red-100'
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -123,7 +171,7 @@ const JobApplications = () => {
           onClose={() => setToast(null)}
         />
       )}
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="mb-6">
           <button
@@ -232,17 +280,28 @@ const JobApplications = () => {
                         setSelectedApplication(application);
                         setShowCoverLetterModal(true);
                       }}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-200 font-medium transition-colors"
+                      className={`${actionButtonBaseClass} ${actionButtonVariants.blue}`}
                     >
                       View Cover Letter
                     </button>
+                  )}
+                  {application.resume_url && (
+                    <a
+                      href={getResumeLink(application)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className={`${actionButtonBaseClass} ${actionButtonVariants.indigo}`}
+                    >
+                      View Resume
+                    </a>
                   )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleStatusUpdate(application.id, 'REVIEWED');
                     }}
-                    className="px-4 py-2 bg-blue-50 text-blue-700 text-sm rounded border border-blue-200 hover:bg-blue-100 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`${actionButtonBaseClass} ${actionButtonVariants.blue}`}
                     disabled={application.status === 'REVIEWED'}
                   >
                     Mark as Reviewed
@@ -252,7 +311,7 @@ const JobApplications = () => {
                       e.stopPropagation();
                       handleStatusUpdate(application.id, 'SHORTLISTED');
                     }}
-                    className="px-4 py-2 bg-amber-50 text-amber-700 text-sm rounded border border-amber-200 hover:bg-amber-100 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`${actionButtonBaseClass} ${actionButtonVariants.amber}`}
                     disabled={application.status === 'SHORTLISTED'}
                   >
                     Shortlist
@@ -262,7 +321,7 @@ const JobApplications = () => {
                       e.stopPropagation();
                       handleStatusUpdate(application.id, 'ACCEPTED');
                     }}
-                    className="px-4 py-2 bg-green-50 text-green-700 text-sm rounded border border-green-200 hover:bg-green-100 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`${actionButtonBaseClass} ${actionButtonVariants.emerald}`}
                     disabled={application.status === 'ACCEPTED'}
                   >
                     Accept
@@ -272,7 +331,7 @@ const JobApplications = () => {
                       e.stopPropagation();
                       handleStatusUpdate(application.id, 'REJECTED');
                     }}
-                    className="px-4 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200 hover:bg-red-100 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`${actionButtonBaseClass} ${actionButtonVariants.red}`}
                     disabled={application.status === 'REJECTED'}
                   >
                     Reject
@@ -308,6 +367,9 @@ const JobApplications = () => {
                         src={`http://localhost:5001${selectedApplication.applicant.profile_image || selectedApplication.applicant.profileImage}`}
                         alt={`${selectedApplication.applicant.first_name} ${selectedApplication.applicant.last_name}`}
                         className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-lg"
+                        onError={(e) => {
+                          e.target.src = `https://ui-avatars.com/api/?name=${selectedApplication.applicant.first_name}+${selectedApplication.applicant.last_name}&background=random&size=200`;
+                        }}
                       />
                     ) : (
                       <img
@@ -374,6 +436,45 @@ const JobApplications = () => {
                     )}
                   </div>
                 </div>
+
+                  {/* Application Preferences */}
+                  <div className="mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Application Preferences
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Preferred Contact</label>
+                        <p className="text-gray-900">{getPreferredContact(selectedApplication)}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Resume</label>
+                        {selectedApplication.resume_url ? (
+                          <a
+                            href={getResumeLink(selectedApplication)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-700 hover:text-blue-800 font-medium"
+                          >
+                            Open uploaded resume
+                          </a>
+                        ) : (
+                          <p className="text-gray-900">No resume uploaded</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Application Contact Email</label>
+                        <p className="text-gray-900">{selectedApplication.contact_email || selectedApplication.applicant.email || 'Not provided'}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Application Contact Number</label>
+                        <p className="text-gray-900">{selectedApplication.contact_number || selectedApplication.applicant.contact_number || 'Not provided'}</p>
+                      </div>
+                    </div>
+                  </div>
 
                 {/* Education */}
                 <div className="mb-6">
@@ -499,6 +600,7 @@ const JobApplications = () => {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

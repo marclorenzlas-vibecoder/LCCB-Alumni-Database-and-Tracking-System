@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "dev": "node src/index.js",
     "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-mysql.ps1 -RootPassword root -DbName alumni",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:session-limiter": "node scripts/test-login-logout-session-count.js"
   },
   "dependencies": {
     "@prisma/client": "^6.17.1",
@@ -24,7 +25,8 @@
     "mysql2": "^3.6.1",
     "passport": "^0.7.0",
     "passport-github2": "^0.1.12",
-    "passport-google-oauth20": "^2.0.0"
+    "passport-google-oauth20": "^2.0.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.4",

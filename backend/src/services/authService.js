@@ -4,24 +4,27 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+const normalizeEmail = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+
 async function registerUser(userData) {
   const { 
     username, email, password, level, course, batch, graduationYear,
     firstName, lastName, studentId, contactNumber
   } = userData;
+  const normalizedEmail = normalizeEmail(email);
   
-  if (!username || !email || !password) {
+  if (!username || !normalizedEmail || !password) {
     throw new Error('Missing required fields');
   }
 
   try {
     // Check if email already exists in user table or pending registrations
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existingUser) {
       throw new Error('Email already exists');
     }
 
-    const existingPending = await prisma.pending_registration.findUnique({ where: { email } });
+    const existingPending = await prisma.pending_registration.findUnique({ where: { email: normalizedEmail } });
     if (existingPending) {
       if (existingPending.status === 'PENDING') {
         throw new Error('Registration already submitted and pending approval');
@@ -36,7 +39,7 @@ async function registerUser(userData) {
     
     console.log('💾 Creating pending registration with data:', {
       username, 
-      email,
+      email: normalizedEmail,
       firstName,
       lastName,
       studentId,
@@ -49,7 +52,7 @@ async function registerUser(userData) {
     
     const pendingRegistration = await prisma.pending_registration.create({
       data: {
-        email: email,
+        email: normalizedEmail,
         username: username,
         password: hashedPassword,
         first_name: firstName || null,
@@ -146,7 +149,7 @@ async function registerUser(userData) {
     return {
       message: 'Registration submitted successfully! Please wait for admin approval.',
       status: 'PENDING',
-      email: email
+      email: normalizedEmail
     };
 
   } catch (error) {
@@ -160,9 +163,10 @@ async function registerUser(userData) {
 
 async function loginUser(email, password) {
   try {
+    const normalizedEmail = normalizeEmail(email);
     // First check if user exists in user table
     let user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       include: {
         alumni: true
       }
@@ -171,7 +175,7 @@ async function loginUser(email, password) {
     // If not in user table, check pending_registration
     if (!user) {
       const pendingUser = await prisma.pending_registration.findUnique({
-        where: { email }
+        where: { email: normalizedEmail }
       });
 
       if (pendingUser) {
@@ -250,7 +254,7 @@ async function loginUser(email, password) {
 
     // Allow login with approval status
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, alumniId: user.alumni?.id || null },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -266,10 +270,14 @@ async function loginUser(email, password) {
         approval_status: user.approval_status,
         is_active: user.is_active,
         is_blocked: user.is_blocked,
+        alumniId: user.alumni?.id || null,
         alumni: user.alumni ? {
           id: user.alumni.id,
           firstName: user.alumni.first_name || user.alumni.firstName,
+          middleName: user.alumni.middle_name || user.alumni.middleName,
           lastName: user.alumni.last_name || user.alumni.lastName,
+          dateOfBirth: user.alumni.date_of_birth || null,
+          date_of_birth: user.alumni.date_of_birth || null,
           level: user.alumni.level,
           course: user.alumni.course,
           batch: user.alumni.batch,
@@ -327,45 +335,80 @@ module.exports = {
   },
   loginTeacher: async (email, password) => {
     try {
-      console.log('🔐 Teacher login attempt:', email);
-      const teacher = await prisma.teacher.findUnique({ where: { email } });
-      
-      if (!teacher) {
-        console.log('❌ Teacher not found:', email);
+      const normalizedEmail = normalizeEmail(email);
+      console.log('🔐 Teacher login attempt:', normalizedEmail);
+
+      const teacherRecord = await prisma.teacher.findUnique({ where: { email: normalizedEmail } });
+      const adminUserRecord = await prisma.user.findFirst({
+        where: { email: normalizedEmail },
+        include: { alumni: true }
+      });
+
+      const candidates = [
+        teacherRecord ? { kind: 'teacher', record: teacherRecord } : null,
+        adminUserRecord ? { kind: 'user', record: adminUserRecord } : null
+      ].filter(Boolean);
+
+      let matched = null;
+      for (const candidate of candidates) {
+        if (!candidate.record.password) {
+          continue;
+        }
+
+        const isValid = await bcrypt.compare(password, candidate.record.password);
+        if (isValid) {
+          matched = candidate;
+          break;
+        }
+      }
+
+      if (!matched) {
+        console.log('❌ No matching teacher/admin credentials for:', normalizedEmail);
         throw new Error('Invalid credentials');
       }
-      
-      if (!teacher.password) {
-        console.log('❌ Teacher has no password:', email);
-        throw new Error('Invalid credentials');
-      }
-      
-      console.log('✅ Teacher found, checking password...');
-      const isValid = await bcrypt.compare(password, teacher.password);
-      
-      if (!isValid) {
-        console.log('❌ Invalid password for:', email);
-        throw new Error('Invalid credentials');
-      }
-      
-      console.log('✅ Teacher login successful:', email);
+
+      const activeRecord = matched.record;
+      console.log(`✅ Teacher login successful via ${matched.kind} record:`, normalizedEmail);
+
+      const teacherAlumni = await prisma.alumni.findFirst({
+        where: { email: activeRecord.email }
+      });
+
+      const role = activeRecord.role && activeRecord.role.toUpperCase() === 'ADMIN' ? 'TEACHER' : (activeRecord.role || 'TEACHER');
 
       const token = jwt.sign(
-        { id: teacher.id, email: teacher.email, role: 'TEACHER' },
+        { id: activeRecord.id, email: activeRecord.email, role },
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '24h' }
       );
       return {
         token,
         user: {
-          id: teacher.id,
-          email: teacher.email,
-          username: teacher.username,
-          department: teacher.department,
-          profile_image: teacher.profile_image,
-          role: 'TEACHER',
+          id: activeRecord.id,
+          email: activeRecord.email,
+          username: activeRecord.username,
+          department: activeRecord.department,
+          profile_image: activeRecord.profile_image,
+          role,
           approval_status: 'APPROVED',
-          is_active: true
+          is_active: true,
+          alumni: teacherAlumni ? {
+            id: teacherAlumni.id,
+            firstName: teacherAlumni.first_name,
+            middleName: teacherAlumni.middle_name,
+            lastName: teacherAlumni.last_name,
+            dateOfBirth: teacherAlumni.date_of_birth || null,
+            date_of_birth: teacherAlumni.date_of_birth || null,
+            level: teacherAlumni.level,
+            course: teacherAlumni.course,
+            batch: teacherAlumni.batch,
+            graduationYear: teacherAlumni.graduation_year,
+            currentPosition: teacherAlumni.current_position,
+            current_position: teacherAlumni.current_position,
+            company: teacherAlumni.company,
+            location: teacherAlumni.location,
+            skills: teacherAlumni.skills
+          } : null
         }
       };
     } catch (error) {

@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
+import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+
+const levelOptions = [
+  { value: 'INTEGRATED_SCHOOL', label: 'Integrated School' },
+  { value: 'NIGHT_HIGH', label: 'Night High' },
+  { value: 'SENIOR_HIGH', label: 'Senior High' },
+  { value: 'COLLEGE', label: 'College' },
+  { value: 'ETEEAP', label: 'ETEEAP' },
+  { value: 'GRAD_SCHOOL', label: 'Grad School' }
+];
 
 const AuthForm = ({ isLogin, toggleForm }) => {
   const navigate = useNavigate();
@@ -19,6 +29,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -32,16 +43,18 @@ const AuthForm = ({ isLogin, toggleForm }) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setIsSubmitting(true);
 
     try {
       if (isLogin) {
         // Login logic
         const response = await authService.login(formData.email, formData.password);
         setSuccess('Login successful! Redirecting...');
-        
+        try { console.log('TOAST: AuthForm login success - ready to show toast'); toast.success('Login successful! Redirecting...'); } catch (e) {}
+
         // Optional: Store user info in localStorage or context
         localStorage.setItem('user', JSON.stringify(response.user));
-        
+
         // Redirect to home or dashboard
         setTimeout(() => {
           navigate('/');
@@ -64,6 +77,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
 
         const response = await authService.register(registrationData);
         setSuccess('Registration successful! Redirecting to login...');
+        try { console.log('TOAST: AuthForm registration success - ready to show toast'); toast.success(response.message || 'Registration successful!'); } catch (e) {}
         
         // Redirect to login after successful registration
         setTimeout(() => {
@@ -74,6 +88,8 @@ const AuthForm = ({ isLogin, toggleForm }) => {
       // Handle errors
       setError(err.response?.data?.message || 'An error occurred');
       console.error('Authentication error:', err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -155,8 +171,8 @@ const AuthForm = ({ isLogin, toggleForm }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="studentId">
-                  School ID / Student Number <span className="text-red-500">*</span>
+                 <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="studentId">
+                  School ID / Student Number <span className="text-gray-500 text-xs">(Optional)</span>
                 </label>
                 <input 
                   type="text" 
@@ -166,9 +182,8 @@ const AuthForm = ({ isLogin, toggleForm }) => {
                   onChange={handleChange}
                   className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
                   placeholder="e.g., 21-0087-958"
-                  required={!isLogin}
                 />
-                <p className="text-xs text-gray-500 mt-1">Enter your official School ID or Student Number</p>
+                 <p className="text-xs text-gray-500 mt-1">Enter your School ID if you have one (school started using IDs in 2018)</p>
               </div>
 
               <div className="mb-4">
@@ -197,13 +212,13 @@ const AuthForm = ({ isLogin, toggleForm }) => {
                 id="level"
                 value={formData.level}
                 onChange={handleChange}
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                className="app-select"
                 required={!isLogin}
               >
                 <option value="">Select your level</option>
-                <option value="COLLEGE">College</option>
-                <option value="SENIOR_HIGH_SCHOOL">Senior High School</option>
-                <option value="HIGH_SCHOOL">High School</option>
+                {levelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </div>
 

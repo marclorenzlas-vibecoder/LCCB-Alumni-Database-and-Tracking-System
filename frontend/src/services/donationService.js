@@ -1,10 +1,8 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 
-// Determine API URL based on current host
-const isNetworkAccess = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_URL = isNetworkAccess 
-  ? 'http://192.168.5.248:5001/api/donations'
-  : 'http://localhost:5001/api/donations';
+// API URL for donation endpoints
+const API_URL = `${API_BASE_URL}/donations`;
 
 console.log('Donation Service API URL:', API_URL);
 
@@ -72,6 +70,17 @@ const donationService = {
       return response.data;
     }
     const response = await axios.put(`${API_URL}/${id}`, donationData, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  },
+
+  // Contribute to an existing donation campaign
+  contributeToDonation: async (id, donationData) => {
+    const token = localStorage.getItem('token');
+    const response = await axios.post(`${API_URL}/${id}/contribute`, donationData, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

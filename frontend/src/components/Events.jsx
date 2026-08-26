@@ -1,13 +1,107 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import eventService from '../services/eventService';
 import ConfirmModal from './ConfirmModal';
 import { authService } from '../services/authService';
+import UserLayout from './UserLayout';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import { toast } from 'react-toastify';
+
+const FilterMenu = ({
+  menuRef,
+  isOpen,
+  setIsOpen,
+  buttonLabel,
+  selectedLabel,
+  selectedValue,
+  icon,
+  sections,
+  onSelect,
+  panelTitle,
+  panelWidthClass = 'w-80',
+  panelMaxHeightClass = 'max-h-80',
+  alignClass = 'right-0'
+}) => {
+  const hasSelection = selectedLabel !== buttonLabel;
+
+  return (
+    <div ref={menuRef} className={`relative ${panelWidthClass}`}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={`flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-white px-3 py-2.5 text-sm shadow-sm ring-1 ring-inset transition ${hasSelection ? 'ring-blue-900 text-gray-900' : 'ring-gray-300 text-gray-700'} focus:outline-none focus:ring-2 focus:ring-blue-900`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-600">
+            {icon}
+          </span>
+          <span className="truncate text-left">{selectedLabel}</span>
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div className={`dropdown-menu-panel absolute ${alignClass} top-full z-50 mt-2 ${panelWidthClass} overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl`}>
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">{panelTitle}</p>
+            </div>
+          </div>
+
+          <div className={`overflow-y-auto p-2.5 scrollbar-hide ${panelMaxHeightClass}`}>
+            <div className="space-y-3.5">
+              {sections.map((section) => (
+                <div key={section.key} className="border-b border-gray-100 pb-3.5 last:border-b-0 last:pb-0">
+                  <div className="mb-2.5 flex items-center gap-3">
+                    <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500">{section.title}</span>
+                    <span className="h-px flex-1 bg-gray-100" />
+                  </div>
+                  <div className={section.gridClassName || 'grid gap-2'}>
+                    {section.items.map((item) => {
+                      const isSelected = item.value === selectedValue;
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => onSelect(item.value)}
+                          className={`dropdown-menu-item rounded-xl border px-3 py-2 text-left transition ${isSelected ? 'border-blue-300 bg-blue-50 shadow-sm' : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/60'}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="break-words text-sm font-semibold text-gray-900">{item.label}</div>
+                              {item.description && (
+                                <p className="mt-1 break-words text-xs leading-snug text-gray-500">{item.description}</p>
+                              )}
+                            </div>
+                            {isSelected && (
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-4 w-4 shrink-0 text-blue-700">
+                                <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.2 7.2a1 1 0 01-1.42 0l-3.2-3.2a1 1 0 111.42-1.42l2.49 2.49 6.49-6.49a1 1 0 011.42 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Events = () => {
   const navigate = useNavigate();
   // Role
   const isTeacher = authService.isTeacher();
+  const currentUser = authService.getCurrentUser();
 
   // State for events from database
   const [events, setEvents] = useState([]);
@@ -24,6 +118,100 @@ const Events = () => {
     onConfirm: null,
     type: 'danger'
   });
+
+  // Filters and menu state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
+  const [isCurrentEventsExpanded, setIsCurrentEventsExpanded] = useState(true);
+  const [isUpcomingEventsExpanded, setIsUpcomingEventsExpanded] = useState(true);
+  const [isPastEventsExpanded, setIsPastEventsExpanded] = useState(false);
+  const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const typeMenuRef = useRef(null);
+  const statusMenuRef = useRef(null);
+  const sortMenuRef = useRef(null);
+
+  const eventTypes = useMemo(() => [...new Set(events.map((event) => event.type).filter(Boolean))], [events]);
+  const selectedTypeLabel = selectedType || 'All Types';
+  const selectedStatusLabel = selectedStatus === 'all'
+    ? 'All Events'
+    : selectedStatus === 'upcoming'
+      ? 'Upcoming'
+      : selectedStatus === 'current'
+        ? 'Happening Today'
+        : 'Past Events';
+  const selectedSortLabel = sortBy === 'date' ? 'Date' : sortBy === 'name' ? 'Name' : 'Attendees';
+
+  const typeMenuSections = useMemo(() => ([
+    {
+      key: 'EVENT_TYPES',
+      title: 'Event Types',
+      gridClassName: 'grid gap-2',
+      items: [{ value: '', label: 'All Types' }, ...eventTypes.map((type) => ({ value: type, label: type }))]
+    }
+  ]), [eventTypes]);
+
+  const statusMenuSections = [
+    {
+      key: 'EVENT_STATUS',
+      title: 'Status',
+      gridClassName: 'grid gap-2',
+      items: [
+        { value: 'all', label: 'All Events' },
+        { value: 'upcoming', label: 'Upcoming' },
+        { value: 'current', label: 'Happening Today' },
+        { value: 'past', label: 'Past Events' }
+      ]
+    }
+  ];
+
+  const sortMenuSections = [
+    {
+      key: 'EVENT_SORT',
+      title: 'Sort By',
+      gridClassName: 'grid gap-2',
+      items: [
+        { value: 'date', label: 'Date' },
+        { value: 'name', label: 'Name' },
+        { value: 'attendees', label: 'Attendees' }
+      ]
+    }
+  ];
+
+  useEffect(() => {
+    if (!showTypeMenu && !showStatusMenu) return undefined;
+
+    const handlePointerDown = (event) => {
+      const clickInsideType = typeMenuRef.current && typeMenuRef.current.contains(event.target);
+      const clickInsideStatus = statusMenuRef.current && statusMenuRef.current.contains(event.target);
+      const clickInsideSort = sortMenuRef.current && sortMenuRef.current.contains(event.target);
+
+      if (!clickInsideType && !clickInsideStatus && !clickInsideSort) {
+        setShowTypeMenu(false);
+        setShowStatusMenu(false);
+        setShowSortMenu(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowTypeMenu(false);
+        setShowStatusMenu(false);
+        setShowSortMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showTypeMenu, showStatusMenu, showSortMenu]);
 
   // Load events from database
   useEffect(() => {
@@ -75,12 +263,12 @@ const Events = () => {
         // Update existing event
         const updated = await eventService.updateEvent(editingId, payload);
         setEvents(prev => prev.map(ev => ev.id === editingId ? updated : ev));
-        alert('Event updated successfully!');
+        toast.success('Event updated successfully!');
       } else {
         // Create new event
         const event = await eventService.createEvent(payload);
         setEvents(prev => [...prev, event]);
-        alert('Event added successfully!');
+        toast.success('Event added successfully!');
       }
       setShowEventModal(false);
       setEditingId(null);
@@ -88,7 +276,7 @@ const Events = () => {
     } catch (err) {
       console.error('Error saving event:', err);
       const msg = err?.response?.data?.error || 'Failed to save event. Please try again.';
-      alert(msg);
+      toast.error(msg);
     }
   };
 
@@ -119,137 +307,78 @@ const Events = () => {
           setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
           console.error('Error deleting event:', err);
-          alert('Failed to delete event. Please try again.');
+          toast.error('Failed to delete event. Please try again.');
           setConfirmModal({ ...confirmModal, isOpen: false });
         }
       }
     });
   };
 
-  // 📅 STATIC EVENTS LIST (keeping for fallback)
-  const staticEvents = [
-    {
-      id: '1',
-      name: 'Annual Alumni Reunion 2024',
-      date: 'March 15, 2024',
-      time: '6:00 PM - 11:00 PM',
-      location: 'Manila Hotel, Manila',
-      description: 'Join us for our biggest annual reunion! Celebrate with fellow alumni, enjoy dinner, networking, and special performances. This is the perfect opportunity to reconnect with old friends and make new connections.',
-      type: 'Reunion',
-      attendees: 150,
-      maxAttendees: 200,
-      price: '₱2,500',
-      image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=400&h=250&fit=crop',
-      status: 'upcoming',
-      organizer: 'LCCB Alumni Association',
-      tags: ['Networking', 'Dinner', 'Entertainment']
-    },
-    {
-      id: '2',
-      name: 'Tech Career Workshop',
-      date: 'February 28, 2024',
-      time: '2:00 PM - 5:00 PM',
-      location: 'Online Webinar',
-      description: 'Learn career growth strategies from successful tech alumni. Topics include: resume building, interview preparation, salary negotiation, and career advancement in the tech industry.',
-      type: 'Workshop',
-      attendees: 75,
-      maxAttendees: 100,
-      price: 'Free',
-      image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=250&fit=crop',
-      status: 'upcoming',
-      organizer: 'Tech Alumni Group',
-      tags: ['Career', 'Technology', 'Online']
-    },
-    {
-      id: '3',
-      name: 'Business Networking Mixer',
-      date: 'February 10, 2024',
-      time: '7:00 PM - 10:00 PM',
-      location: 'Makati City, Taguig',
-      description: 'Connect with business professionals and entrepreneurs. Perfect for those looking to expand their professional network, find business partners, or explore new opportunities.',
-      type: 'Networking',
-      attendees: 60,
-      maxAttendees: 80,
-      price: '₱1,500',
-      image: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=400&h=250&fit=crop',
-      status: 'upcoming',
-      organizer: 'Business Alumni Network',
-      tags: ['Networking', 'Business', 'Entrepreneurship']
-    },
-    {
-      id: '4',
-      name: 'Engineering Innovation Summit',
-      date: 'January 25, 2024',
-      time: '9:00 AM - 4:00 PM',
-      location: 'Engineering Conference Center',
-      description: 'Explore the latest trends in engineering and innovation. Featuring keynote speakers, panel discussions, and hands-on workshops on emerging technologies.',
-      type: 'Conference',
-      attendees: 120,
-      maxAttendees: 150,
-      price: '₱3,000',
-      image: 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=250&fit=crop',
-      status: 'upcoming',
-      organizer: 'Engineering Alumni Society',
-      tags: ['Engineering', 'Innovation', 'Technology']
-    },
-    {
-      id: '5',
-      name: 'Alumni Sports Day',
-      date: 'January 20, 2024',
-      time: '8:00 AM - 6:00 PM',
-      location: 'LCCB Sports Complex',
-      description: 'Join us for a fun-filled day of sports and activities! Basketball, volleyball, badminton, and more. Open to all alumni and their families. Food and drinks will be provided.',
-      type: 'Sports',
-      attendees: 45,
-      maxAttendees: 100,
-      price: '₱500',
-      image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=250&fit=crop',
-      status: 'upcoming',
-      organizer: 'Sports Alumni Club',
-      tags: ['Sports', 'Family', 'Fun']
-    },
-    {
-      id: '6',
-      name: 'Startup Pitch Competition',
-      date: 'December 15, 2023',
-      time: '1:00 PM - 6:00 PM',
-      location: 'Innovation Hub, BGC',
-      description: 'Watch alumni entrepreneurs pitch their innovative business ideas to a panel of judges. Great opportunity to discover new startups and investment opportunities.',
-      type: 'Competition',
-      attendees: 85,
-      maxAttendees: 100,
-      price: '₱1,000',
-      image: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=400&h=250&fit=crop',
-      status: 'past',
-      organizer: 'Entrepreneurship Alumni',
-      tags: ['Startup', 'Pitch', 'Investment']
+  const handleQuickJoinEvent = async (eventId) => {
+    try {
+      const alumniId = currentUser?.alumni?.id;
+      if (!alumniId) {
+        toast.warning('You need to complete your alumni profile first');
+        return;
+      }
+
+      await eventService.joinEvent(eventId, alumniId);
+      await loadEvents();
+      toast.success('Joined event successfully!');
+    } catch (error) {
+      console.error('Error joining event:', error);
+      toast.error(error.response?.data?.error || 'Failed to join event');
     }
-  ];
+  };
 
-  // State for filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('date');
-  const [isPastEventsExpanded, setIsPastEventsExpanded] = useState(false);
+  const getEventCalendarKey = (dateValue) => {
+    if (!dateValue) return null;
 
-  // Get unique event types (filter out empty/undefined to avoid key warnings)
-  const eventTypes = [...new Set(events.map(event => event.type).filter(Boolean))];
+    const dateString = String(dateValue);
+    const calendarMatch = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (calendarMatch) return calendarMatch[1];
 
-  // Categorize events by time
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // 📅 STATIC EVENTS LIST (keeping for fallback)
   const categorizeEvents = () => {
+    const todayKey = getEventCalendarKey(new Date());
+
     return events.reduce((acc, event) => {
-      // Use backend status field
-      const status = event.status || 'UPCOMING';
-      
-      if (status === 'PREVIOUS') {
+      const rawStatus = (event.status || '').toString().toUpperCase();
+      const eventKey = event.date ? getEventCalendarKey(event.date) : null;
+
+      if (eventKey) {
+        if (eventKey === todayKey) acc.current.push(event);
+        else if (eventKey < todayKey) acc.past.push(event);
+        else acc.upcoming.push(event);
+        return acc;
+      }
+
+      if (rawStatus === 'PREVIOUS' || rawStatus === 'PAST') {
         acc.past.push(event);
-      } else if (status === 'CURRENT') {
+        return acc;
+      }
+
+      if (rawStatus === 'CURRENT' || rawStatus === 'TODAY' || rawStatus === 'HAPPENING') {
         acc.current.push(event);
+        return acc;
+      }
+
+      if (rawStatus === 'UPCOMING' || rawStatus === 'FUTURE') {
+        acc.upcoming.push(event);
+        return acc;
       } else {
         acc.upcoming.push(event);
       }
-      
+
       return acc;
     }, { past: [], current: [], upcoming: [] });
   };
@@ -269,14 +398,12 @@ const Events = () => {
       
       // Filter by status category
       if (selectedStatus !== 'all') {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const eventDate = new Date(event.date);
-        const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        
-        if (selectedStatus === 'past' && eventDay >= today) return false;
-        if (selectedStatus === 'current' && eventDay.getTime() !== today.getTime()) return false;
-        if (selectedStatus === 'upcoming' && eventDay <= today) return false;
+        const todayKey = getEventCalendarKey(new Date());
+        const eventKey = getEventCalendarKey(event.date);
+
+        if (selectedStatus === 'past' && eventKey >= todayKey) return false;
+        if (selectedStatus === 'current' && eventKey !== todayKey) return false;
+        if (selectedStatus === 'upcoming' && eventKey <= todayKey) return false;
       }
       
       return matchesSearch && matchesType;
@@ -304,7 +431,61 @@ const Events = () => {
     setSelectedType('');
     setSelectedStatus('all');
     setSortBy('date');
+    setShowTypeMenu(false);
+    setShowStatusMenu(false);
   };
+
+  useEffect(() => {
+    if (!showTypeMenu && !showStatusMenu) return undefined;
+
+    const handlePointerDown = (event) => {
+      const clickInsideType = typeMenuRef.current && typeMenuRef.current.contains(event.target);
+      const clickInsideStatus = statusMenuRef.current && statusMenuRef.current.contains(event.target);
+
+      if (!clickInsideType && !clickInsideStatus) {
+        setShowTypeMenu(false);
+        setShowStatusMenu(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowTypeMenu(false);
+        setShowStatusMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showTypeMenu, showStatusMenu]);
+
+  // Collapse ref and animation for past events
+  const pastContentRef = useRef(null);
+  const upcomingContentRef = useRef(null);
+  const currentContentRef = useRef(null);
+  useEffect(() => {
+    const handleAnim = (ref, expanded) => {
+      const el = ref?.current;
+      if (!el) return;
+      if (expanded) {
+        const height = el.scrollHeight;
+        el.style.maxHeight = height + 'px';
+        el.style.opacity = '1';
+      } else {
+        el.style.maxHeight = '0px';
+        el.style.opacity = '0';
+      }
+    };
+
+    handleAnim(pastContentRef, isPastEventsExpanded);
+    handleAnim(upcomingContentRef, isUpcomingEventsExpanded);
+    handleAnim(currentContentRef, isCurrentEventsExpanded);
+  }, [isPastEventsExpanded, isUpcomingEventsExpanded, isCurrentEventsExpanded, events.length]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -339,7 +520,8 @@ const Events = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <UserLayout>
+      <div className="min-h-screen bg-gray-50 py-8">
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -365,7 +547,7 @@ const Events = () => {
             {isTeacher && (
               <button
                 onClick={() => setShowEventModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2"
+                className="app-primary-button"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -377,94 +559,115 @@ const Events = () => {
         </div>
 
         {/* Search and Filter Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            {/* Search Bar */}
-            <div className="lg:col-span-2">
-              <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-                Search Events
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+        <div className="bg-white rounded-2xl shadow-md p-6 mb-8 border border-gray-100">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex-1 min-w-[280px]">
+              <div className="relative group">
+                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-100 bg-blue-50">
+                    <svg className="h-4.5 w-4.5 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </span>
                 </div>
                 <input
                   type="text"
                   id="search"
-                  placeholder="Search by event name, description, or location..."
+                  placeholder="Search events by name, description, or location"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-14 pr-12 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-3 my-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                    aria-label="Clear search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                      <path fillRule="evenodd" d="M10 8.586 5.707 4.293A1 1 0 0 0 4.293 5.707L8.586 10l-4.293 4.293a1 1 0 1 0 1.414 1.414L10 11.414l4.293 4.293a1 1 0 0 0 1.414-1.414L11.414 10l4.293-4.293a1 1 0 0 0-1.414-1.414L10 8.586Z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Event Type Filter */}
-            <div>
-              <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-2">
-                Event Type
-              </label>
-              <select
-                id="type"
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
-              >
-                <option value="">All Types</option>
-                {eventTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
+            <FilterMenu
+              menuRef={typeMenuRef}
+              isOpen={showTypeMenu}
+              setIsOpen={setShowTypeMenu}
+              buttonLabel="All Types"
+              selectedLabel={selectedTypeLabel}
+              selectedValue={selectedType}
+              panelTitle="Event Type"
+              panelWidthClass="w-72"
+              icon={(
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l7-4-7-4-7 4 7 4z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 11.5v3.5L12 18l6-3v-3.5" />
+                </svg>
+              )}
+              sections={typeMenuSections}
+              onSelect={(value) => {
+                setSelectedType((current) => (current === value ? '' : value));
+                setShowTypeMenu(false);
+              }}
+            />
 
-            {/* Status Filter */}
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                id="status"
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
-              >
-                <option value="all">All Events</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="current">Happening Today</option>
-                <option value="past">Past Events</option>
-              </select>
-            </div>
-          </div>
+            <FilterMenu
+              menuRef={statusMenuRef}
+              isOpen={showStatusMenu}
+              setIsOpen={setShowStatusMenu}
+              buttonLabel="All Events"
+              selectedLabel={selectedStatusLabel}
+              selectedValue={selectedStatus}
+              panelTitle="Status"
+              panelWidthClass="w-72"
+              icon={(
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 5v2m8-2v2M5 11h14" />
+                  <rect x="5" y="7" width="14" height="12" rx="2" ry="2" />
+                </svg>
+              )}
+              sections={statusMenuSections}
+              onSelect={(value) => {
+                setSelectedStatus((current) => (current === value ? 'all' : value));
+                setShowStatusMenu(false);
+              }}
+            />
 
-          {/* Sort and Clear Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <label htmlFor="sort" className="text-sm font-medium text-gray-700">
-                Sort by:
-              </label>
-              <select
-                id="sort"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900"
-              >
-                <option value="date">Date</option>
-                <option value="name">Name</option>
-                <option value="attendees">Attendees</option>
-              </select>
-            </div>
-            
+            <FilterMenu
+              menuRef={sortMenuRef}
+              isOpen={showSortMenu}
+              setIsOpen={setShowSortMenu}
+              buttonLabel="Date"
+              selectedLabel={selectedSortLabel}
+              selectedValue={sortBy}
+              panelTitle="Sort By"
+              panelWidthClass="w-56"
+              icon={(
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M6 12h12M10 18h4" />
+                </svg>
+              )}
+              sections={sortMenuSections}
+              onSelect={(value) => {
+                setSortBy(value);
+                setShowSortMenu(false);
+              }}
+            />
+
             <button
               onClick={clearFilters}
-              className="px-4 py-2 text-sm font-medium text-blue-900 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
+              className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
             >
               Clear Filters
             </button>
           </div>
 
-          {/* Results Count and Category Summary */}
           <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
             <div>Showing {filteredEvents.length} of {events.length} events</div>
             {selectedStatus === 'all' && (
@@ -486,61 +689,89 @@ const Events = () => {
         {/* Events Grid - Categorized */}
         {selectedStatus === 'all' ? (
           <div className="space-y-12">
-            {/* Current Events (Happening Today) */}
-            {categorizedEvents.current.length > 0 && (
+            {/* Upcoming Events */}
+            {categorizedEvents.upcoming.length > 0 && (
               <div className="mb-12">
-                <div className="flex items-center mb-6">
-                  <div className="h-0.5 w-12 bg-green-500 mr-4"></div>
+                <div
+                  className="flex items-center mb-6 cursor-pointer group"
+                  onClick={() => setIsUpcomingEventsExpanded(!isUpcomingEventsExpanded)}
+                >
+                  <div className="h-0.5 w-12 bg-blue-900 mr-4"></div>
                   <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                    <span className="mr-3">Current Events</span>
-                    <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full">
-                      {categorizedEvents.current.length}
+                    <span className="mr-3">Upcoming Events</span>
+                    <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                      {categorizedEvents.upcoming.length}
                     </span>
                   </h2>
-                  <svg className="h-6 w-6 text-green-600 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <svg
+                    className={`h-6 w-6 text-gray-600 ml-3 transform transition-transform duration-300 ${isUpcomingEventsExpanded ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {categorizedEvents.current.filter(event => {
-                    const matchesSearch = 
-                      event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
-                    const matchesType = selectedType === '' || event.type === selectedType;
-                    return matchesSearch && matchesType;
-                  }).map((event) => (
-                    <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
-                  ))}
+                <div
+                  ref={upcomingContentRef}
+                  style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease, opacity 250ms linear', opacity: 0 }}
+                  aria-hidden={!isUpcomingEventsExpanded}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {categorizedEvents.upcoming.filter(event => {
+                      const matchesSearch = 
+                        event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
+                      const matchesType = selectedType === '' || event.type === selectedType;
+                      return matchesSearch && matchesType;
+                    }).map((event) => (
+                      <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Upcoming Events */}
-            {categorizedEvents.upcoming.length > 0 && (
+            {/* Current Events (Happening Today) */}
+            {categorizedEvents.current.length > 0 && (
               <div className="mb-12">
-                <div className="flex items-center mb-6">
-                  <div className="h-0.5 w-12 bg-blue-900 mr-4"></div>
+                  <div
+                    className="flex items-center mb-6 cursor-pointer group"
+                    onClick={() => setIsCurrentEventsExpanded(!isCurrentEventsExpanded)}
+                  >
+                  <div className="h-0.5 w-12 bg-green-500 mr-4"></div>
                   <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                    <span className="mr-3">Upcoming Events</span>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-900 text-sm font-medium rounded-full">
-                      {categorizedEvents.upcoming.length}
+                      <span className="mr-3">Today&apos;s Events</span>
+                      <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                      {categorizedEvents.current.length}
                     </span>
                   </h2>
-                  <svg className="h-6 w-6 text-blue-900 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    <svg
+                      className={`h-6 w-6 text-gray-600 ml-3 transform transition-transform duration-300 ${isCurrentEventsExpanded ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {categorizedEvents.upcoming.filter(event => {
-                    const matchesSearch = 
-                      event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
-                    const matchesType = selectedType === '' || event.type === selectedType;
-                    return matchesSearch && matchesType;
-                  }).map((event) => (
-                    <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
-                  ))}
-                </div>
+                  <div
+                    ref={currentContentRef}
+                    style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease, opacity 250ms linear', opacity: 0 }}
+                    aria-hidden={!isCurrentEventsExpanded}
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {categorizedEvents.current.filter(event => {
+                        const matchesSearch = 
+                          event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
+                        const matchesType = selectedType === '' || event.type === selectedType;
+                        return matchesSearch && matchesType;
+                      }).map((event) => (
+                        <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                      ))}
+                    </div>
+                  </div>
               </div>
             )}
 
@@ -567,8 +798,12 @@ const Events = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
-                {isPastEventsExpanded && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-all duration-300">
+                <div
+                  ref={pastContentRef}
+                  style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease' }}
+                  aria-hidden={!isPastEventsExpanded}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {categorizedEvents.past.filter(event => {
                       const matchesSearch = 
                         event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -576,10 +811,10 @@ const Events = () => {
                       const matchesType = selectedType === '' || event.type === selectedType;
                       return matchesSearch && matchesType;
                     }).map((event) => (
-                      <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                      <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                     ))}
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>
@@ -587,7 +822,7 @@ const Events = () => {
           /* Filtered Events Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEvents.map((event) => (
-              <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+              <EventCard key={event.id} event={event} isTeacher={isTeacher} currentUser={currentUser} onJoinEvent={handleQuickJoinEvent} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
             ))}
           </div>
         )}
@@ -623,7 +858,7 @@ const Events = () => {
                     value={newEvent.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
+                    className="app-input"
                     placeholder="Enter event name"
                   />
                 </div>
@@ -637,7 +872,7 @@ const Events = () => {
                     value={newEvent.description}
                     onChange={handleInputChange}
                     rows="4"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
+                    className="app-textarea"
                     placeholder="Enter event description"
                   />
                 </div>
@@ -652,7 +887,7 @@ const Events = () => {
                       name="date"
                       value={newEvent.date}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
+                      className="app-input"
                     />
                   </div>
 
@@ -665,7 +900,7 @@ const Events = () => {
                       name="location"
                       value={newEvent.location}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900"
+                      className="app-input"
                       placeholder="Event location"
                     />
                   </div>
@@ -720,7 +955,7 @@ const Events = () => {
                       <select
                         value={newEvent.notifyBatch}
                         onChange={(e) => setNewEvent(prev => ({ ...prev, notifyBatch: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="app-select"
                       >
                         <option value="all">All Alumni</option>
                         <option value="2015">Batch 2015</option>
@@ -752,13 +987,13 @@ const Events = () => {
                       setEditingId(null);
                       setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all' });
                     }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    className="app-secondary-button"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800"
+                    className="app-primary-button"
                   >
                     {editingId ? 'Update Event' : 'Add Event'}
                   </button>
@@ -769,11 +1004,12 @@ const Events = () => {
         )}
       </div>
     </div>
+    </UserLayout>
   );
 };
 
 // Event Card Component to avoid repetition
-const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => {
+const EventCard = ({ event, isTeacher, currentUser, onJoinEvent, handleEditEvent, handleDeleteEvent }) => {
   const navigate = useNavigate();
   const titleRef = React.useRef(null);
   const [descriptionLines, setDescriptionLines] = React.useState(2);
@@ -830,14 +1066,26 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
     return 'Upcoming';
   };
 
+  const canQuickJoin = () => {
+    if (!currentUser || (currentUser?.role || '').toUpperCase() === 'TEACHER') return false;
+    if (!event.date) return false;
+
+    const now = new Date();
+    const todayKey = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const eventDate = new Date(event.date);
+    const eventKey = Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate());
+
+    return eventKey >= todayKey;
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden group flex flex-col h-full">
+    <div className="app-card overflow-hidden group flex h-full flex-col p-0">
       {/* Event Image */}
       <div className="relative h-48 overflow-hidden flex-shrink-0">
         <img
           src={
             event.image 
-              ? (event.image.startsWith('/') ? `http://localhost:5001${event.image}` : event.image)
+              ? (event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image)
               : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=250&fit=crop'
           }
           alt={event.name}
@@ -856,7 +1104,7 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
       </div>
 
       {/* Event Content */}
-      <div className="p-6 flex flex-col flex-grow min-h-[280px]">
+      <div className="flex flex-grow flex-col px-6 pb-6 pt-5 min-h-[280px]">
         <h3 ref={titleRef} className={`text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors ${titleLines === 1 ? 'min-h-[28px] mb-4' : 'min-h-[56px] mb-2'}`}>
           {event.name}
         </h3>
@@ -890,7 +1138,7 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
         <div className="flex gap-2 mt-auto pt-4">
           <button
             onClick={() => navigate(`/events/${event.id}`)}
-            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 transition-colors"
+            className="app-primary-button-sm flex-1"
           >
             View Details
           </button>
@@ -898,13 +1146,13 @@ const EventCard = ({ event, isTeacher, handleEditEvent, handleDeleteEvent }) => 
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
-                className="px-3 py-2 text-sm font-medium text-blue-900 bg-blue-100 rounded-md border border-blue-300 hover:bg-blue-200"
+                className="px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 shadow-sm text-sm font-medium"
               >
                 Edit
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md border border-red-200 hover:bg-red-100"
+                className="px-3 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 shadow-sm text-sm font-medium"
               >
                 Delete
               </button>

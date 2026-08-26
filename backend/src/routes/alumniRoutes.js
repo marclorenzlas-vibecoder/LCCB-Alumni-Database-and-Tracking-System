@@ -3,6 +3,14 @@ const { PrismaClient } = require('@prisma/client');
 const upload = require('../middleware/upload');
 const authMiddleware = require('../middleware/auth').authMiddleware;
 const path = require('path');
+const { broadcastUpdate } = require('../services/realtimeService');
+const {
+  normalizeLevel,
+  parseEducationHistory,
+  getEducationHistoryWithFallback,
+  getEducationHistoryByAlumniIds,
+  replaceEducationHistory
+} = require('../utils/educationHistory');
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -10,16 +18,40 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const alumni = await prisma.alumni.findMany({
+      where: {
+        NOT: {
+          OR: [
+            { email: { endsWith: '@lccbonline.com' } },
+            { user: { is: { email: { endsWith: '@lccbonline.com' } } } }
+          ]
+        }
+      },
       include: {
         user: {
           select: {
-            email: true
+            email: true,
+            username: true
           }
         },
         social_link: true
       }
     });
-    res.json(alumni);
+
+    const historyByAlumniId = await getEducationHistoryByAlumniIds(
+      prisma,
+      alumni.map((entry) => entry.id)
+    );
+
+    const payload = alumni.map((entry) => {
+      const history = getEducationHistoryWithFallback(entry, historyByAlumniId.get(entry.id) || []);
+      return {
+        ...entry,
+        education_history: history,
+        educationHistory: history
+      };
+    });
+
+    res.json(payload);
   } catch (error) {
     console.error('Error fetching alumni:', error);
     res.status(500).json({ error: 'Failed to fetch alumni' });
@@ -45,6 +77,7 @@ router.post('/', runProfileUpload, async (req, res) => {
     const { 
       email, 
       firstName, 
+      middleName,
       lastName, 
       graduationYear, 
       course, 
@@ -54,16 +87,25 @@ router.post('/', runProfileUpload, async (req, res) => {
       profileImage,
       contactNumber,
       level,
-      batch
+      batch,
+      dateOfBirth,
+      date_of_birth
     } = req.body;
+    const parsedEducationHistory = parseEducationHistory(
+      req.body.educationHistory ?? req.body.education_history
+    );
+    const primaryEducation = parsedEducationHistory.length > 0
+      ? parsedEducationHistory[parsedEducationHistory.length - 1]
+      : null;
+
     // Be tolerant to casing differences coming from the client
     const location = (req.body.location ?? req.body.Location) || null;
 
     // Validate required fields
-    if (!firstName || !lastName || !graduationYear || !course) {
+    if (!firstName || !lastName || !course) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        required: ['firstName', 'lastName', 'graduationYear', 'course']
+        required: ['firstName', 'lastName', 'course']
       });
     }
 
@@ -86,30 +128,23 @@ router.post('/', runProfileUpload, async (req, res) => {
       }
     }
 
-    // Prepare alumni data
-    // Normalize level to enum values if provided
-    const normalizeLevel = (val) => {
-      if (!val) return null;
-      const s = String(val).toLowerCase().replace(/\s+/g, '_');
-      if (['college', 'col'].includes(s) || s.includes('college')) return 'COLLEGE';
-      if (['high_school', 'highschool', 'hs', 'junior_high'].includes(s)) return 'HIGH_SCHOOL';
-      if (['senior_high_school', 'senior_high', 'shs', 'seniorhigh'].includes(s)) return 'SENIOR_HIGH_SCHOOL';
-      return null;
-    };
-
+    const birthDateValue = dateOfBirth !== undefined ? dateOfBirth : date_of_birth;
+    const parsedDateOfBirth = birthDateValue ? new Date(birthDateValue) : null;
     const alumniData = {
       first_name: firstName.trim(),
+      middle_name: middleName ? middleName.trim() : null,
       last_name: lastName.trim(),
       email: email ? email.trim() : null,
       contact_number: contactNumber ? String(contactNumber).trim() : null,
-      level: normalizeLevel(level),
-      batch: batch ? parseInt(batch) : null,
-      graduation_year: parseInt(graduationYear),
+      level: normalizeLevel(level) || primaryEducation?.level || null,
+      batch: batch ? parseInt(batch, 10) : (primaryEducation?.batch ?? null),
+      graduation_year: graduationYear ? parseInt(graduationYear, 10) : (primaryEducation?.graduationYear ?? null),
       course: course.trim(),
       current_position: currentPosition ? currentPosition.trim() : null,
       company: company ? company.trim() : null,
       location: location ? String(location).trim() : null,
       skills: Array.isArray(skills) ? skills.join(', ') : (skills ? String(skills) : null),
+      date_of_birth: parsedDateOfBirth instanceof Date && !Number.isNaN(parsedDateOfBirth.getTime()) ? parsedDateOfBirth : null,
       profile_image: req.file ? `/uploads/profiles/${req.file.filename}` : (profileImage || null)
     };
 
@@ -139,13 +174,97 @@ router.post('/', runProfileUpload, async (req, res) => {
       }
     }
 
-    res.status(201).json(newAlumni);
+    if (parsedEducationHistory.length > 0) {
+      await replaceEducationHistory(prisma, newAlumni.id, parsedEducationHistory);
+    }
+
+    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [newAlumni.id]);
+    const history = historyByAlumniId.get(newAlumni.id) || [];
+
+    broadcastUpdate('alumni.created', {
+      alumniId: newAlumni.id,
+      userId: newAlumni.user_id || null
+    });
+
+    res.status(201).json({
+      ...newAlumni,
+      education_history: history,
+      educationHistory: history
+    });
   } catch (error) {
     console.error('Error creating alumni:', error);
     res.status(500).json({ 
       error: 'Failed to create alumni record',
       details: error.message 
     });
+  }
+});
+
+// Get today's birthday alumni
+router.get('/birthdays/today', authMiddleware, async (req, res) => {
+  try {
+    const today = new Date();
+    const birthdays = await prisma.alumni.findMany({
+      where: {
+        date_of_birth: {
+          not: null
+        },
+        status: {
+          not: 'DECEASED'
+        }
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+            username: true
+          }
+        }
+      }
+    });
+
+    const birthdayList = birthdays
+      .filter((entry) => {
+        const dob = new Date(entry.date_of_birth);
+        return (
+          !Number.isNaN(dob.getTime()) &&
+          dob.getUTCDate() === today.getUTCDate() &&
+          dob.getUTCMonth() === today.getUTCMonth()
+        );
+      })
+      .map((entry) => ({
+        id: entry.id,
+        firstName: entry.first_name,
+        lastName: entry.last_name,
+        profileImage: entry.profile_image,
+        dateOfBirth: entry.date_of_birth,
+        email: entry.email || entry.user?.email || null
+      }));
+
+    const currentAlumni = await prisma.alumni.findFirst({
+      where: {
+        OR: [
+          { user_id: req.user.id },
+          { email: req.user.email }
+        ]
+      }
+    });
+    const isYourBirthday = currentAlumni && currentAlumni.date_of_birth ? (() => {
+      const dob = new Date(currentAlumni.date_of_birth);
+      return (
+        !Number.isNaN(dob.getTime()) &&
+        dob.getUTCDate() === today.getUTCDate() &&
+        dob.getUTCMonth() === today.getUTCMonth()
+      );
+    })() : false;
+
+    res.json({
+      birthdays: birthdayList,
+      isYourBirthday
+    });
+  } catch (error) {
+    console.error('Error fetching today birthdays:', error);
+    res.status(500).json({ error: 'Failed to fetch birthday alumni' });
   }
 });
 
@@ -158,7 +277,8 @@ router.get('/:id', async (req, res) => {
       include: {
         user: {
           select: {
-            email: true
+            email: true,
+            username: true
           }
         },
         social_link: true
@@ -169,7 +289,14 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Alumni not found' });
     }
 
-    res.json(alumni);
+    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [alumni.id]);
+    const history = getEducationHistoryWithFallback(alumni, historyByAlumniId.get(alumni.id) || []);
+
+    res.json({
+      ...alumni,
+      education_history: history,
+      educationHistory: history
+    });
   } catch (error) {
     console.error('Error fetching alumni:', error);
     res.status(500).json({ error: 'Failed to fetch alumni' });
@@ -180,6 +307,14 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', runProfileUpload, async (req, res) => {
   try {
     const { id } = req.params;
+    const parsedEducationHistory = parseEducationHistory(
+      req.body.educationHistory ?? req.body.education_history
+    );
+    const hasEducationHistoryInput =
+      req.body.educationHistory !== undefined || req.body.education_history !== undefined;
+    const primaryEducation = parsedEducationHistory.length > 0
+      ? parsedEducationHistory[parsedEducationHistory.length - 1]
+      : null;
     
     // Check if alumni exists
     const existingAlumni = await prisma.alumni.findUnique({
@@ -196,6 +331,9 @@ router.put('/:id', runProfileUpload, async (req, res) => {
     
     if (req.body.firstName && req.body.firstName.trim()) {
       updateData.first_name = req.body.firstName.trim();
+    }
+    if (req.body.middleName && req.body.middleName.trim()) {
+      updateData.middle_name = req.body.middleName.trim();
     }
     if (req.body.lastName && req.body.lastName.trim()) {
       updateData.last_name = req.body.lastName.trim();
@@ -215,17 +353,22 @@ router.put('/:id', runProfileUpload, async (req, res) => {
     }
     // Level normalization
     if (req.body.level !== undefined) {
-      const raw = req.body.level;
-      const s = raw ? String(raw).toLowerCase().replace(/\s+/g, '_') : '';
-      let normalized = null;
-      if (['college', 'col'].includes(s) || s.includes('college')) normalized = 'COLLEGE';
-      else if (['high_school', 'highschool', 'hs', 'junior_high'].includes(s)) normalized = 'HIGH_SCHOOL';
-      else if (['senior_high_school', 'senior_high', 'shs', 'seniorhigh'].includes(s)) normalized = 'SENIOR_HIGH_SCHOOL';
-      updateData.level = normalized;
+      updateData.level = normalizeLevel(req.body.level);
     }
     if (req.body.batch !== undefined) {
       const b = parseInt(req.body.batch);
       updateData.batch = isNaN(b) ? null : b;
+    }
+    if (hasEducationHistoryInput) {
+      if (req.body.level === undefined) {
+        updateData.level = primaryEducation?.level ?? null;
+      }
+      if (req.body.batch === undefined) {
+        updateData.batch = primaryEducation?.batch ?? null;
+      }
+      if (req.body.graduationYear === undefined && req.body.graduation_year === undefined) {
+        updateData.graduation_year = primaryEducation?.graduationYear ?? null;
+      }
     }
     if (req.body.course && req.body.course.trim()) {
       updateData.course = req.body.course.trim();
@@ -235,6 +378,11 @@ router.put('/:id', runProfileUpload, async (req, res) => {
     }
     if (req.body.company !== undefined) {
       updateData.company = req.body.company && req.body.company.trim() ? req.body.company.trim() : null;
+    }
+    const dobValue = req.body.dateOfBirth !== undefined ? req.body.dateOfBirth : req.body.date_of_birth;
+    if (dobValue !== undefined) {
+      const parsedDob = dobValue ? new Date(dobValue) : null;
+      updateData.date_of_birth = parsedDob instanceof Date && !Number.isNaN(parsedDob.getTime()) ? parsedDob : null;
     }
     const locationIncoming = req.body.location !== undefined ? req.body.location : req.body.Location;
     if (locationIncoming !== undefined) {
@@ -247,7 +395,7 @@ router.put('/:id', runProfileUpload, async (req, res) => {
         updateData.skills = req.body.skills ? String(req.body.skills).trim() : null;
       }
     }
-    
+
     // Handle profile image upload
     if (req.file) {
       updateData.profile_image = `/uploads/profiles/${req.file.filename}`;
@@ -307,8 +455,32 @@ router.put('/:id', runProfileUpload, async (req, res) => {
       }
     }
 
+    if (hasEducationHistoryInput && parsedEducationHistory.length > 0) {
+      await replaceEducationHistory(prisma, Number(id), parsedEducationHistory);
+    }
+
+    const historyByAlumniId = await getEducationHistoryByAlumniIds(prisma, [updatedAlumni.id]);
+    const history = getEducationHistoryWithFallback(updatedAlumni, historyByAlumniId.get(updatedAlumni.id) || []);
+
     console.log('Alumni updated successfully:', updatedAlumni.id);
-    res.json(updatedAlumni);
+
+    broadcastUpdate('alumni.updated', {
+      alumniId: updatedAlumni.id,
+      userId: existingAlumni.user_id || null
+    });
+
+    if (existingAlumni.user_id) {
+      broadcastUpdate('profile.updated', {
+        userId: existingAlumni.user_id,
+        alumniId: updatedAlumni.id
+      });
+    }
+
+    res.json({
+      ...updatedAlumni,
+      education_history: history,
+      educationHistory: history
+    });
   } catch (error) {
     console.error('=== ERROR UPDATING ALUMNI ===');
     console.error('Error message:', error.message);
@@ -356,6 +528,18 @@ router.delete('/:id', async (req, res) => {
         console.error('Error deleting associated user:', userDeleteError);
         // Continue even if user deletion fails (user might already be deleted)
       }
+    }
+
+    broadcastUpdate('alumni.deleted', {
+      alumniId: Number(id),
+      userId: userId || null
+    });
+
+    if (userId) {
+      broadcastUpdate('profile.updated', {
+        userId,
+        alumniId: Number(id)
+      });
     }
 
     res.json({ message: 'Alumni and associated user deleted successfully' });
@@ -500,6 +684,26 @@ router.delete('/:id/social-links/:linkId', authMiddleware, async (req, res) => {
     console.error('Error deleting social link:', error);
     res.status(500).json({ error: 'Failed to delete social link' });
   }
+});
+
+// Report deceased alumni (Disabled)
+router.post('/:id/report-deceased', authMiddleware, async (req, res) => {
+  return res.status(400).json({ error: 'This feature is no longer supported.' });
+});
+
+// Get pending deceased reports (Disabled)
+router.get('/deceased-reports/pending', authMiddleware, async (req, res) => {
+  return res.json([]);
+});
+
+// Approve deceased report (Disabled)
+router.post('/deceased-reports/:reportId/approve', authMiddleware, async (req, res) => {
+  return res.status(400).json({ error: 'This feature is no longer supported.' });
+});
+
+// Reject deceased report (Disabled)
+router.post('/deceased-reports/:reportId/reject', authMiddleware, async (req, res) => {
+  return res.status(400).json({ error: 'This feature is no longer supported.' });
 });
 
 module.exports = router;

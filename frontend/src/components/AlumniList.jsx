@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = 'http://localhost:5001/api/alumni-list';
+import { API_BASE_URL } from '../config/apiBaseUrl';
+import UserLayout from './UserLayout';
 
 const AlumniList = () => {
   const [alumniList, setAlumniList] = useState([]);
@@ -63,9 +63,10 @@ const AlumniList = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Official Alumni List</h1>
-      <p className="text-gray-600 mb-8">Search for verified alumni by School ID, name, or filter by graduation year</p>
+    <UserLayout>
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">Official Alumni List</h1>
+        <p className="text-gray-600 mb-8">Search by School ID only</p>
 
       {/* Search Section */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -74,7 +75,7 @@ const AlumniList = () => {
           <div className="flex-1">
             <input
               type="text"
-              placeholder="Enter School ID (e.g., 21-0087-958)"
+              placeholder="School ID"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyPress={handleKeyPress}
@@ -155,7 +156,7 @@ const AlumniList = () => {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="app-select"
           >
             <option value="">All Years</option>
             <option value="2023">Class of 2023</option>
@@ -199,7 +200,8 @@ const AlumniList = () => {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 

@@ -2,23 +2,119 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const notificationService = require('../services/notificationService');
+const { authenticateToken } = require('../middleware/auth');
+
+const applicationsDir = path.join(__dirname, '../../uploads/applications');
+if (!fs.existsSync(applicationsDir)) {
+  fs.mkdirSync(applicationsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, applicationsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, 'resume-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedExt = /pdf|doc|docx/;
+    const extname = allowedExt.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = /application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/.test(file.mimetype);
+
+    if (extname && mimetype) {
+      return cb(null, true);
+    }
+
+    cb(new Error('Only PDF, DOC, and DOCX files are allowed'));
+  }
+});
+
+const runResumeUpload = (req, res, next) => {
+  upload.single('resume_file')(req, res, (err) => {
+    if (err) {
+      const isSize = err.code === 'LIMIT_FILE_SIZE';
+      return res.status(400).json({
+        error: isSize ? 'Resume file is too large. Max size is 10MB.' : (err.message || 'Invalid resume upload')
+      });
+    }
+    next();
+  });
+};
+
+const APPLICATION_META_PREFIX = '[APPLICATION_META]';
+
+const buildApplicationMeta = (payload = {}) => {
+  const contactMethod = String(payload.contact_method || '').trim().toLowerCase();
+  const contactEmail = String(payload.contact_email || '').trim();
+  const contactNumber = String(payload.contact_number || '').trim();
+
+  const meta = {};
+  if (contactMethod === 'email' || contactMethod === 'phone') meta.contact_method = contactMethod;
+  if (contactEmail) meta.contact_email = contactEmail;
+  if (contactNumber) meta.contact_number = contactNumber;
+
+  return Object.keys(meta).length > 0 ? meta : null;
+};
+
+const parseApplicationMeta = (notes) => {
+  if (!notes || typeof notes !== 'string') return {};
+  if (!notes.startsWith(APPLICATION_META_PREFIX)) return {};
+
+  try {
+    const rawFull = notes.slice(APPLICATION_META_PREFIX.length);
+    const firstLine = rawFull.split('\n')[0].trim();
+    const raw = firstLine || rawFull;
+    const parsed = JSON.parse(raw);
+    return {
+      contact_method: parsed.contact_method || null,
+      contact_email: parsed.contact_email || null,
+      contact_number: parsed.contact_number || null
+    };
+  } catch (error) {
+    return {};
+  }
+};
+
+const attachApplicationMeta = (application) => {
+  const meta = parseApplicationMeta(application?.notes);
+  return {
+    ...application,
+    ...meta
+  };
+};
 
 // Submit a job application (Alumni applies to a job)
-router.post('/', async (req, res) => {
+router.post('/', runResumeUpload, async (req, res) => {
   try {
     const {
       job_posting_id,
       applicant_id,
       cover_letter,
-      resume_url
+      resume_url,
+      contact_method,
+      contact_email,
+      contact_number
     } = req.body;
+
+    const uploadedResumeUrl = req.file ? `/uploads/applications/${req.file.filename}` : null;
+    const finalResumeUrl = uploadedResumeUrl || resume_url || null;
+    const applicationMeta = buildApplicationMeta({ contact_method, contact_email, contact_number });
 
     console.log('📝 Application submission request:', {
       job_posting_id,
       applicant_id,
       has_cover_letter: !!cover_letter,
-      has_resume: !!resume_url
+      has_resume: !!finalResumeUrl
     });
 
     if (!job_posting_id || !applicant_id) {
@@ -26,6 +122,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['job_posting_id', 'applicant_id']
+      });
+    }
+
+    if (!cover_letter || !String(cover_letter).trim()) {
+      return res.status(400).json({
+        error: 'Cover letter is required'
       });
     }
 
@@ -75,8 +177,9 @@ router.post('/', async (req, res) => {
       data: {
         job_posting_id: Number(job_posting_id),
         applicant_id: Number(applicant_id),
-        cover_letter,
-        resume_url,
+        cover_letter: String(cover_letter).trim(),
+        resume_url: finalResumeUrl,
+        notes: applicationMeta ? `${APPLICATION_META_PREFIX}${JSON.stringify(applicationMeta)}` : null,
         status: 'PENDING'
       },
       include: {
@@ -170,7 +273,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({
       message: 'Application submitted successfully',
-      application
+      application: attachApplicationMeta(application)
     });
   } catch (error) {
     console.error('❌ Error submitting application:', error);
@@ -216,7 +319,7 @@ router.get('/job/:jobId', async (req, res) => {
       orderBy: { applied_at: 'desc' }
     });
 
-    res.json(applications);
+    res.json(applications.map(attachApplicationMeta));
   } catch (error) {
     console.error('Error fetching job applications:', error);
     res.status(500).json({ error: 'Failed to fetch applications' });
@@ -247,10 +350,64 @@ router.get('/alumni/:alumniId', async (req, res) => {
       orderBy: { applied_at: 'desc' }
     });
 
-    res.json(applications);
+    res.json(applications.map(attachApplicationMeta));
   } catch (error) {
     console.error('Error fetching alumni applications:', error);
     res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// Get resume file for a specific application
+router.get('/:id/resume', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const application = await prisma.job_application.findUnique({
+      where: { id: Number(id) },
+      select: {
+        id: true,
+        resume_url: true
+      }
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    if (!application.resume_url) {
+      return res.status(404).json({ error: 'Resume not found for this application' });
+    }
+
+    const normalizedRelativePath = String(application.resume_url).replace(/^\/+/, '');
+    const absolutePath = path.join(__dirname, '../../', normalizedRelativePath);
+    const normalizedAbsolute = path.normalize(absolutePath);
+    const normalizedBase = path.normalize(applicationsDir + path.sep);
+
+    // Prevent path traversal and ensure files only come from uploads/applications
+    if (!normalizedAbsolute.startsWith(normalizedBase)) {
+      return res.status(400).json({ error: 'Invalid resume path' });
+    }
+
+    if (!fs.existsSync(normalizedAbsolute)) {
+      return res.status(404).json({ error: 'Resume file is missing on server' });
+    }
+
+    const ext = path.extname(normalizedAbsolute).toLowerCase();
+    const mimeTypes = {
+      '.pdf': 'application/pdf',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    };
+
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    const fileName = path.basename(normalizedAbsolute);
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    return res.sendFile(normalizedAbsolute);
+  } catch (error) {
+    console.error('Error fetching application resume:', error);
+    return res.status(500).json({ error: 'Failed to fetch resume file' });
   }
 });
 
@@ -288,7 +445,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Application not found' });
     }
 
-    res.json(application);
+    res.json(attachApplicationMeta(application));
   } catch (error) {
     console.error('Error fetching application:', error);
     res.status(500).json({ error: 'Failed to fetch application' });
@@ -309,13 +466,27 @@ router.patch('/:id/status', async (req, res) => {
       });
     }
 
+    const existingApplication = await prisma.job_application.findUnique({
+      where: { id: Number(id) },
+      select: { id: true, notes: true }
+    });
+
+    if (!existingApplication) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
     const updateData = {};
     if (status) {
       updateData.status = status;
       updateData.reviewed_at = new Date();
     }
     if (notes !== undefined) {
-      updateData.notes = notes;
+      const meta = parseApplicationMeta(existingApplication.notes);
+      const hasMeta = Object.keys(meta).length > 0;
+      const reviewerNotes = String(notes || '').trim();
+      updateData.notes = hasMeta
+        ? `${APPLICATION_META_PREFIX}${JSON.stringify(meta)}${reviewerNotes ? `\n\n${reviewerNotes}` : ''}`
+        : reviewerNotes;
     }
 
     const application = await prisma.job_application.update({
@@ -456,9 +627,81 @@ router.patch('/:id/status', async (req, res) => {
 });
 
 // Delete/withdraw an application
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!req.user || !req.user.role || String(req.user.role).toUpperCase() !== 'ALUMNI') {
+      return res.status(403).json({ error: 'Only alumni can withdraw applications' });
+    }
+
+    let alumniId = req.user.alumniId || req.user.alumni_id || null;
+
+    if (!alumniId && req.user.id) {
+      const applicantUser = await prisma.user.findUnique({
+        where: { id: Number(req.user.id) },
+        select: {
+          id: true,
+          email: true,
+          alumni: {
+            select: { id: true }
+          }
+        }
+      });
+
+      alumniId = applicantUser?.alumni?.id || null;
+
+      if (!alumniId && applicantUser?.email) {
+        const emailMatch = await prisma.user.findUnique({
+          where: { email: applicantUser.email },
+          select: {
+            alumni: {
+              select: { id: true }
+            }
+          }
+        });
+
+        alumniId = emailMatch?.alumni?.id || null;
+      }
+    }
+
+    if (!alumniId && req.user.email) {
+      const emailUser = await prisma.user.findUnique({
+        where: { email: req.user.email },
+        select: {
+          alumni: {
+            select: { id: true }
+          }
+        }
+      });
+
+      alumniId = emailUser?.alumni?.id || null;
+    }
+
+    if (!alumniId) {
+      return res.status(403).json({ error: 'Alumni profile not found for this account' });
+    }
+
+    const application = await prisma.job_application.findUnique({
+      where: { id: Number(id) },
+      select: {
+        id: true,
+        applicant_id: true,
+        status: true
+      }
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    if (application.applicant_id !== alumniId) {
+      return res.status(403).json({ error: 'You can only withdraw your own application' });
+    }
+
+    if (application.status !== 'PENDING') {
+      return res.status(400).json({ error: 'Only pending applications can be withdrawn' });
+    }
 
     await prisma.job_application.delete({
       where: { id: Number(id) }

@@ -1,0 +1,72 @@
+{
+  "levelOptions": [
+    { "value": "", "label": "All Levels" },
+    { "value": "INTEGRATED_SCHOOL", "label": "Integrated School" },
+    { "value": "NIGHT_HIGH", "label": "Night High" },
+    { "value": "SENIOR_HIGH", "label": "Senior High" },
+    { "value": "COLLEGE", "label": "College" },
+    { "value": "ETEEAP", "label": "ETEEAP" },
+    { "value": "GRAD_SCHOOL", "label": "Grad School" }
+  ],
+  "groupSectionDefinitions": [
+    {
+      "key": "INTEGRATED_SCHOOL",
+      "title": "Integrated School",
+      "gridClassName": "grid gap-2 sm:grid-cols-2",
+      "items": [
+        { "value": "Integrated School - Elementary", "label": "Elementary" },
+        { "value": "Integrated School - Junior High", "label": "Junior High" },
+        { "value": "Night High", "label": "Night High" }
+      ]
+    },
+    {
+      "key": "SENIOR_HIGH",
+      "title": "Senior High School",
+      "gridClassName": "grid gap-2 sm:grid-cols-2",
+      "items": [
+        { "value": "Senior High School", "label": "Senior High School" }
+      ]
+    },
+    {
+      "key": "COLLEGE",
+      "title": "College",
+      "gridClassName": "grid gap-2 sm:grid-cols-2",
+      "items": [
+        { "value": "SARFAID", "label": "SARFAID" },
+        { "value": "SHTM", "label": "SHTM" },
+        { "value": "SBIT", "label": "SBIT" },
+        { "value": "SSLATE", "label": "SSLATE" }
+      ]
+    },
+    {
+      "key": "ETEEAP",
+      "title": "ETEEAP",
+      "gridClassName": "grid gap-2 sm:grid-cols-2",
+      "items": [
+        { "value": "B.A. in English Language Studies", "label": "Bachelor of Arts — English Language Studies", "description": "Bachelor of Arts in English Language Studies (ABELS)" },
+        { "value": "B.S. in Business Administration", "label": "Bachelor of Science — Business Administration", "description": "Business Administration (BSBA) program" },
+        { "value": "B.S. in Hospitality Management", "label": "Bachelor of Science — Hospitality Management", "description": "Hospitality Management (BSHM) program" }
+      ]
+    },
+    {
+      "key": "GRAD_SCHOOL",
+      "title": "Graduate School",
+      "gridClassName": "grid gap-2",
+      "items": [
+        { "value": "Doctor in Business Administration", "label": "Doctor in Business Administration" },
+        { "value": "Master of Science in Architecture", "label": "Master of Science — Architecture" },
+        { "value": "Master of Science in Hospitality Management", "label": "Master of Science — Hospitality Management" },
+        { "value": "Master in Business Administration", "label": "Master in Business Administration (MBA)" },
+        { "value": "Master in Business Administration - Human Resource Management", "label": "MBA — Human Resource Management" },
+        { "value": "Master of Arts in Counseling", "label": "Master of Arts — Counseling" },
+        { "value": "Master of Arts in Educational Management", "label": "Master of Arts — Educational Management" },
+        { "value": "Master of Arts in Education - English/Literature", "label": "M.A. in Education — English / Literature" },
+        { "value": "Master of Arts in Education - Filipino", "label": "M.A. in Education — Filipino" },
+        { "value": "Master of Arts in Education - General Science", "label": "M.A. in Education — General Science" },
+        { "value": "Master of Arts in Education - Instructional Technology", "label": "M.A. in Education — Instructional Technology" },
+        { "value": "Master of Arts in Education - Mathematics", "label": "M.A. in Education — Mathematics" },
+        { "value": "Master of Arts in Education - Religious Studies", "label": "M.A. in Education — Religious Studies" }
+      ]
+    }
+  ]
+}

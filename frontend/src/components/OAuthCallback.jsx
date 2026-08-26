@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { toast } from 'react-toastify';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 
 const OAuthCallback = () => {
   const navigate = useNavigate();
@@ -18,18 +20,25 @@ const OAuthCallback = () => {
         // Parse and store the user data
         const user = JSON.parse(decodeURIComponent(userStr));
         localStorage.setItem('user', JSON.stringify(user));
+        window.dispatchEvent(new CustomEvent('auth-user-updated', { detail: user }));
 
         // Set up axios headers
         const axiosInstance = axios.create({
-          baseURL: 'http://localhost:5001/api',
+          baseURL: `${API_BASE_URL}/auth`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         });
 
-        // Redirect to Home page after successful OAuth
-        window.location.replace('/home');
+        // Show success toast then navigate (use SPA navigation so toast is visible)
+        try {
+          console.log('TOAST: OAuth login success - ready to show toast');
+          toast.success('Login successful! Redirecting...');
+        } catch (e) {
+          /* ignore toast failures */
+        }
+        setTimeout(() => navigate('/home', { replace: true }), 900);
       } catch (error) {
         console.error('Error processing OAuth callback:', error);
         navigate('/login?error=Authentication failed');

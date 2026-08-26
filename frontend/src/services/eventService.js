@@ -1,6 +1,12 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 
-const API_URL = 'http://localhost:5001/api/events';
+const API_URL = `${API_BASE_URL}/events`;
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 const eventService = {
   // Get all events
@@ -82,14 +88,17 @@ const eventService = {
   addGalleryPhotos: async (eventId, formData) => {
     const response = await axios.post(`${API_URL}/${eventId}/gallery`, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data'
+        'Content-Type': 'multipart/form-data',
+        ...getAuthHeaders()
       }
     });
     return response.data;
   },
 
   deleteGalleryPhoto: async (eventId, photoId) => {
-    const response = await axios.delete(`${API_URL}/${eventId}/gallery/${photoId}`);
+    const response = await axios.delete(`${API_URL}/${eventId}/gallery/${photoId}`, {
+      headers: getAuthHeaders()
+    });
     return response.data;
   }
 };

@@ -1,12 +1,10 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 
-// Determine API URL based on current host
-const isNetworkAccess = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_URL = isNetworkAccess 
-  ? `http://192.168.5.248:5001/api/auth`
-  : 'http://localhost:5001/api/auth';
+// API URL for auth endpoints
+const API_URL = `${API_BASE_URL}/auth`;
 
-console.log('Auth Service API URL:', API_URL, '(Network access:', isNetworkAccess, ')');
+console.log('Auth Service API URL:', API_URL);
 
 // Create an axios instance with default config
 const axiosInstance = axios.create({
@@ -17,14 +15,37 @@ const axiosInstance = axios.create({
   }
 });
 
+const normalizeEmail = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+
+const getAuthError = (error, fallbackMessage) => {
+  if (!axios.isAxiosError(error)) {
+    return new Error(fallbackMessage);
+  }
+
+  if (!error.response) {
+    return new Error('Network error: XAMPP may be off or the backend is unreachable. Please start XAMPP and try again.');
+  }
+
+  return error.response.data || new Error(fallbackMessage);
+};
+
+const notifyAuthUserUpdated = (user) => {
+  try {
+    window.dispatchEvent(new CustomEvent('auth-user-updated', { detail: user }));
+  } catch (error) {
+    console.warn('Unable to dispatch auth-user-updated event:', error);
+  }
+};
+
 export const authService = {
   register: async (userData) => {
     try {
       console.log('Registering user:', userData);
       const { username, email, password, level, course, batch, graduationYear, firstName, lastName, studentId, contactNumber } = userData;
+      const normalizedEmail = normalizeEmail(email);
       const response = await axiosInstance.post('/register', { 
         username, 
-        email, 
+        email: normalizedEmail, 
         password, 
         level, 
         course, 
@@ -44,16 +65,15 @@ export const authService = {
         console.error('Error response:', error.response?.data);
         console.error('Error status:', error.response?.status);
         console.error('Error headers:', error.response?.headers);
-        
-        throw error.response?.data || new Error('Registration failed');
       }
-      throw new Error('Registration failed');
+
+      throw getAuthError(error, 'Registration failed');
     }
   },
 
   login: async (email, password) => {
     try {
-      const response = await axiosInstance.post('/login', { email, password });
+      const response = await axiosInstance.post('/login', { email: normalizeEmail(email), password });
       
       // Store user token and info in localStorage
       if (response.data.token) {
@@ -62,15 +82,13 @@ export const authService = {
         
         // Set the token in axios default headers
         axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+        notifyAuthUserUpdated(response.data.user);
       }
       
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
-      if (axios.isAxiosError(error)) {
-        throw error.response?.data || new Error('Login failed');
-      }
-      throw new Error('Login failed');
+      throw getAuthError(error, 'Login failed');
     }
   },
 
@@ -78,33 +96,30 @@ export const authService = {
   registerTeacher: async (userData) => {
     try {
       const { username, email, password } = userData;
-      const response = await axiosInstance.post('/register-teacher', { username, email, password });
+      const response = await axiosInstance.post('/register-teacher', { username, email: normalizeEmail(email), password });
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw error.response?.data || new Error('Registration failed');
-      }
-      throw new Error('Registration failed');
+      throw getAuthError(error, 'Registration failed');
     }
   },
   loginTeacher: async (email, password) => {
     try {
-      const response = await axiosInstance.post('/login', { email, password });
+      const response = await axiosInstance.post('/login', { email: normalizeEmail(email), password });
       if (response.data.token) {
         localStorage.setItem('user', JSON.stringify(response.data.user));
         localStorage.setItem('token', response.data.token);
         axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+        notifyAuthUserUpdated(response.data.user);
       }
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw error.response?.data || new Error('Login failed');
-      }
-      throw new Error('Login failed');
+      throw getAuthError(error, 'Login failed');
     }
   },
 
   logout: () => {
+    axiosInstance.post('/logout').catch(() => {});
+
     // Check if user has rejected status before logging out
     const user = authService.getCurrentUser();
     if (user && user.approval_status === 'REJECTED') {

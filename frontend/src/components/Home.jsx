@@ -4,9 +4,12 @@ import eventService from '../services/eventService';
 import achievementService from '../services/achievementService';
 import careerService from '../services/careerService';
 import donationService from '../services/donationService';
-import alumniService from '../services/alumniService';
-import backgroundImage from '../assets/background.jpg';
+import statsService from '../services/statsService';
+import backgroundImage from '../assets/homeimage.jpg';
 import NotificationPermissionPopup from './NotificationPermissionPopup';
+import UserLayout from './UserLayout';
+import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
+import { extractDonationMeta } from '../utils/donationMeta';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -23,12 +26,12 @@ const Home = () => {
 
   const fetchPreviewData = async () => {
     try {
-      const [eventsData, achievementsData, jobsData, donationsData, alumniData] = await Promise.all([
+      const [eventsData, achievementsData, jobsData, donationsData, homeStats] = await Promise.all([
         eventService.getAllEvents(),
         achievementService.getAllAchievements(),
         careerService.getAllCareers(),
         donationService.getAllDonations(),
-        alumniService.getAllAlumni()
+        statsService.getHomeStats()
       ]);
       
       setEvents(eventsData.slice(0, 3));
@@ -36,11 +39,12 @@ const Home = () => {
       setJobs(jobsData.slice(0, 3));
       setDonations(donationsData.slice(0, 3));
 
-      const totalAlumni = Array.isArray(alumniData) ? alumniData.length : 0;
-      const activeMembers = Array.isArray(alumniData) ? alumniData.filter(a => a.isVerified === true).length : 0;
-      const totalEvents = Array.isArray(eventsData) ? eventsData.length : 0;
-      const totalJobs = Array.isArray(jobsData) ? jobsData.length : 0;
-      setTotals({ alumni: totalAlumni, active: activeMembers, events: totalEvents, jobs: totalJobs });
+      setTotals({
+        alumni: Number(homeStats?.totalAlumni || 0),
+        active: Number(homeStats?.activeMembers || 0),
+        events: Number(homeStats?.upcomingEvents || 0),
+        jobs: Number(homeStats?.jobOpportunities || 0)
+      });
     } catch (err) {
       console.error('Error fetching preview data:', err);
     } finally {
@@ -101,16 +105,25 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen">
+    <UserLayout>
+      <div className="-mx-4 -mt-4 -mb-4 bg-gray-50 sm:-mx-6 lg:-mx-8 lg:-mt-6 lg:-mb-6">
       {/* Notification Permission Popup */}
       <NotificationPermissionPopup />
       
       {/* Hero Section - Clean & Modern */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-blue-800 via-blue-900 to-indigo-900" style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-        {/* Blue overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-800/90 via-blue-900/90 to-indigo-900/90"></div>
+      <div 
+        className="relative overflow-hidden" 
+        style={{ 
+          backgroundImage: `url(${backgroundImage})`, 
+          backgroundSize: 'cover', 
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      >
+        {/* Transparent overlay for readability */}
+        <div className="absolute inset-0 bg-black/35" />
         
-        <div className="relative px-8 lg:px-16 pt-32 pb-20">
+        <div className="relative px-8 lg:px-16 pt-32 pb-20 z-10">
           <div className="text-center max-w-4xl mx-auto">
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-tight">
               Welcome to LCCB <br />
@@ -145,7 +158,7 @@ const Home = () => {
 
       {/* Statistics Section - At the bottom overlapping */}
       <div className="relative -mt-12 pb-16 z-10">
-        <div className="max-w-7xl mx-auto px-8">
+        <div className="container mx-auto px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
               <div key={index} className="bg-white rounded-xl p-6 text-center shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
@@ -163,7 +176,7 @@ const Home = () => {
 
       {/* About Section */}
       <div className="py-12 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">ABOUT</h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
@@ -326,7 +339,7 @@ const Home = () => {
       {/* Features Section - What We Offer */}
       <div className="py-12 bg-gray">
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">What We Offer</h2>
             <p className="text-xl text-gray-600">Everything you need to stay connected and grow professionally</p>
@@ -395,7 +408,7 @@ const Home = () => {
 
       {/* Events Preview Section */}
       <div className="py-10 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Upcoming Events</h2>
@@ -421,7 +434,7 @@ const Home = () => {
                 <div key={event.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
                   {event.image && (
                     <img
-                      src={event.image.startsWith('/') ? `http://localhost:5001${event.image}` : event.image}
+                      src={event.image.startsWith('/') ? `${IMAGE_BASE_URL}${event.image}` : event.image}
                       alt={event.name}
                       className="w-full h-40 object-cover"
                     />
@@ -442,7 +455,7 @@ const Home = () => {
                       {event.location || 'TBA'}
                     </div>
                     <div className="mt-auto pt-4">
-                      <Link to="/events" className="w-full inline-flex justify-center items-center px-4 py-2.5 bg-blue-900 text-white rounded-md hover:bg-blue-800 transition-colors">
+                      <Link to="/events" className="w-full inline-flex items-center justify-center rounded-md bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-700/20 transition-all hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-lg">
                         View Details
                       </Link>
                     </div>
@@ -456,7 +469,7 @@ const Home = () => {
 
       {/* Achievements Preview Section */}
       <div className="py-10 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Recent Achievements</h2>
@@ -482,7 +495,7 @@ const Home = () => {
                 <div key={achievement.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
                   {achievement.image && (
                     <img
-                      src={achievement.image.startsWith('/') ? `http://localhost:5001${achievement.image}` : achievement.image}
+                      src={achievement.image.startsWith('/') ? `${IMAGE_BASE_URL}${achievement.image}` : achievement.image}
                       alt={achievement.title}
                       className="w-full h-40 object-cover rounded-lg mb-4"
                     />
@@ -506,7 +519,7 @@ const Home = () => {
 
       {/* Job Opportunities Preview Section */}
       <div className="py-10 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Career Opportunities</h2>
@@ -568,7 +581,7 @@ const Home = () => {
 
       {/* Donations/Campaigns Preview Section */}
       <div className="py-10 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Support Our Causes</h2>
@@ -592,12 +605,13 @@ const Home = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {donations.map((donation) => {
                 const progress = donation.goal ? Math.min((donation.amount / donation.goal) * 100, 100) : 0;
+                const { cleanDescription } = extractDonationMeta(donation.description || '');
                 
                 return (
                   <div key={donation.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
                     {donation.image && (
                       <img
-                        src={donation.image.startsWith('/') ? `http://localhost:5001${donation.image}` : donation.image}
+                        src={donation.image.startsWith('/') ? `${IMAGE_BASE_URL}${donation.image}` : donation.image}
                         alt={donation.purpose}
                         className="w-full h-40 object-cover"
                       />
@@ -607,8 +621,8 @@ const Home = () => {
                         {donation.category || 'General'}
                       </span>
                       <h3 className="text-lg font-semibold text-gray-900 mt-3 mb-2">{donation.purpose}</h3>
-                      {donation.description && (
-                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{donation.description}</p>
+                      {cleanDescription && (
+                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{cleanDescription}</p>
                       )}
                       {donation.goal && (
                         <div className="mb-3">
@@ -636,7 +650,7 @@ const Home = () => {
 
       {/* Office Hours & Stay Connected */}
       <div className="py-10 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Office Hours */}
             <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
@@ -725,7 +739,7 @@ const Home = () => {
 
       {/* Call to Action - Professional Footer Style */}
       <div className="bg-blue-900 text-white py-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-12">
             {/* About Section */}
             <div className="col-span-1">
@@ -823,7 +837,8 @@ const Home = () => {
         </div>
       </div>
 
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 
