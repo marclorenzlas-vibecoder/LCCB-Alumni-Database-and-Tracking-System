@@ -1252,7 +1252,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
         aria-label={isOpen && !isClosing ? 'Close messages' : 'Open messages'}
         aria-expanded={isOpen && !isClosing}
       >
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
         </svg>
         <span className="lccb-chat-toggle-label">Messages</span>

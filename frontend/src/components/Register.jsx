@@ -532,19 +532,33 @@ const Register = () => {
                 , per the Data Privacy Act of 2012 (RA 10173).
               </p>
 
-              <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
-                <h3 className="text-sm font-bold text-slate-950">Key points</h3>
-                <ul className="mt-3 space-y-3">
-                  <li>
-                    <span className="font-bold text-slate-900">Secure & limited access</span> — encrypted storage, visible only to authorized staff.
-                  </li>
-                  <li>
-                    <span className="font-bold text-slate-900">Directory-safe by default</span> — directory listing shows only name, batch, and program; contact info, address, and other sensitive fields stay hidden unless the user opts to reveal them individually.
-                  </li>
-                  <li>
-                    <span className="font-bold text-slate-900">No selling your data</span> — used only for alumni tracking, events, jobs, and donations; never shared with outside organizations.
-                  </li>
-                </ul>
+              <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4 space-y-4">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700">Consent Details</h3>
+                  <ul className="mt-2 space-y-2 text-slate-700">
+                    <li>
+                      <span className="font-bold text-slate-900">1. Data Needed:</span> We collect your personal info (name, email, birthday, phone), academic info (student ID, course, graduation year), and employment/career history.
+                    </li>
+                    <li>
+                      <span className="font-bold text-slate-900">2. Where/How Used:</span> To verify alumni status, manage events, track employment alignment, facilitate donations, and maintain the alumni directory (where contact/sensitive details stay private by default).
+                    </li>
+                    <li>
+                      <span className="font-bold text-slate-900">3. How long it is kept:</span> Your data will be kept securely as long as your alumni account is active or until you request its deletion.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="border-t border-blue-100 pt-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700">Security & Privacy Key Points</h3>
+                  <ul className="mt-2 space-y-2 text-slate-700">
+                    <li>
+                      <span className="font-bold text-slate-900">Secure storage</span> — encrypted database, visible only to authorized staff.
+                    </li>
+                    <li>
+                      <span className="font-bold text-slate-900">No selling of data</span> — used only for alumni tracking, events, jobs, and donations; never shared with outside organizations.
+                    </li>
+                  </ul>
+                </div>
               </div>
 
               <label className="mt-5 flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition hover:border-blue-200 hover:bg-blue-50/40">

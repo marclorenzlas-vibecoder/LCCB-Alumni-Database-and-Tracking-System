@@ -290,6 +290,7 @@ const AlumniDirectory = () => {
   // Related records data
   const [achievements, setAchievements] = useState([]);
   const [careers, setCareers] = useState([]);
+  const [expandedAchievements, setExpandedAchievements] = useState({});
 
   // Batch officers
   const [batchOfficers, setBatchOfficers] = useState([]);
@@ -781,6 +782,7 @@ const AlumniDirectory = () => {
     setViewingAlumni(alumnus);
     setAchievements([]);
     setCareers([]);
+    setExpandedAchievements({});
     setShowViewModal(true);
 
     try {
@@ -1132,17 +1134,17 @@ const AlumniDirectory = () => {
             </div>
             <div className="border-t border-gray-200" />
             {/* ── Content below banner ── */}
-            <div className="px-4 sm:px-6 py-8">
+            <div className="px-4 sm:px-6 pt-2 pb-6">
               <div className="w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                  <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                  <div className="rounded-lg border border-transparent bg-transparent py-3 px-4 md:col-span-2">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" /></svg>Academic Information</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                       {fieldIsPublic(viewingAlumni, 'isStudentIdPublic', 'is_student_id_public') && <div><label className="text-sm font-medium text-gray-500">School ID / Student Number</label><p className="text-gray-900 mt-1 font-mono">{viewingAlumni.student_id || 'Not provided'}</p></div>}
                       {fieldIsPublic(viewingAlumni, 'isCoursePublic', 'is_course_public') && <div><label className="text-sm font-medium text-gray-500">Course</label><p className="text-gray-900 mt-1">{viewingAlumni.course || 'Not provided'}</p></div>}
                       {fieldIsPublic(viewingAlumni, 'isGraduationYearPublic', 'is_graduation_year_public') && <div><label className="text-sm font-medium text-gray-500">Graduation Year</label><p className="text-gray-900 mt-1">{viewingAlumni.graduation_year || viewingAlumni.graduationYear || 'Not provided'}</p></div>}
                     </div>
-                    {fieldIsPublic(viewingAlumni, 'isEducationHistoryPublic', 'is_education_history_public') && <div className="pt-6">
+                    {fieldIsPublic(viewingAlumni, 'isEducationHistoryPublic', 'is_education_history_public') && <div className="pt-2">
                       <h4 className="text-md font-medium text-gray-900 mb-3">Education History</h4>
                       <div className="grid grid-cols-3 gap-3">
                         {viewingAlumni.educationHistory && viewingAlumni.educationHistory.length > 0 ? (
@@ -1160,7 +1162,7 @@ const AlumniDirectory = () => {
                       </div>
                     </div>}
                   </div>
-                  <div className="rounded-lg border border-transparent bg-transparent p-6">
+                  <div className="rounded-lg border border-transparent bg-transparent py-3 px-4">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -1230,12 +1232,12 @@ const AlumniDirectory = () => {
                       </div>}
                     </div>
                   </div>
-                  <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
+                  <div className="rounded-lg border border-transparent bg-transparent py-3 px-4 md:col-span-2">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Professional Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {fieldIsPublic(viewingAlumni, 'isPositionPublic', 'is_position_public') && <div><label className="text-sm font-medium text-gray-500">Current Position</label><p className="text-gray-900">{viewingAlumni.current_position || viewingAlumni.currentPosition || 'Not specified'}</p></div>}
-                      {fieldIsPublic(viewingAlumni, 'isCompanyPublic', 'is_company_public') && <div><label className="text-sm font-medium text-gray-500">Company</label><p className="text-gray-900">{viewingAlumni.company || 'Not specified'}</p></div>}
-                      {fieldIsPublic(viewingAlumni, 'isLocationPublic', 'is_location_public') && <div><label className="text-sm font-medium text-gray-500">Location</label><p className="text-gray-900">{viewingAlumni.location || 'Not specified'}</p></div>}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                      {fieldIsPublic(viewingAlumni, 'isPositionPublic', 'is_position_public') && <div><label className="text-sm font-medium text-gray-500">Current Position</label><p className="text-gray-900 mt-1">{viewingAlumni.current_position || viewingAlumni.currentPosition || 'Not specified'}</p></div>}
+                      {fieldIsPublic(viewingAlumni, 'isCompanyPublic', 'is_company_public') && <div><label className="text-sm font-medium text-gray-500">Company</label><p className="text-gray-900 mt-1">{viewingAlumni.company || 'Not specified'}</p></div>}
+                      {fieldIsPublic(viewingAlumni, 'isLocationPublic', 'is_location_public') && <div><label className="text-sm font-medium text-gray-500">Location</label><p className="text-gray-900 mt-1">{viewingAlumni.location || 'Not specified'}</p></div>}
                     </div>
                   </div>
                   {fieldIsPublic(viewingAlumni, 'isSkillsPublic', 'is_skills_public') && viewingAlumni.skills && (
@@ -1245,12 +1247,62 @@ const AlumniDirectory = () => {
                     </div>
                   )}
                   {/* Achievements */}
-                  <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
-                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>Achievements</h3></div>
-                    <div className="space-y-3">{achievements.length === 0 ? <p className="text-gray-500 text-sm">No achievements recorded yet.</p> : achievements.map(a => (<div key={a.id} className="rounded-2xl border border-transparent bg-transparent p-4"><div className="flex justify-between items-start"><div className="flex-1"><h4 className="font-medium text-gray-900">{a.title}</h4>{a.description && <p className="text-sm text-gray-600 mt-1" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.description}</p>}{a.date && <p className="text-xs text-gray-500 mt-2">{new Date(a.date).toLocaleDateString()}</p>}</div>{isTeacher && <button onClick={() => handleDeleteAchievement(a.id)} className="text-red-600 hover:text-red-800 ml-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}</div></div>))}</div>
+                  <div className="rounded-lg border border-transparent bg-transparent py-3 px-4 md:col-span-2">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                        </svg>
+                        Achievements
+                      </h3>
+                    </div>
+                    <div className="space-y-3">
+                      {achievements.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No achievements recorded yet.</p>
+                      ) : (
+                        achievements.map(a => {
+                          const isExpanded = !!expandedAchievements[a.id];
+                          return (
+                            <div key={a.id} className="rounded-2xl border border-transparent bg-transparent p-4">
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900">{a.title}</h4>
+                                  {a.description && (
+                                    <div>
+                                      <p 
+                                        className="text-sm text-gray-600 mt-1" 
+                                        style={isExpanded ? { whiteSpace: 'pre-wrap' } : { display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                                      >
+                                        {a.description}
+                                      </p>
+                                      {a.description.length > 120 && (
+                                        <button 
+                                          onClick={() => setExpandedAchievements(prev => ({ ...prev, [a.id]: !prev[a.id] }))}
+                                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 mt-1 focus:outline-none"
+                                        >
+                                          {isExpanded ? 'Read Less' : 'Read More'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {a.date && <p className="text-xs text-gray-500 mt-2">{new Date(a.date).toLocaleDateString()}</p>}
+                                </div>
+                                {isTeacher && (
+                                  <button onClick={() => handleDeleteAchievement(a.id)} className="text-red-600 hover:text-red-800 ml-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
                   {/* Employment */}
-                  {canViewEmploymentHistory(viewingAlumni) && <div className="rounded-lg border border-transparent bg-transparent p-6 md:col-span-2">
+                  {canViewEmploymentHistory(viewingAlumni) && <div className="rounded-lg border border-transparent bg-transparent py-3 px-4 md:col-span-2">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                       <h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3>
                       {isOwnAlumniProfile(viewingAlumni) && (

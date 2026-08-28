@@ -768,7 +768,14 @@ const AlumniProfile = () => {
                   <h4 className="text-lg font-semibold text-gray-900">{achievement.title}</h4>
                   <p className="text-blue-600 font-medium">{achievement.issuer}</p>
                   <p className="text-gray-500 text-sm">{achievement.date}</p>
-                  <p className="text-gray-700 mt-2" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{achievement.description}</p>
+                  {achievement.description && (
+                    <>
+                      <p className="text-gray-700 mt-2" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{achievement.description}</p>
+                      {achievement.description.length > 120 && (
+                        <span className="text-sm font-semibold text-blue-600 hover:text-blue-800 mt-2 inline-block">Read more →</span>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             ))}
