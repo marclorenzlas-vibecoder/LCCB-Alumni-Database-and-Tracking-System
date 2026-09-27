@@ -220,19 +220,6 @@ const ManageUsers = () => {
     return matchesSearch;
   });
 
-  if (loading) {
-    return (
-      <UserLayout>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-sky-600" />
-            <p className="mt-4 text-slate-600">Loading users...</p>
-          </div>
-        </div>
-      </UserLayout>
-    );
-  }
-
   return (
     <UserLayout>
       <div>
@@ -305,7 +292,32 @@ const ManageUsers = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {filteredUsers.length > 0 ? (
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <tr key={`user-skel-${index}`} className="animate-pulse">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-slate-200 shrink-0"></div>
+                          <div className="h-4 w-28 bg-slate-200 rounded"></div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-36 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-5 w-16 bg-slate-200 rounded-full"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-5 w-16 bg-slate-200 rounded-full"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-right">
+                        <div className="flex justify-end">
+                          <div className="h-8 w-16 bg-slate-200 rounded-lg"></div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : filteredUsers.length > 0 ? (
                   filteredUsers.map((user) => (
                     <tr key={`${user.id}-${user.alumniId || 'na'}`} className={`transition-all duration-150 ${user.is_blocked ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                       <td className="px-4 py-4 whitespace-nowrap">

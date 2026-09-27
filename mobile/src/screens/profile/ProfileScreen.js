@@ -498,7 +498,15 @@ export default function ProfileScreen({ navigation, user, setUser }) {
       await refreshProfile();
       // Emit event to notify other screens about data change
       dataEmitter.emit('profileUpdated', nextUser);
-      Alert.alert('Saved', 'Profile updated successfully.');
+      const blockedKeys = Object.keys(response?.blockedFields || {});
+      if (blockedKeys.length > 0) {
+        Alert.alert(
+          'Saved with notice',
+          `Profile saved, but the following field(s) were skipped due to active cooldown: ${blockedKeys.join(', ')}.`
+        );
+      } else {
+        Alert.alert('Saved', 'Profile updated successfully.');
+      }
     } catch (error) {
       Alert.alert('Unable to save', error?.response?.data?.error || 'Profile update failed.');
     } finally {

@@ -15,6 +15,7 @@ const FilterMenu = ({
   panelTitle,
   panelSubtitle = 'Choose an option',
   panelWidthClass = 'w-80',
+  menuWidthClass,
   panelMaxHeightClass = 'max-h-80',
   alignClass = 'right-0'
 }) => {
@@ -40,15 +41,15 @@ const FilterMenu = ({
     : icon;
 
   return (
-    <div ref={menuRef} className={`relative ${panelWidthClass}`}>
+    <div ref={menuRef} className={`relative ${menuWidthClass || panelWidthClass}`}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`flex w-full items-center justify-between gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm transition hover:border-gray-400 ${hasSelection ? 'text-gray-900' : 'text-gray-700'} focus:outline-none focus:border-blue-500 focus:ring-0`}
+        className={`flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm transition hover:border-gray-400 ${hasSelection ? 'text-gray-900' : 'text-gray-700'} focus:outline-none focus:border-blue-500 focus:ring-0`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className="flex min-w-0 items-center gap-3">
+        <span className="flex min-w-0 items-center gap-2">
           <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent bg-transparent text-blue-600">
             {renderedIcon}
           </span>

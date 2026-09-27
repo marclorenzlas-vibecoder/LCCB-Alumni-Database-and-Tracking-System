@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const FALLBACK_HOST = '192.168.5.248';
 const FALLBACK_PORT = '5001';
@@ -7,6 +8,10 @@ const getBaseUrl = () => {
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (envUrl) {
     return envUrl.replace(/\/$/, '');
+  }
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    return `http://${window.location.hostname}:${FALLBACK_PORT}/api`;
   }
 
   const debuggerHost = Constants?.expoConfig?.hostUri || Constants?.manifest2?.extra?.expoClient?.hostUri;
@@ -20,3 +25,4 @@ const getBaseUrl = () => {
 
 export const API_BASE_URL = getBaseUrl();
 export const API_ORIGIN = API_BASE_URL.replace(/\/api$/, '');
+

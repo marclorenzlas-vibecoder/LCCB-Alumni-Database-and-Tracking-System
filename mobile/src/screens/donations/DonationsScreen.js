@@ -7,6 +7,7 @@ import ScreenContainer from '../../components/ScreenContainer';
 import SectionHeader from '../../components/SectionHeader';
 import { API_ORIGIN } from '../../config/api';
 import { donationService } from '../../services/donationService';
+import { realtimeClient } from '../../services/realtimeClient';
 import { extractDonationMeta } from '../../utils/donationMeta';
 import { formatCurrency, formatDate, imageUrl } from '../../utils/formatters';
 
@@ -38,8 +39,25 @@ export default function DonationsScreen({ navigation, user }) {
         if (mounted) setLoading(false);
       });
 
+      const unsubCreated = realtimeClient.subscribe('donation.created', () => {
+        if (mounted) loadDonations().catch(() => {});
+      });
+      const unsubUpdated = realtimeClient.subscribe('donation.updated', () => {
+        if (mounted) loadDonations().catch(() => {});
+      });
+      const unsubDeleted = realtimeClient.subscribe('donation.deleted', () => {
+        if (mounted) loadDonations().catch(() => {});
+      });
+      const unsubContributed = realtimeClient.subscribe('donation.contributed', () => {
+        if (mounted) loadDonations().catch(() => {});
+      });
+
       return () => {
         mounted = false;
+        unsubCreated();
+        unsubUpdated();
+        unsubDeleted();
+        unsubContributed();
       };
     }, [loadDonations])
   );

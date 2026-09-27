@@ -300,9 +300,10 @@ router.get("/", softAuth, async (req, res) => {
     };
 
     const search = req.query.search ? String(req.query.search).trim() : '';
+    const isAll = req.query.all === 'true';
 
-    // Apply batch scope restriction ONLY if regular alumni and no active search term
-    if (!isStaff && !search) {
+    // Apply batch scope restriction ONLY if regular alumni, not requesting all, and no active search term
+    if (!isStaff && !search && !isAll) {
       let sharingAlumniIds = [];
       if (userBatches.length > 0) {
         try {
@@ -315,11 +316,14 @@ router.get("/", softAuth, async (req, res) => {
           console.warn('Failed to load sharing alumni ids:', err.message);
         }
       }
-      where.OR = [
-        ...(reqUserId ? [{ user_id: reqUserId }] : []),
-        { batch: { in: userBatches } },
-        { id: { in: sharingAlumniIds } }
-      ];
+      where.AND = where.AND || [];
+      where.AND.push({
+        OR: [
+          ...(reqUserId ? [{ user_id: reqUserId }] : []),
+          { batch: { in: userBatches } },
+          { id: { in: sharingAlumniIds } }
+        ]
+      });
     }
 
     // Apply specific filters
@@ -360,8 +364,6 @@ router.get("/", softAuth, async (req, res) => {
 
     // 2. Count total matches
     const totalAlumni = await prisma.alumni.count({ where });
-
-    const isAll = req.query.all === 'true';
 
     // 3. Pagination calculation
     let limit = parseInt(req.query.limit, 10) || 30;

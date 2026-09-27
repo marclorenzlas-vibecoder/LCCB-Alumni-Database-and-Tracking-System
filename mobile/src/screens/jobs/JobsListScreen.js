@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
 import { jobService } from '../../services/jobService';
+import { realtimeClient } from '../../services/realtimeClient';
 import { timeAgo } from '../../utils/formatters';
 
 const departments = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
@@ -163,6 +164,7 @@ function JobRow({ job, onPress }) {
 export default function JobsListScreen({ navigation, user }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
@@ -187,11 +189,34 @@ export default function JobsListScreen({ navigation, user }) {
         .finally(() => {
           if (mounted) setLoading(false);
         });
+
+      const unsubCreated = realtimeClient.subscribe('job.created', () => {
+        if (mounted) loadData().catch(() => {});
+      });
+      const unsubUpdated = realtimeClient.subscribe('job.updated', () => {
+        if (mounted) loadData().catch(() => {});
+      });
+      const unsubDeleted = realtimeClient.subscribe('job.deleted', () => {
+        if (mounted) loadData().catch(() => {});
+      });
+
       return () => {
         mounted = false;
+        unsubCreated();
+        unsubUpdated();
+        unsubDeleted();
       };
     }, [loadData])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const uniqueLocations = useMemo(() => [...new Set(jobs.map(j => j.location).filter(Boolean))], [jobs]);
 
@@ -243,7 +268,11 @@ export default function JobsListScreen({ navigation, user }) {
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <Text style={styles.screenTitle}>Job Board</Text>
         <Text style={styles.screenSubtitle}>Explore openings posted across alumni network.</Text>
 

@@ -28,6 +28,9 @@ const createEducationEntry = (entry = {}) => ({
 });
 
 const ALUMNI_PAGE_SIZE = 30;
+const ALUMNI_CACHE_LIST_KEY = 'lccb_cached_alumni_list';
+const ALUMNI_CACHE_COUNT_KEY = 'lccb_alumni_cached_count';
+
 
 const getPaginationItems = (currentPage, totalPages) => {
   if (totalPages <= 6) {
@@ -251,7 +254,30 @@ const AlumniDirectory = () => {
   };
 
   // Core data
-  const [alumni, setAlumni] = useState([]);
+  const [alumni, setAlumni] = useState(() => {
+    try {
+      const cached = localStorage.getItem(ALUMNI_CACHE_LIST_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return [];
+  });
+  const [cachedAlumniCount, setCachedAlumniCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ALUMNI_CACHE_COUNT_KEY);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 10;
+  });
   const [userStatuses, setUserStatuses] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -383,6 +409,11 @@ const AlumniDirectory = () => {
     try {
       const data = await alumniService.getAllAlumni();
       setAlumni(data);
+      try {
+        localStorage.setItem(ALUMNI_CACHE_LIST_KEY, JSON.stringify(data));
+      } catch (e) {
+        // ignore storage quota
+      }
     } catch (e) {
       setError(e.message || 'Failed to load alumni');
     } finally {
@@ -461,11 +492,34 @@ const AlumniDirectory = () => {
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      data = data.filter((a) =>
-        [a.firstName, a.lastName, a.course, a.email, a.company, a.location, a.graduationYear?.toString()].some(
-          (v) => v && v.toLowerCase().includes(term)
-        )
-      );
+      data = data.filter((a) => {
+        const itemBatches = [];
+        if (a.batch) itemBatches.push(String(a.batch), `batch ${a.batch}`);
+        if (a.educationHistory) {
+          a.educationHistory.forEach((edu) => {
+            if (edu.batch) itemBatches.push(String(edu.batch), `batch ${edu.batch}`);
+          });
+        }
+        const fullName = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+
+        return (
+          fullName.includes(term) ||
+          [
+            a.firstName,
+            a.middleName,
+            a.lastName,
+            a.course,
+            a.email,
+            a.company,
+            a.location,
+            a.currentPosition,
+            a.level,
+            a.skills,
+            a.graduationYear?.toString(),
+            ...itemBatches,
+          ].some((v) => v && v.toString().toLowerCase().includes(term))
+        );
+      });
     }
 
     if (selectedLevel) {
@@ -487,8 +541,15 @@ const AlumniDirectory = () => {
       if (batchValue !== null && batchValue !== undefined && batchValue !== '') {
         set.add(String(batchValue));
       }
+      if (item.educationHistory) {
+        item.educationHistory.forEach((edu) => {
+          if (edu.batch !== null && edu.batch !== undefined && edu.batch !== '') {
+            set.add(String(edu.batch));
+          }
+        });
+      }
     });
-    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+    return Array.from(set).sort((a, b) => Number(b) - Number(a));
   }, [baseFilteredAlumni]);
 
   useEffect(() => {
@@ -559,6 +620,41 @@ const AlumniDirectory = () => {
   const pageStartItem = filteredAlumni.length === 0 ? 0 : (currentPage - 1) * ALUMNI_PAGE_SIZE + 1;
   const pageEndItem = Math.min(currentPage * ALUMNI_PAGE_SIZE, filteredAlumni.length);
   const usesAlumniPagination = filteredAlumni.length > ALUMNI_PAGE_SIZE;
+
+  // Track active alumni count and persist to cache
+  useEffect(() => {
+    const activeCount = paginatedAlumni.length || filteredAlumni.length;
+    if (activeCount > 0) {
+      setCachedAlumniCount(activeCount);
+      try {
+        localStorage.setItem(ALUMNI_CACHE_COUNT_KEY, String(activeCount));
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [paginatedAlumni.length, filteredAlumni.length]);
+
+  // Dynamically determine exact skeleton count to match actual alumni on page
+  const skeletonCount = useMemo(() => {
+    if (isPageChanging) {
+      const pageItems = Math.min(
+        ALUMNI_PAGE_SIZE,
+        Math.max(1, filteredAlumni.length - (currentPage - 1) * ALUMNI_PAGE_SIZE)
+      );
+      return pageItems;
+    }
+    if (paginatedAlumni.length > 0) {
+      return paginatedAlumni.length;
+    }
+    if (filteredAlumni.length > 0) {
+      return Math.min(ALUMNI_PAGE_SIZE, filteredAlumni.length);
+    }
+    if (cachedAlumniCount > 0) {
+      return cachedAlumniCount;
+    }
+    return 10;
+  }, [isPageChanging, paginatedAlumni.length, filteredAlumni.length, currentPage, cachedAlumniCount]);
+
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1007,9 +1103,9 @@ const AlumniDirectory = () => {
     <button
       type="button"
       onClick={() => { setSelectedLevel(''); setSelectedBatch(''); setSelectedGroup(''); setSearchTerm(''); }}
-      className="alumni-admin-clear-filters-btn inline-flex h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+      className="inline-flex h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3.5 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
     >
-      <span className="truncate">Clear Filters</span>
+      <span className="whitespace-nowrap">Clear Filters</span>
     </button>
   );
   const batchOfficersButton = (
@@ -1020,15 +1116,15 @@ const AlumniDirectory = () => {
         setShowOfficersModal(true);
       }}
       disabled={!selectedBatch}
-      className={`alumni-admin-batch-officers-btn inline-flex h-[46px] shrink-0 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${selectedBatch
+      className={`inline-flex h-[42px] shrink-0 items-center justify-center gap-2 rounded-lg border px-3.5 text-sm font-semibold shadow-sm transition ${selectedBatch
           ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
           : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
         }`}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 shrink-0">
         <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
       </svg>
-      <span className="min-w-0 truncate">{selectedBatch ? `Batch ${selectedBatch} Officers (${batchOfficers.length})` : 'Batch Officers'}</span>
+      <span className="whitespace-nowrap">{selectedBatch ? `Batch ${selectedBatch} Officers (${batchOfficers.length})` : 'Batch Officers'}</span>
     </button>
   );
 
@@ -1879,38 +1975,12 @@ const AlumniDirectory = () => {
             </div>
 
             {/* Row 2: Filter Dropdowns + Actions */}
-            <div className="alumni-admin-filter-row flex w-full flex-wrap items-center gap-2 xl:flex-nowrap">
-              <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
-                <div className="hidden md:block">
-                  <FilterMenu
-                    menuRef={levelMenuRef}
-                    isOpen={showLevelMenu}
-                    setIsOpen={setShowLevelMenu}
-                    buttonLabel="All Levels"
-                    selectedLabel={getLevelLabel(selectedLevel)}
-                    selectedValue={selectedLevel}
-                    icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5zm0 8l7.5-4.167V15L12 20l-7.5-5.167V6.833L12 11zm0 2.25L7.5 12v2.5L12 17l4.5-2.5V12L12 13.25z" /></svg>}
-                    sections={[{ key: 'levels', title: 'Levels', items: sharedLevelOptions.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label })) }]}
-                    onSelect={(value) => {
-                      setSelectedLevel((prev) => {
-                        const nextLevel = prev === value ? '' : value;
-                        const nextSections = buildRegisterCourseSections(nextLevel);
-                        const groupStillAvailable = nextSections.some((section) =>
-                          section.items.some((item) => item.value === selectedGroup)
-                        );
-                        if (!groupStillAvailable) {
-                          setSelectedGroup('');
-                        }
-                        return nextLevel;
-                      });
-                      setShowLevelMenu(false);
-                    }}
-                    panelTitle="All Levels"
-                    panelWidthClass="alumni-admin-level-filter"
-                    alignClass="right-0"
-                  />
-                </div>
-                <MobileFilterButton
+            <div className="flex w-full flex-wrap items-center gap-2.5">
+              <div className="hidden md:block">
+                <FilterMenu
+                  menuRef={levelMenuRef}
+                  isOpen={showLevelMenu}
+                  setIsOpen={setShowLevelMenu}
                   buttonLabel="All Levels"
                   selectedLabel={getLevelLabel(selectedLevel)}
                   selectedValue={selectedLevel}
@@ -1928,77 +1998,110 @@ const AlumniDirectory = () => {
                       }
                       return nextLevel;
                     });
+                    setShowLevelMenu(false);
                   }}
                   panelTitle="All Levels"
+                  menuWidthClass="w-44"
+                  panelWidthClass="w-56"
+                  alignClass="left-0"
                 />
-                <div className="hidden md:block">
-                  <FilterMenu
-                    menuRef={batchMenuRef}
-                    isOpen={showBatchMenu}
-                    setIsOpen={setShowBatchMenu}
-                    buttonLabel="All Batches"
-                    selectedLabel={selectedBatch ? String(selectedBatch) : 'All Batches'}
-                    selectedValue={selectedBatch}
-                    icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a1 1 0 011-1h8a1 1 0 011 1v2H5V4zm0 4h10v7a1 1 0 01-1 1H6a1 1 0 01-1-1V8zm3 2a1 1 0 100 2h4a1 1 0 100-2H8z" /></svg>}
-                    sections={[{ key: 'batches', title: 'Batches', items: [...batches.map((batch) => ({ value: String(batch), label: String(batch) }))] }]}
-                    onSelect={(value) => {
-                      setSelectedBatch((prev) => (prev === value ? '' : value));
-                      setShowBatchMenu(false);
-                    }}
-                    panelTitle="All Batches"
-                    panelWidthClass="alumni-admin-batch-filter"
-                    alignClass="right-0"
-                  />
-                </div>
-                <MobileFilterButton
+              </div>
+              <MobileFilterButton
+                buttonLabel="All Levels"
+                selectedLabel={getLevelLabel(selectedLevel)}
+                selectedValue={selectedLevel}
+                icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5zm0 8l7.5-4.167V15L12 20l-7.5-5.167V6.833L12 11zm0 2.25L7.5 12v2.5L12 17l4.5-2.5V12L12 13.25z" /></svg>}
+                sections={[{ key: 'levels', title: 'Levels', items: sharedLevelOptions.filter((option) => option.value).map((option) => ({ value: option.value, label: option.label })) }]}
+                onSelect={(value) => {
+                  setSelectedLevel((prev) => {
+                    const nextLevel = prev === value ? '' : value;
+                    const nextSections = buildRegisterCourseSections(nextLevel);
+                    const groupStillAvailable = nextSections.some((section) =>
+                      section.items.some((item) => item.value === selectedGroup)
+                    );
+                    if (!groupStillAvailable) {
+                      setSelectedGroup('');
+                    }
+                    return nextLevel;
+                  });
+                }}
+                panelTitle="All Levels"
+              />
+              <div className="hidden md:block">
+                <FilterMenu
+                  menuRef={batchMenuRef}
+                  isOpen={showBatchMenu}
+                  setIsOpen={setShowBatchMenu}
                   buttonLabel="All Batches"
                   selectedLabel={selectedBatch ? String(selectedBatch) : 'All Batches'}
                   selectedValue={selectedBatch}
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a1 1 0 011-1h8a1 1 0 011 1v2H5V4zm0 4h10v7a1 1 0 01-1 1H6a1 1 0 01-1-1V8zm3 2a1 1 0 100 2h4a1 1 0 100-2H8z" /></svg>}
                   sections={[{ key: 'batches', title: 'Batches', items: [...batches.map((batch) => ({ value: String(batch), label: String(batch) }))] }]}
-                  onSelect={(value) => setSelectedBatch((prev) => (prev === value ? '' : value))}
+                  onSelect={(value) => {
+                    setSelectedBatch((prev) => (prev === value ? '' : value));
+                    setShowBatchMenu(false);
+                  }}
                   panelTitle="All Batches"
+                  menuWidthClass="w-44"
+                  panelWidthClass="w-48"
+                  alignClass="left-0"
                 />
-                <div className="hidden md:block">
-                  <FilterMenu
-                    menuRef={groupMenuRef}
-                    isOpen={showGroupMenu}
-                    setIsOpen={setShowGroupMenu}
-                    buttonLabel="All Program"
-                    selectedLabel={getGroupLabel(selectedGroup)}
-                    selectedValue={selectedGroup}
-                    icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
-                    sections={filterCourseSections}
-                    onSelect={(value) => {
-                      setSelectedGroup((prev) => (prev === value ? '' : value));
-                      setShowGroupMenu(false);
-                    }}
-                    panelTitle={selectedLevel ? `${getLevelLabel(selectedLevel)} Programs` : 'All Program'}
-                    panelWidthClass="alumni-admin-program-filter"
-                    alignClass="right-0"
-                  />
-                </div>
-                <MobileFilterButton
+              </div>
+              <MobileFilterButton
+                buttonLabel="All Batches"
+                selectedLabel={selectedBatch ? String(selectedBatch) : 'All Batches'}
+                selectedValue={selectedBatch}
+                icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a1 1 0 011-1h8a1 1 0 011 1v2H5V4zm0 4h10v7a1 1 0 01-1 1H6a1 1 0 01-1-1V8zm3 2a1 1 0 100 2h4a1 1 0 100-2H8z" /></svg>}
+                sections={[{ key: 'batches', title: 'Batches', items: [...batches.map((batch) => ({ value: String(batch), label: String(batch) }))] }]}
+                onSelect={(value) => setSelectedBatch((prev) => (prev === value ? '' : value))}
+                panelTitle="All Batches"
+              />
+              <div className="hidden md:block">
+                <FilterMenu
+                  menuRef={groupMenuRef}
+                  isOpen={showGroupMenu}
+                  setIsOpen={setShowGroupMenu}
                   buttonLabel="All Program"
                   selectedLabel={getGroupLabel(selectedGroup)}
                   selectedValue={selectedGroup}
                   icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
                   sections={filterCourseSections}
-                  onSelect={(value) => setSelectedGroup((prev) => (prev === value ? '' : value))}
+                  onSelect={(value) => {
+                    setSelectedGroup((prev) => (prev === value ? '' : value));
+                    setShowGroupMenu(false);
+                  }}
                   panelTitle={selectedLevel ? `${getLevelLabel(selectedLevel)} Programs` : 'All Program'}
+                  menuWidthClass="w-48 sm:w-56"
+                  panelWidthClass="w-80 sm:w-96"
+                  alignClass="left-0"
                 />
-                {isTeacher && batchOfficersButton}
               </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2 xl:flex-nowrap">
-                {!isTeacher && batchOfficersButton}
-                {isTeacher && (
-                  <button type="button" onClick={generateCsv} className="alumni-admin-generate-csv-btn inline-flex h-[46px] shrink-0 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 16v-4m0 0V8m0 4h4m-4 0H8M5 20h14a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-4.828-4.828A2 2 0 0014.172 2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                    <span className="min-w-0 truncate">Generate List (CSV)</span>
-                  </button>
-                )}
-                {clearFiltersButton}
-              </div>
+              <MobileFilterButton
+                buttonLabel="All Program"
+                selectedLabel={getGroupLabel(selectedGroup)}
+                selectedValue={selectedGroup}
+                icon={<svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a3 3 0 100 6 3 3 0 000-6zm-5 8a3 3 0 100 6 3 3 0 000-6zm10 0a3 3 0 100 6 3 3 0 000-6z" /></svg>}
+                sections={filterCourseSections}
+                onSelect={(value) => setSelectedGroup((prev) => (prev === value ? '' : value))}
+                panelTitle={selectedLevel ? `${getLevelLabel(selectedLevel)} Programs` : 'All Program'}
+              />
+
+              {batchOfficersButton}
+
+              {isTeacher && (
+                <button
+                  type="button"
+                  onClick={generateCsv}
+                  className="inline-flex h-[42px] shrink-0 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 shrink-0">
+                    <path d="M12 16v-4m0 0V8m0 4h4m-4 0H8M5 20h14a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-4.828-4.828A2 2 0 0014.172 2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <span className="whitespace-nowrap">Generate List (CSV)</span>
+                </button>
+              )}
+
+              {clearFiltersButton}
             </div>
           </div>
         </div>
@@ -2015,7 +2118,7 @@ const AlumniDirectory = () => {
         <div className="grid auto-rows-[104px] content-start items-stretch gap-3 px-4 py-4 sm:px-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           {(loading || isPageChanging) && (
             <>
-              {Array.from({ length: 12 }).map((_, index) => (
+              {Array.from({ length: skeletonCount }).map((_, index) => (
                 <div key={`skel-${index}`} className="flex h-full min-h-[104px] w-full items-center gap-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm animate-pulse">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="h-14 w-14 shrink-0 rounded-full bg-slate-200"></div>

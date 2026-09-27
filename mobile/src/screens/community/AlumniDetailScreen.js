@@ -123,6 +123,7 @@ export default function AlumniDetailScreen({ route, navigation }) {
   const [careers, setCareers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [imgErrored, setImgErrored] = useState(false);
+  const [expandedAchievements, setExpandedAchievements] = useState({});
 
   const openExternalLink = async (rawUrl) => {
     if (!rawUrl) return;
@@ -508,25 +509,44 @@ export default function AlumniDetailScreen({ route, navigation }) {
           {achievements.length === 0 ? (
             <Text style={styles.emptyText}>No achievements yet.</Text>
           ) : (
-            achievements.slice(0, 3).map((item) => (
-              <Pressable
-                key={item.id}
-                style={styles.cardItem}
-                onPress={() => navigation.navigate('AlumniAchievementDetail', { achievement: item })}
-              >
-                <Text style={styles.cardItemTitle}>
-                  {item.title || "Untitled achievement"}
-                </Text>
-                {item.description ? (
-                  <Text style={styles.cardItemDesc} numberOfLines={3} ellipsizeMode="tail">{item.description}</Text>
-                ) : null}
-                {item.date ? (
-                  <Text style={styles.cardItemMeta}>
-                    {new Date(item.date).toLocaleDateString()}
-                  </Text>
-                ) : null}
-              </Pressable>
-            ))
+            achievements.slice(0, 5).map((item) => {
+              const isExpanded = !!expandedAchievements[item.id];
+              const isLong = String(item.description || '').length > 100;
+              return (
+                <View key={item.id} style={styles.cardItem}>
+                  <Pressable onPress={() => navigation.navigate('AlumniAchievementDetail', { achievement: item })}>
+                    <Text style={styles.cardItemTitle}>
+                      {item.title || "Untitled achievement"}
+                    </Text>
+                  </Pressable>
+                  {item.description ? (
+                    <View>
+                      <Text
+                        style={styles.cardItemDesc}
+                        numberOfLines={isExpanded ? undefined : 3}
+                        ellipsizeMode="tail"
+                      >
+                        {item.description}
+                      </Text>
+                      {isLong ? (
+                        <Pressable
+                          hitSlop={8}
+                          onPress={() => setExpandedAchievements((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                          style={styles.readMoreBtn}
+                        >
+                          <Text style={styles.readMoreText}>{isExpanded ? 'Read Less' : 'Read More'}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {item.date ? (
+                    <Text style={styles.cardItemMeta}>
+                      {new Date(item.date).toLocaleDateString()}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })
           )}
         </View>
 
@@ -784,6 +804,16 @@ const styles = StyleSheet.create({
   cardItemMeta: {
     fontSize: 12,
     color: "#64748b",
+  },
+  readMoreBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    marginBottom: 4
+  },
+  readMoreText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb'
   },
   companyLink: {
     fontSize: 14,

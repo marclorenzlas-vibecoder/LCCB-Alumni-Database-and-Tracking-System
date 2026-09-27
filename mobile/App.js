@@ -1,14 +1,12 @@
 import "react-native-gesture-handler";
 import React from "react";
-import {
-  NavigationContainer,
-  createNavigationContainerRef,
-} from "@react-navigation/native";
+import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import AppNavigator from "./src/navigation/AppNavigator";
 import AppBackHandler from "./src/navigation/AppBackHandler";
+import { navigationRef } from "./src/navigation/navigationRef";
 
-export const navigationRef = createNavigationContainerRef();
+export { navigationRef };
 
 export default function App() {
   return (

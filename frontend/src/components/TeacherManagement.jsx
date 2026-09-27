@@ -7,7 +7,7 @@ const TeacherManagement = () => {
   const [teachers, setTeachers] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
@@ -32,6 +32,7 @@ const TeacherManagement = () => {
 
   const fetchTeachers = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/auth/teachers`, {
         headers: {
@@ -39,9 +40,11 @@ const TeacherManagement = () => {
         }
       });
       const data = await response.json();
-      setTeachers(data);
+      setTeachers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching teachers:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -221,34 +224,65 @@ const TeacherManagement = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {teachers.map((teacher) => (
-                  <tr key={teacher.id} className="hover:bg-gray-50 transition-all duration-150">
-                    <td className="px-4 py-4 text-sm font-medium text-gray-900">{teacher.username}</td>
-                    <td className="px-4 py-4 text-sm text-gray-600">{teacher.email}</td>
-                    <td className="px-4 py-4 text-sm text-gray-600">{teacher.department || 'N/A'}</td>
-                    <td className="px-4 py-4 text-sm">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        {teacher.role || 'ADMIN'}
-                      </span>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <tr key={`teacher-skel-${index}`} className="animate-pulse">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-32 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-40 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-24 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-5 w-16 bg-slate-200 rounded-full"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-right">
+                        <div className="flex justify-end gap-2">
+                          <div className="h-8 w-14 bg-slate-200 rounded-lg"></div>
+                          <div className="h-8 w-16 bg-slate-200 rounded-lg"></div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : teachers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">
+                      No teacher accounts found.
                     </td>
-                    <td className="px-4 py-4 text-right text-sm font-medium">
-                      <div className="flex justify-end gap-2">
+                  </tr>
+                ) : (
+                  teachers.map((teacher) => (
+                    <tr key={teacher.id} className="hover:bg-gray-50 transition-all duration-150">
+                      <td className="px-4 py-4 text-sm font-medium text-gray-900">{teacher.username}</td>
+                      <td className="px-4 py-4 text-sm text-gray-600">{teacher.email}</td>
+                      <td className="px-4 py-4 text-sm text-gray-600">{teacher.department || 'N/A'}</td>
+                      <td className="px-4 py-4 text-sm">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          {teacher.role || 'ADMIN'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-right text-sm font-medium">
+                        <div className="flex justify-end gap-2">
                           <button
                             onClick={() => openEditModal(teacher)}
                             className="inline-flex items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800"
                           >
                             Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(teacher.id, teacher.username)}
-                          className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(teacher.id, teacher.username)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

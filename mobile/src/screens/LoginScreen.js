@@ -486,8 +486,10 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline'
   },
   statusBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24
@@ -500,7 +502,12 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     backgroundColor: '#fff',
     padding: 24,
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10
   },
   successIcon: {
     width: 54,

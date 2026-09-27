@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
+const { broadcastUpdate } = require('../services/realtimeService');
 
 const prisma = require('../config/prisma');
 const router = express.Router();
@@ -237,6 +238,8 @@ router.post('/', authenticateToken, async (req, res) => {
       details: { company: job.company, location: job.location }
     });
 
+    broadcastUpdate('job.created', { jobId: job.id });
+
     res.status(201).json(job);
   } catch (error) {
     console.error('Error creating job posting:', error);
@@ -336,6 +339,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     });
 
+    broadcastUpdate('job.updated', { jobId: job.id });
+
     res.json(job);
   } catch (error) {
     console.error('Error updating job posting:', error);
@@ -382,6 +387,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         }
       }
     });
+
+    broadcastUpdate('job.deleted', { jobId: Number(id) });
 
     res.json({ message: 'Job posting deleted successfully' });
   } catch (error) {

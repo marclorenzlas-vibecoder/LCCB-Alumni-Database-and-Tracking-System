@@ -743,6 +743,8 @@ router.post('/', flexibleAuthMiddleware, upload.fields([
       details: { amount: Number(donation.amount), goal: donation.goal ? Number(donation.goal) : null }
     });
 
+    broadcastUpdate('donation.created', { donationId: donation.id });
+
     res.status(201).json(donation);
   } catch (error) {
     console.error('Error creating donation:', error);
@@ -1020,6 +1022,9 @@ router.post('/:id/contribute', flexibleAuthMiddleware, uploadContributionFiles, 
       console.error('Error creating donation notification:', notificationError);
     }
 
+    broadcastUpdate('donation.contributed', { donationId: Number(id) });
+    broadcastUpdate('donation.updated', { donationId: Number(id) });
+
     res.json(updatedCampaign);
   } catch (error) {
     console.error('Error contributing to donation campaign:', error);
@@ -1113,6 +1118,8 @@ router.put('/:id', teacherAuthMiddleware, upload.fields([
       }
     });
 
+    broadcastUpdate('donation.updated', { donationId: donation.id });
+
     res.json(donation);
   } catch (error) {
     console.error('Error updating donation:', error);
@@ -1167,6 +1174,8 @@ router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
         }
       }
     });
+
+    broadcastUpdate('donation.deleted', { donationId: Number(id) });
 
     res.json({ message: 'Donation deleted successfully' });
   } catch (error) {

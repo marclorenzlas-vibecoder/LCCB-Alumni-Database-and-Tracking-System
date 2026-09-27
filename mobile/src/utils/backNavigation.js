@@ -1,5 +1,5 @@
 import { CommonActions } from '@react-navigation/native';
-import { navigationRef } from '../../App';
+import { navigationRef } from '../navigation/navigationRef';
 
 const MAIN_DIRECTORY_TABS = ['Home', 'Alumni', 'Events', 'Employment', 'Donations'];
 

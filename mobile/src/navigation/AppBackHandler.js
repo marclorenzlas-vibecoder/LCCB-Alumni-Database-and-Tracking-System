@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { BackHandler } from "react-native";
-import { navigationRef } from "../../App";
+import { navigationRef } from "./navigationRef";
 import { handleGlobalBackNavigation, getStackDepth } from "../utils/backNavigation";
 
 export default function AppBackHandler() {

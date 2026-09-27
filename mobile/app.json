@@ -14,10 +14,15 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#f5f5f5"
-      }
+      },
+      "package": "com.marclas.lccbalumnimobile"
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      "expo-status-bar",
+      "expo-video"
+    ]
   }
 }

@@ -514,16 +514,30 @@ export default function RegisterScreen({ navigation }) {
                 </Text>
 
                 <View style={styles.commitmentBox}>
-                  <Text style={styles.commitmentTitle}>Key points</Text>
-                  <Text style={styles.commitmentItem}>
-                    <Text style={styles.commitmentStrong}>Secure & limited access</Text> — encrypted storage, visible only to authorized staff.
-                  </Text>
-                  <Text style={styles.commitmentItem}>
-                    <Text style={styles.commitmentStrong}>Directory-safe by default</Text> — directory listing shows only name, batch, and program; contact info, address, and other sensitive fields stay hidden unless the user opts to reveal them individually.
-                  </Text>
-                  <Text style={styles.commitmentItem}>
-                    <Text style={styles.commitmentStrong}>No selling your data</Text> — used only for alumni tracking, events, jobs, and donations; never shared with outside organizations.
-                  </Text>
+                  <View>
+                    <Text style={styles.consentSectionTitle}>CONSENT DETAILS</Text>
+                    <Text style={styles.commitmentItem}>
+                      <Text style={styles.commitmentStrong}>1. Data Needed:</Text> We collect your personal info (name, email, birthday, phone), academic info (student ID, course, graduation year), and employment/career history.
+                    </Text>
+                    <Text style={styles.commitmentItem}>
+                      <Text style={styles.commitmentStrong}>2. Where/How Used:</Text> To verify alumni status, manage events, track employment alignment, facilitate donations, and maintain the alumni directory (where contact/sensitive details stay private by default).
+                    </Text>
+                    <Text style={styles.commitmentItem}>
+                      <Text style={styles.commitmentStrong}>3. How long it is kept:</Text> Your data will be kept securely as long as your alumni account is active or until you request its deletion.
+                    </Text>
+                  </View>
+
+                  <View style={styles.consentSectionDivider} />
+
+                  <View>
+                    <Text style={styles.consentSectionTitle}>SECURITY & PRIVACY KEY POINTS</Text>
+                    <Text style={styles.commitmentItem}>
+                      <Text style={styles.commitmentStrong}>Secure storage</Text> — encrypted database, visible only to authorized staff.
+                    </Text>
+                    <Text style={styles.commitmentItem}>
+                      <Text style={styles.commitmentStrong}>No selling of data</Text> — used only for alumni tracking, events, jobs, and donations; never shared with outside organizations.
+                    </Text>
+                  </View>
                 </View>
 
                 <Pressable
@@ -1029,6 +1043,19 @@ const styles = StyleSheet.create({
   commitmentStrong: {
     fontWeight: '800',
     color: '#0f172a'
+  },
+  consentSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1d4ed8',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 6
+  },
+  consentSectionDivider: {
+    height: 1,
+    backgroundColor: '#bfdbfe',
+    marginVertical: 4
   },
   consentTextWrap: {
     flex: 1

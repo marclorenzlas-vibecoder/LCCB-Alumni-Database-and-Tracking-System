@@ -793,32 +793,68 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         <div className="bg-white shadow sm:rounded-lg">
           <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Pending Requests ({pendingUsers.length})</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Pending Requests {loading ? '' : `(${pendingUsers.length})`}</h2>
               <p className="mt-1 text-sm text-gray-500">Approve or reject registrations after checking the submitted details.</p>
             </div>
           </div>
 
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">Loading pending registrations...</div>
-          ) : pendingUsers.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No pending registrations to review.</div>
-          ) : (
-            <div className="overflow-x-auto scrollbar-hide">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
+          <div className="overflow-x-auto scrollbar-hide">
+            <table className="min-w-full divide-y divide-gray-300">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">School ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Contact</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Level/Course</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Batch/Grad Year</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date Submitted</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <tr key={`pending-skel-${index}`} className="animate-pulse">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-32 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-20 bg-slate-200 rounded font-mono"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-36 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-24 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-24 bg-slate-200 rounded mb-1.5"></div>
+                        <div className="h-3 w-16 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-20 bg-slate-200 rounded mb-1.5"></div>
+                        <div className="h-3 w-16 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="h-4 w-20 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-right">
+                        <div className="flex flex-col gap-2">
+                          <div className="h-7 w-20 bg-slate-200 rounded-lg ml-auto"></div>
+                          <div className="h-7 w-20 bg-slate-200 rounded-lg ml-auto"></div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : pendingUsers.length === 0 ? (
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">School ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Contact</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Level/Course</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Batch/Grad Year</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date Submitted</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                    <td colSpan={8} className="p-12 text-center text-sm text-gray-500">
+                      No pending registrations to review.
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {pendingUsers.map((user) => {
+                ) : (
+                  pendingUsers.map((user) => {
                     const isVerified = verificationStatus[user.id]?.verified === true;
 
                     return (
@@ -861,11 +897,11 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                         </td>
                       </tr>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
         )}
       </div>

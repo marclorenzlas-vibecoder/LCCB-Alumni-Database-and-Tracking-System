@@ -148,71 +148,6 @@ body::-webkit-scrollbar,
         0 0 0 4px #d1d5db;
 }
 
-.alumni-admin-level-filter,
-.alumni-admin-batch-filter {
-    width: 12rem;
-}
-
-.alumni-admin-level-filter,
-.alumni-admin-batch-filter,
-.alumni-admin-program-filter,
-.alumni-admin-batch-officers-btn,
-.alumni-admin-generate-csv-btn,
-.alumni-admin-clear-filters-btn {
-    transition:
-        width 260ms cubic-bezier(0.4, 0, 0.2, 1),
-        max-width 260ms cubic-bezier(0.4, 0, 0.2, 1),
-        flex-basis 260ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.alumni-admin-program-filter {
-    width: 18rem;
-}
-
-.alumni-admin-batch-officers-btn {
-    width: 14rem;
-}
-
-.alumni-admin-generate-csv-btn {
-    width: 11rem;
-}
-
-.alumni-admin-clear-filters-btn {
-    width: 7rem;
-}
-
-.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-level-filter,
-.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-batch-filter {
-    width: 14rem;
-}
-
-.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-program-filter {
-    width: 24rem;
-}
-
-.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-batch-officers-btn {
-    width: 15rem;
-}
-
-.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-generate-csv-btn {
-    width: 14rem;
-}
-
-.app-sidebar-main[data-sidebar-collapsed="true"] .alumni-admin-clear-filters-btn {
-    width: 9rem;
-}
-
-@media (max-width: 1279px) {
-    .alumni-admin-level-filter,
-    .alumni-admin-batch-filter,
-    .alumni-admin-program-filter,
-    .alumni-admin-batch-officers-btn,
-    .alumni-admin-generate-csv-btn,
-    .alumni-admin-clear-filters-btn {
-        width: 100%;
-    }
-}
-
 @keyframes loginSuccessPop {
     0% {
         opacity: 0;
@@ -1485,7 +1420,7 @@ body::-webkit-scrollbar,
 
 /* Firebase chat motion */
 .lccb-chat-widget {
-    --lccb-chat-button-width: 132px;
+    --lccb-chat-button-width: 124px;
     display: inline-flex;
     pointer-events: none;
 }
@@ -1523,7 +1458,7 @@ body::-webkit-scrollbar,
 }
 
 .lccb-chat-toggle-button:hover {
-    width: 135px;
+    width: 124px;
     background: #1e40af;
     box-shadow: 0 12px 32px rgba(37, 99, 235, 0.45), 0 4px 10px rgba(0, 0, 0, 0.2);
     transform: translateY(-1px);

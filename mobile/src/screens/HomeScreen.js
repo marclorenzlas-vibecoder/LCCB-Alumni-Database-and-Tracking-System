@@ -6,6 +6,7 @@ import ScreenContainer from '../components/ScreenContainer';
 import LoadingState from '../components/LoadingState';
 import { API_ORIGIN } from '../config/api';
 import { dashboardService } from '../services/dashboardService';
+import { realtimeClient } from '../services/realtimeClient';
 import { getAlumniId } from '../utils/auth';
 import { formatDate, imageUrl } from '../utils/formatters';
 import AchievementVideoPreview from '../components/AchievementVideoPreview';
@@ -34,8 +35,39 @@ export default function HomeScreen({ navigation, user }) {
         .finally(() => {
           if (mounted) setLoading(false);
         });
+
+      const handleLiveUpdate = () => {
+        if (mounted) {
+          loadSnapshot().catch(() => {});
+        }
+      };
+
+      const unsubs = [
+        realtimeClient.subscribe('event.created', handleLiveUpdate),
+        realtimeClient.subscribe('event.updated', handleLiveUpdate),
+        realtimeClient.subscribe('event.deleted', handleLiveUpdate),
+        realtimeClient.subscribe('event.attendance.changed', handleLiveUpdate),
+        realtimeClient.subscribe('job.created', handleLiveUpdate),
+        realtimeClient.subscribe('job.updated', handleLiveUpdate),
+        realtimeClient.subscribe('job.deleted', handleLiveUpdate),
+        realtimeClient.subscribe('donation.created', handleLiveUpdate),
+        realtimeClient.subscribe('donation.updated', handleLiveUpdate),
+        realtimeClient.subscribe('donation.deleted', handleLiveUpdate),
+        realtimeClient.subscribe('donation.contributed', handleLiveUpdate),
+        realtimeClient.subscribe('achievement.created', handleLiveUpdate),
+        realtimeClient.subscribe('achievement.updated', handleLiveUpdate),
+        realtimeClient.subscribe('achievement.deleted', handleLiveUpdate),
+        realtimeClient.subscribe('profile.updated', handleLiveUpdate),
+        realtimeClient.subscribe('alumni.created', handleLiveUpdate),
+        realtimeClient.subscribe('alumni.updated', handleLiveUpdate),
+        realtimeClient.subscribe('alumni.deleted', handleLiveUpdate)
+      ];
+
       return () => {
         mounted = false;
+        unsubs.forEach((unsub) => {
+          if (typeof unsub === 'function') unsub();
+        });
       };
     }, [loadSnapshot])
   );
