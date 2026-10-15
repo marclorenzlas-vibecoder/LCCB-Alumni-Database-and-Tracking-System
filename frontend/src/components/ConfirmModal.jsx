@@ -8,9 +8,18 @@ const ConfirmModal = ({
   title = "Confirm Action",
   message = "Are you sure you want to proceed?",
   confirmText = "Confirm",
+  confirmLoadingText,
   cancelText = "Cancel",
   type = "danger" // danger, warning, info
 }) => {
+  const [isConfirming, setIsConfirming] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setIsConfirming(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const iconColors = {
@@ -80,22 +89,50 @@ const ConfirmModal = ({
         <div className="border-t border-gray-100 bg-white/80 backdrop-blur px-5 py-4 flex justify-start gap-3">
           <button
             type="button"
+            disabled={isConfirming}
             onClick={async () => {
+              if (isConfirming) return;
+              setIsConfirming(true);
               try {
                 if (onConfirm) await onConfirm();
                 if (onClose) onClose();
               } catch (e) {
                 console.error('Confirm action failed', e);
+              } finally {
+                setIsConfirming(false);
               }
             }}
-            className={`inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2.5 ${buttonColors[type]} text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors`}
+            className={`inline-flex items-center justify-center rounded-lg border border-transparent shadow-sm px-4 py-2.5 ${buttonColors[type]} text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            {confirmText}
+            {isConfirming && (
+              <svg
+                className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                />
+              </svg>
+            )}
+            {isConfirming ? (confirmLoadingText || (type === 'danger' ? 'Deleting...' : 'Processing...')) : confirmText}
           </button>
           <button
             type="button"
+            disabled={isConfirming}
             onClick={onClose}
-            className="inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2.5 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            className="inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2.5 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelText}
           </button>

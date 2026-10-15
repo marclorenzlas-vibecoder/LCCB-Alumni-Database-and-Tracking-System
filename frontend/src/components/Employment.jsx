@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import careerService from '../services/careerService';
 import { authService } from '../services/authService';
 import ConfirmModal from './ConfirmModal';
@@ -19,6 +20,191 @@ const initialJobForm = {
   description: ''
 };
 
+const cleanClientText = (raw) => {
+  if (!raw || typeof raw !== 'string') return '';
+  let text = raw;
+
+  // 1. Unescape entity tags if written as &lt;p&gt;
+  if (/&lt;[a-z/!]/i.test(text)) {
+    text = text
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&');
+  }
+
+  // 2. If text contains HTML tags
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    text = text.replace(/<br\s*\/?>/gi, '\n');
+    text = text.replace(/<\/p>|<\/div>|<\/h[1-6]>/gi, '\n\n');
+    text = text.replace(/<li[^>]*>/gi, '\n• ');
+    text = text.replace(/<[^>]+>/g, ' ');
+  }
+
+  // 3. Normalize common entities
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;|&rsquo;|&lsquo;/g, "'")
+    .replace(/&rdquo;|&ldquo;/g, '"')
+    .replace(/&ndash;|&mdash;/g, ' - ')
+    .replace(/&bull;/g, '• ');
+
+  // 4. Separate common section headings (even when glued to text without spaces)
+  const headers = [
+    'Job Description',
+    'About the Role',
+    'About LinkedIn',
+    'About Us',
+    'About the Company',
+    'Role Overview',
+    'Key Responsibilities',
+    'Responsibilities',
+    'Basic Qualifications',
+    'Preferred Qualifications',
+    'Minimum Qualifications',
+    'Qualifications',
+    'Requirements',
+    'Benefits',
+    'What We Offer',
+    'Suggested Skills',
+    'Equal Opportunity Employer',
+    'Equal Opportunity',
+    'Additional Information'
+  ];
+
+  for (const h of headers) {
+    const escaped = h.replace(/([:*?+()])/g, '\\$1');
+    const regex = new RegExp('(?:\\*{0,2})\\b(' + escaped + '):?(?:\\*{0,2})', 'gi');
+    text = text.replace(regex, '\n\n**$1:**\n\n');
+  }
+
+  // 5. Fix glued sentences: period/question/exclamation followed immediately by capital letter
+  text = text.replace(/([a-z0-9][.!?])([A-Z][a-z])/g, '$1\n\n$2');
+
+  // 6. Fix glued colon to capital letter: 'Responsibilities:Have' -> 'Responsibilities:\n\n• Have'
+  text = text.replace(/:\s*([A-Z][a-z]+(?:\s+[a-z]+){1,3})/g, ':\n\n• $1');
+
+  // 7. Process sections and format list items under lists
+  const rawSections = text.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  const formattedSections = [];
+  let isUnderListHeader = false;
+
+  for (const sec of rawSections) {
+    if (/^\*\*(?:Responsibilities|Qualifications|Basic Qualifications|Preferred Qualifications|Requirements|Skills|Benefits):?\*\*/i.test(sec)) {
+      isUnderListHeader = true;
+      formattedSections.push(sec);
+      continue;
+    }
+
+    if (/^\*\*(?:Job Description|About|Equal Opportunity|Additional)/i.test(sec)) {
+      isUnderListHeader = false;
+      formattedSections.push(sec);
+      continue;
+    }
+
+    if (isUnderListHeader) {
+      const lines = sec.split('\n').map(l => l.trim()).filter(Boolean);
+      const bulletLines = [];
+
+      for (const line of lines) {
+        if (/^[-•*]\s+/.test(line)) {
+          bulletLines.push('• ' + line.replace(/^[-•*]\s+/, '').trim());
+        } else if (line.length > 20) {
+          const splitSentences = line.split(/\.\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean);
+          for (const sentence of splitSentences) {
+            const cleanSentence = sentence.replace(/^[-•*:\s]+/, '');
+            if (cleanSentence) {
+              bulletLines.push('• ' + cleanSentence + (cleanSentence.endsWith('.') ? '' : '.'));
+            }
+          }
+        } else {
+          bulletLines.push(line);
+        }
+      }
+
+      if (bulletLines.length > 0) {
+        formattedSections.push(bulletLines.join('\n'));
+      }
+    } else {
+      const cleanPara = sec.replace(/\s+/g, ' ').trim();
+      if (cleanPara) {
+        formattedSections.push(cleanPara);
+      }
+    }
+  }
+
+  let finalText = formattedSections.join('\n\n');
+  finalText = finalText.replace(/•\s*•/g, '•');
+  finalText = finalText.replace(/\*\*\s*\*\*/g, '');
+  finalText = finalText.replace(/\n{3,}/g, '\n\n').trim();
+
+  return finalText;
+};
+
+const renderFormattedDescription = (rawText) => {
+  const text = cleanClientText(rawText);
+  if (!text) {
+    return <p className="text-slate-400 italic">No description provided.</p>;
+  }
+
+  const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+
+  return (
+    <div className="space-y-6 text-slate-700 text-sm sm:text-base leading-relaxed">
+      {paragraphs.map((para, pIdx) => {
+        const isMarkdownHeading = /^\*\*.*?\*\*$/.test(para.trim());
+        const cleanHeadingText = para.replace(/^\*\*|\*\*$/g, '').replace(/:$/, '').trim();
+        const isHeading = isMarkdownHeading || /^(responsibilities|requirements|qualifications|about the role|about linkedin|job description|overview|what you'll do|skills|benefits|minimum qualifications|preferred qualifications|key responsibilities)[:]?$/i.test(para.trim());
+
+        if (isHeading) {
+          return (
+            <div key={pIdx} className="pt-3">
+              <h4 className="text-base sm:text-lg font-bold text-slate-900 border-b border-slate-200 pb-2.5 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block shadow-sm"></span>
+                {cleanHeadingText || para}
+              </h4>
+            </div>
+          );
+        }
+
+        const lines = para.split('\n').map(l => l.trim()).filter(Boolean);
+        const hasBullets = lines.some(l => /^[-•*]\s+/.test(l));
+
+        if (hasBullets) {
+          return (
+            <div key={pIdx} className="space-y-3 pl-1 sm:pl-2">
+              {lines.map((line, lIdx) => {
+                if (/^[-•*]\s+/.test(line)) {
+                  return (
+                    <div key={lIdx} className="flex items-start gap-3">
+                      <span className="h-2 w-2 rounded-full bg-blue-500 mt-2 shrink-0"></span>
+                      <span className="flex-1 leading-relaxed text-slate-700">{line.replace(/^[-•*]\s+/, '')}</span>
+                    </div>
+                  );
+                }
+                return (
+                  <p key={lIdx} className="leading-relaxed text-slate-700 font-medium">
+                    {line}
+                  </p>
+                );
+              })}
+            </div>
+          );
+        }
+
+        return (
+          <p key={pIdx} className="leading-relaxed text-slate-700 text-justify sm:text-left">
+            {para}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 /**
  * Employment Component - Job Postings
  * 
@@ -28,13 +214,106 @@ const initialJobForm = {
  */
 const Employment = () => {
   const [postedJobs, setPostedJobs] = useState([]);
+  const currentUser = authService.getCurrentUser();
   const isTeacher = authService.isTeacher();
+  const isLoggedIn = authService.isLoggedIn();
+  const navigate = useNavigate();
   const [alumniList, setAlumniList] = useState([]);
+
+  const currentAlumniId = React.useMemo(() => {
+    if (!currentUser) return null;
+    if (currentUser.alumniId) return Number(currentUser.alumniId);
+    if (currentUser.alumni_id) return Number(currentUser.alumni_id);
+    const alumniArr = Array.isArray(alumniList) ? alumniList : (Array.isArray(alumniList?.alumni) ? alumniList.alumni : []);
+    const matched = alumniArr.find(
+      (a) => (a.user_id && Number(a.user_id) === Number(currentUser.id)) ||
+             (a.email && currentUser.email && a.email.toLowerCase() === currentUser.email.toLowerCase())
+    );
+    return matched ? Number(matched.id) : null;
+  }, [currentUser, alumniList]);
+
+  const getJobPosterInfo = (job) => {
+    if (!job) return { name: 'School Administration / Placement', role: 'Admin', isSchoolAdmin: true };
+
+    if (job.alumni) {
+      const firstName = job.alumni.first_name || '';
+      const lastName = job.alumni.last_name || '';
+      const name = `${firstName} ${lastName}`.trim() || 'Alumni Member';
+      return {
+        name,
+        firstName,
+        lastName,
+        role: 'Alumni',
+        profileImage: job.alumni.profile_image || null,
+        email: job.alumni.email || null,
+        userId: job.alumni.user_id || null,
+        alumniId: job.alumni.id,
+        isSchoolAdmin: false
+      };
+    }
+
+    if (job.posted_by_alumni_id) {
+      const alumniArr = Array.isArray(alumniList) ? alumniList : (Array.isArray(alumniList?.alumni) ? alumniList.alumni : []);
+      const matched = alumniArr.find((a) => Number(a.id) === Number(job.posted_by_alumni_id));
+      if (matched) {
+        const firstName = matched.first_name || '';
+        const lastName = matched.last_name || '';
+        const name = `${firstName} ${lastName}`.trim() || 'Alumni Member';
+        return {
+          name,
+          firstName,
+          lastName,
+          role: 'Alumni',
+          profileImage: matched.profile_image || null,
+          email: matched.email || null,
+          userId: matched.user_id || null,
+          alumniId: matched.id,
+          isSchoolAdmin: false
+        };
+      }
+    }
+
+    return {
+      name: 'School Administration / Placement',
+      firstName: 'School',
+      lastName: 'Admin',
+      role: 'Admin',
+      profileImage: null,
+      email: null,
+      userId: null,
+      alumniId: null,
+      isSchoolAdmin: true
+    };
+  };
+
+  const canManageJob = (job) => {
+    if (!job) return false;
+    // Admins / teachers can manage any job posting:
+    if (isTeacher) {
+      return true;
+    }
+    // An alumni can only manage their own job post:
+    if (currentAlumniId && job.posted_by_alumni_id && Number(currentAlumniId) === Number(job.posted_by_alumni_id)) {
+      return true;
+    }
+    return false;
+  };
+
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(initialJobForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Automated Job Scanner states
+  const [entryMode, setEntryMode] = useState('manual'); // 'manual' | 'scan'
+  const [scanType, setScanType] = useState('url'); // 'url' | 'file' | 'text'
+  const [scanUrl, setScanUrl] = useState('');
+  const [scanFile, setScanFile] = useState(null);
+  const [scanText, setScanText] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const [scanSuccessNotice, setScanSuccessNotice] = useState('');
   
   // Job detail state
   const [showJobDetail, setShowJobDetail] = useState(false);
@@ -117,11 +396,18 @@ const Employment = () => {
 
   const fetchAlumniList = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/alumni`);
-      const data = await response.json();
-      setAlumniList(data);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/alumni?all=true`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.alumni) ? data.alumni : []);
+        setAlumniList(list);
+      }
     } catch (err) {
       console.error('Error fetching alumni list:', err);
+      setAlumniList([]);
     }
   };
 
@@ -179,7 +465,7 @@ const Employment = () => {
 
       // Prepare external job directory data for job_posting table
       const jobData = {
-        posted_by_alumni_id: parseInt(formData.alumni_id),
+        posted_by_alumni_id: formData.alumni_id ? parseInt(formData.alumni_id) : (currentAlumniId || null),
         job_title: formData.job_title,
         company: formData.company,
         location: formData.location,
@@ -193,8 +479,16 @@ const Employment = () => {
 
       if (editingId) {
         // Update existing job post
-        await careerService.updateJob(editingId, jobData);
+        const updated = await careerService.updateJob(editingId, jobData);
         toast.success('Job updated successfully!');
+        if (selectedJob && selectedJob.id === editingId) {
+          setSelectedJob(prev => ({
+            ...prev,
+            ...jobData,
+            id: editingId,
+            ...(updated || {})
+          }));
+        }
       } else {
         // Create new job post
         await careerService.createJob(jobData);
@@ -214,8 +508,76 @@ const Employment = () => {
     }
   };
 
+  const handleScanJob = async (e) => {
+    if (e) e.preventDefault();
+    setScanError('');
+    setIsScanning(true);
+
+    try {
+      let response;
+      if (scanType === 'url') {
+        const trimmed = scanUrl.trim();
+        if (!trimmed) {
+          setScanError('Please enter a job posting URL.');
+          setIsScanning(false);
+          return;
+        }
+        response = await careerService.parseJob({ url: trimmed });
+      } else if (scanType === 'file') {
+        if (!scanFile) {
+          setScanError('Please select a document file (PDF, DOC, DOCX, TXT) to scan.');
+          setIsScanning(false);
+          return;
+        }
+        if (scanFile.type && scanFile.type.startsWith('image/')) {
+          setScanError('Image files are not supported. Please upload a PDF, DOC, DOCX, or TXT document.');
+          setIsScanning(false);
+          return;
+        }
+        const data = new FormData();
+        data.append('file', scanFile);
+        response = await careerService.parseJob(data, true);
+      } else if (scanType === 'text') {
+        const trimmed = scanText.trim();
+        if (!trimmed || trimmed.length < 15) {
+          setScanError('Please enter at least a few sentences describing the job.');
+          setIsScanning(false);
+          return;
+        }
+        response = await careerService.parseJob({ text: trimmed });
+      }
+
+      if (response && response.data) {
+        const parsed = response.data;
+        setFormData(prev => ({
+          ...prev,
+          job_title: parsed.job_title || prev.job_title,
+          company: parsed.company || prev.company,
+          location: parsed.location || prev.location,
+          department: parsed.department || prev.department,
+          type: parsed.type || prev.type,
+          application_url: parsed.application_url || (scanType === 'url' ? scanUrl.trim() : prev.application_url),
+          description: cleanClientText(parsed.description || prev.description)
+        }));
+        setScanSuccessNotice('Job details auto-filled! Please review and adjust any fields before posting.');
+        setEntryMode('manual');
+        toast.success('Job details extracted! Review before posting.');
+      } else {
+        setScanError('No details could be extracted from the content.');
+      }
+    } catch (err) {
+      console.error('Scan error:', err);
+      setScanError(err.response?.data?.error || err.message || 'Failed to scan and extract job details');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const handleEdit = (job) => {
     setEditingId(job.id);
+    setEntryMode('manual');
+    setScanError('');
+    setScanSuccessNotice('');
     setFormData({
       alumni_id: job.posted_by_alumni_id?.toString() || '',
       company: job.company || '',
@@ -224,7 +586,7 @@ const Employment = () => {
       department: job.department || '',
       type: job.job_type || '',
       application_url: job.application_url || '',
-      description: job.description || ''
+      description: cleanClientText(job.description || '')
     });
     setShowModal(true);
   };
@@ -241,11 +603,15 @@ const Employment = () => {
         try {
           await careerService.deleteJob(id);
           await fetchPostedJobs();
+          setShowModal(false);
+          setEditingId(null);
+          setShowJobDetail(false);
+          setSelectedJob(null);
           setConfirmModal({ ...confirmModal, isOpen: false });
           toast.success('Job deleted successfully!');
         } catch (err) {
           console.error('Error deleting job:', err);
-          toast.error('Failed to delete job');
+          toast.error(err.response?.data?.error || 'Failed to delete job');
           setConfirmModal({ ...confirmModal, isOpen: false });
         }
       }
@@ -295,9 +661,24 @@ const Employment = () => {
                 Discover and share job opportunities within our alumni network
               </p>
             </div>
-            {isTeacher && (
+            {isLoggedIn && (
               <button
-                onClick={() => { setEditingId(null); setFormData(initialJobForm); setError(''); setShowModal(true); }}
+                onClick={() => {
+                  setEditingId(null);
+                  setFormData({
+                    ...initialJobForm,
+                    alumni_id: currentAlumniId ? currentAlumniId.toString() : ''
+                  });
+                  setError('');
+                  setEntryMode('manual');
+                  setScanType('url');
+                  setScanUrl('');
+                  setScanFile(null);
+                  setScanText('');
+                  setScanError('');
+                  setScanSuccessNotice('');
+                  setShowModal(true);
+                }}
                 className="app-primary-button"
               >
                 Add New
@@ -470,282 +851,603 @@ const Employment = () => {
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '14%', minWidth: '100px' }} />
-                    <col style={{ width: '16%', minWidth: '160px' }} />
+                    <col style={{ width: '16%', minWidth: '150px' }} />
                   </>
                 ) : (
                   <>
-                    <col style={{ width: '32%' }} />
-                    <col style={{ width: '18%' }} />
-                    <col style={{ width: '18%' }} />
-                    <col style={{ width: '14%', minWidth: '100px' }} />
+                    <col style={{ width: '36%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '20%', minWidth: '100px' }} />
                   </>
                 )}
               </colgroup>
               <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Job Title</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Location</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Department</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Work Type</th>
-                {isTeacher && <th className="px-6 py-3 text-right text-sm font-semibold uppercase tracking-wider text-gray-500">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={`skel-${i}`} className="border-b border-gray-100 animate-pulse">
-                    <td className="px-6 py-4">
-                      <div className="h-5 w-48 bg-slate-200 rounded mb-2"></div>
-                      <div className="h-4 w-32 bg-slate-200 rounded"></div>
-                    </td>
-                    <td className="px-6 py-4"><div className="h-5 w-24 bg-slate-200 rounded"></div></td>
-                    <td className="px-6 py-4"><div className="h-5 w-24 bg-slate-200 rounded"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 w-20 bg-slate-200 rounded-full"></div></td>
-                    {isTeacher && (
-                      <td className="px-4 py-4">
-                        <div className="flex gap-2">
-                          <div className="h-9 w-16 bg-slate-200 rounded-md flex-1"></div>
-                          <div className="h-9 w-16 bg-slate-200 rounded-md flex-1"></div>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              ) : filteredJobs.length === 0 ? (
-                <tr>
-                  <td colSpan={isTeacher ? 5 : 4} className="text-center py-12">
-                    <p className="text-gray-500">No job postings found.</p>
-                  </td>
-                </tr>
-              ) : (
-                filteredJobs.map((job) => (
-                <tr
-                  key={job.id}
-                  onClick={() => handleOpenJobDetail(job)}
-                  className="border-b border-gray-100 last:border-b-0 transition hover:bg-blue-50/50 cursor-pointer"
-                >
-                  <td className="px-6 py-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-lg font-semibold text-blue-600 hover:text-blue-800 transition truncate">{job.job_title}</p>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-0.5">Posted {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-base text-gray-700">{job.location || '—'}</td>
-                  <td className="px-6 py-4 text-base text-gray-700">{job.department || '—'}</td>
-                  <td className="px-6 py-4 text-base text-gray-700">
-                    <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-sm font-semibold text-gray-600 whitespace-nowrap">
-                      {job.job_type || '—'}
-                    </span>
-                  </td>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Job Opportunity</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Location</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Department</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">Work Type</th>
                   {isTeacher && (
-                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1" style={{ flexDirection: 'row', alignItems: 'center', gap: '6px', justifyContent: 'flex-start' }}>
-                        <button
-                          onClick={() => handleEdit(job)}
-                          className="flex-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors duration-200 text-sm font-medium shadow-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(job.id)}
-                          className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium shadow-sm"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+                    <th className="px-6 py-3 text-right text-sm font-semibold uppercase tracking-wider text-gray-500">Actions</th>
                   )}
                 </tr>
-              ))
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={`skel-${i}`} className="border-b border-gray-100 animate-pulse">
+                      <td className="px-6 py-4">
+                        <div className="h-5 w-48 bg-slate-200 rounded mb-2"></div>
+                        <div className="h-4 w-32 bg-slate-200 rounded"></div>
+                      </td>
+                      <td className="px-6 py-4"><div className="h-5 w-24 bg-slate-200 rounded"></div></td>
+                      <td className="px-6 py-4"><div className="h-5 w-24 bg-slate-200 rounded"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 w-20 bg-slate-200 rounded-full"></div></td>
+                      {isTeacher && (
+                        <td className="px-4 py-4">
+                          <div className="flex gap-2 justify-end">
+                            <div className="h-9 w-16 bg-slate-200 rounded-md"></div>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                ) : filteredJobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={isTeacher ? 5 : 4} className="text-center py-12">
+                      <p className="text-gray-500">No job postings found.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredJobs.map((job) => {
+                    const poster = getJobPosterInfo(job);
+
+                    return (
+                      <tr
+                        key={job.id}
+                        onClick={() => handleOpenJobDetail(job)}
+                        className="border-b border-gray-100 last:border-b-0 transition hover:bg-blue-50/50 cursor-pointer"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="min-w-0">
+                            <p className="text-lg font-semibold text-blue-600 hover:text-blue-800 transition truncate">
+                              {job.job_title}
+                            </p>
+                            <p className="text-sm font-medium text-slate-700 mt-0.5 truncate">
+                              {job.company}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 flex-wrap">
+                              <span className="inline-flex items-center gap-1 font-medium">
+                                {poster.isSchoolAdmin ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                    LCCB Admin
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-blue-700 font-medium">
+                                    <svg className="w-3.5 h-3.5 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                    <span className="truncate max-w-[130px] font-semibold text-slate-800">{poster.name}</span>
+                                  </span>
+                                )}
+                              </span>
+                              <span>•</span>
+                              <span>Posted {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-base text-gray-700">{job.location || '—'}</td>
+                        <td className="px-6 py-4 text-base text-gray-700">{job.department || '—'}</td>
+                        <td className="px-6 py-4 text-base text-gray-700">
+                          <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-sm font-semibold text-gray-600 whitespace-nowrap">
+                            {job.job_type || '—'}
+                          </span>
+                        </td>
+                        {isTeacher && (
+                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(job)}
+                                className="bg-sky-600 text-white px-3 py-1.5 rounded-md hover:bg-sky-700 transition-colors duration-200 text-xs font-medium shadow-xs"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(job.id)}
+                                className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 transition-colors duration-200 text-xs font-medium shadow-xs"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
         {/* Modal for Posting a Job */}
         {showModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-xl bg-white max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="bg-white border-b border-gray-200 px-3 py-4 -mx-5 -mt-5 rounded-t-xl z-10">
-                <h3 className="text-2xl font-semibold text-gray-900">
-                  {editingId ? 'Edit Job Posting' : 'Post a Job Opportunity'}
-                </h3>
-              </div>
-              <div className="mt-6 overflow-y-auto scrollbar-hide flex-1">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Job Title *
-                      </label>
-                      <input
-                        type="text"
-                        name="job_title"
-                        value={formData.job_title}
-                        onChange={handleInputChange}
-                        required
-                        className={fieldClass}
-                        placeholder="e.g. Senior Software Engineer"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Company *
-                      </label>
-                      <input
-                        type="text"
-                        name="company"
-                        value={formData.company}
-                        onChange={handleInputChange}
-                        required
-                        className={fieldClass}
-                        placeholder="Company name"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Location *
-                      </label>
-                      <input
-                        type="text"
-                        name="location"
-                        value={formData.location}
-                        onChange={handleInputChange}
-                        required
-                        className={fieldClass}
-                        placeholder="e.g. Makati City"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Department
-                      </label>
-                      <select
-                        name="department"
-                        value={formData.department}
-                        onChange={handleInputChange}
-                        className={selectFieldClass}
-                      >
-                        <option value="">Select department</option>
-                        <option value="Technology">Technology</option>
-                        <option value="Marketing">Marketing</option>
-                        <option value="Analytics">Analytics</option>
-                        <option value="Finance">Finance</option>
-                        <option value="Education">Education</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Job Type *
-                      </label>
-                      <select
-                        name="type"
-                        value={formData.type}
-                        onChange={handleInputChange}
-                        required
-                        className={selectFieldClass}
-                      >
-                        <option value="">Select type</option>
-                        <option value="Full-time">Full-time</option>
-                        <option value="Part-time">Part-time</option>
-                        <option value="Contract">Contract</option>
-                        <option value="Remote">Remote</option>
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Application Link *
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="url"
-                        name="application_url"
-                        value={formData.application_url}
-                        onChange={handleInputChange}
-                        required
-                        className={fieldClass}
-                        placeholder="https://www.linkedin.com/jobs/view/..."
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Description
-                      </label>
-                      <textarea
-                        name="description"
-                        value={formData.description}
-                        onChange={handleInputChange}
-                        className={`${fieldClass} resize-none`}
-                        placeholder="Detailed description..."
-                        rows="4"
-                      />
-                    </div>
-                  </div>
-
-                  {error && (
-                    <div className="text-red-600 text-sm">
-                      {error}
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <div className="fixed inset-0 bg-gray-600/60 backdrop-blur-xs overflow-y-auto h-full w-full z-[60]">
+            <div className="relative top-8 mx-auto p-5 border w-full max-w-3xl shadow-2xl rounded-2xl bg-white max-h-[92vh] overflow-hidden flex flex-col">
+              {/* Header with Mode Switcher */}
+              <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-5 -mt-5 rounded-t-2xl z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {editingId ? 'Edit Job Posting' : 'Post a Job Opportunity'}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {editingId
+                      ? 'Update details for this job opportunity'
+                      : 'Choose manual entry or auto-fill by scanning a job link or file'}
+                  </p>
+                </div>
+                {!editingId && (
+                  <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 shadow-inner shrink-0">
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowModal(false);
-                        setEditingId(null);
-                        setError('');
-                      }}
-                        className={secondaryActionClass}
+                      onClick={() => { setEntryMode('manual'); setScanError(''); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        entryMode === 'manual'
+                          ? 'bg-white text-blue-700 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
                     >
-                      Cancel
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Manual Entry
                     </button>
                     <button
-                      type="submit"
-                      disabled={loading}
-                        className={primaryActionClass}
+                      type="button"
+                      onClick={() => { setEntryMode('scan'); setScanError(''); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        entryMode === 'scan'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-blue-700 hover:text-blue-900'
+                      }`}
                     >
-                      {loading ? (
-                        <>
-                          <svg
-                            className="h-4 w-4 animate-spin"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                            />
-                          </svg>
-                          Saving...
-                        </>
-                      ) : editingId ? (
-                        'Update Job'
-                      ) : (
-                        'Post Job'
-                      )}
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Scan & Auto-Fill
                     </button>
                   </div>
-                </form>
+                )}
+              </div>
+
+              {/* Modal Body */}
+              <div className="mt-4 overflow-y-auto scrollbar-hide flex-1 px-1">
+                {entryMode === 'scan' && !editingId ? (
+                  /* Auto-Fill / Scanner View */
+                  <div className="py-2 space-y-6">
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                      <h4 className="text-sm font-bold text-slate-900">Automated Job Extraction</h4>
+                      <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                        Scan a job web link, upload a document (PDF, Doc, or image), or paste text. 
+                        The system will automatically extract the job title, company, location, type, and description so you can review and edit before posting.
+                      </p>
+                    </div>
+
+                    {/* Source Selector */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                        Select Input Source
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => { setScanType('url'); setScanError(''); }}
+                          className={`flex flex-col items-center justify-center p-3.5 rounded-xl border text-center transition ${
+                            scanType === 'url'
+                              ? 'border-blue-500 bg-blue-50/90 text-blue-700 font-semibold shadow-sm ring-2 ring-blue-500/20'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <svg className="w-5 h-5 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                          <span className="text-xs">Job Link (URL)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => { setScanType('file'); setScanError(''); }}
+                          className={`flex flex-col items-center justify-center p-3.5 rounded-xl border text-center transition ${
+                            scanType === 'file'
+                              ? 'border-blue-500 bg-blue-50/90 text-blue-700 font-semibold shadow-sm ring-2 ring-blue-500/20'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <svg className="w-5 h-5 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="text-xs">Upload File</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => { setScanType('text'); setScanError(''); }}
+                          className={`flex flex-col items-center justify-center p-3.5 rounded-xl border text-center transition ${
+                            scanType === 'text'
+                              ? 'border-blue-500 bg-blue-50/90 text-blue-700 font-semibold shadow-sm ring-2 ring-blue-500/20'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <svg className="w-5 h-5 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
+                          </svg>
+                          <span className="text-xs">Paste Text</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Scan Inputs */}
+                    <div className="space-y-4">
+                      {scanType === 'url' && (
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                            Job Posting Link (URL) *
+                          </label>
+                          <div className="relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                              </svg>
+                            </div>
+                            <input
+                              type="url"
+                              value={scanUrl}
+                              onChange={(e) => setScanUrl(e.target.value)}
+                              placeholder="e.g. https://www.linkedin.com/jobs/view/... or https://company.com/careers/job"
+                              className={`${fieldClass} pl-10`}
+                            />
+                          </div>
+                          <p className="mt-1.5 text-xs text-slate-500">
+                            Paste any public job listing link. We'll extract details and set the application link automatically.
+                          </p>
+                        </div>
+                      )}
+
+                      {scanType === 'file' && (
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                            Job Document (PDF, DOC, DOCX, TXT) *
+                          </label>
+                          <div className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-6 transition hover:border-blue-400 hover:bg-blue-50/30">
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null;
+                                if (file && file.type && file.type.startsWith('image/')) {
+                                  setScanError('Image files are not supported. Please upload a PDF, DOC, DOCX, or TXT document.');
+                                  setScanFile(null);
+                                  return;
+                                }
+                                setScanError('');
+                                setScanFile(file);
+                              }}
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            />
+                            <div className="text-center pointer-events-none">
+                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 mb-3">
+                                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                              </div>
+                              {scanFile ? (
+                                <div>
+                                  <p className="text-sm font-semibold text-blue-700">{scanFile.name}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">{(scanFile.size / 1024).toFixed(1)} KB — Click to change</p>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className="text-sm font-medium text-slate-700">
+                                    <span className="font-semibold text-blue-600">Click to upload</span> or drag and drop
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-1">PDF, DOC, DOCX, or TXT document (up to 10MB)</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {scanType === 'text' && (
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                            Job Announcement / Description Text *
+                          </label>
+                          <textarea
+                            value={scanText}
+                            onChange={(e) => setScanText(e.target.value)}
+                            rows="6"
+                            className={`${fieldClass} resize-none`}
+                            placeholder="Paste job title, company name, requirements, location, job type, and responsibilities here..."
+                          />
+                          <p className="mt-1.5 text-xs text-slate-500">
+                            Useful if you copied a job announcement from an email, PDF, or chat group.
+                          </p>
+                        </div>
+                      )}
+
+                      {scanError && (
+                        <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 flex flex-col gap-1.5">
+                          <div className="flex items-start gap-2">
+                            <svg className="w-4 h-4 shrink-0 text-red-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <span className="flex-1 font-medium">{scanError}</span>
+                          </div>
+                          {scanError.includes('GEMINI_API_KEY') && (
+                            <p className="text-[11px] text-red-600 pl-6 leading-relaxed">
+                              Image and flyer auto-fill uses Google Gemini Vision to read text. Add <code className="font-mono bg-red-100 px-1 py-0.5 rounded text-red-800">GEMINI_API_KEY=your_key</code> into <code className="font-mono bg-red-100 px-1 py-0.5 rounded text-red-800">backend/.env</code> and restart the backend, or switch to <strong className="cursor-pointer underline" onClick={() => { setEntryMode('manual'); setScanError(''); }}>Manual Entry</strong> to fill the fields directly.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Scan Action Buttons */}
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => { setEntryMode('manual'); setScanError(''); }}
+                        className="text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-1"
+                      >
+                        ← Back to Manual Form
+                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowModal(false);
+                            setEditingId(null);
+                            setError('');
+                            setScanError('');
+                          }}
+                          className={secondaryActionClass}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleScanJob}
+                          disabled={isScanning}
+                          className={primaryActionClass}
+                        >
+                          {isScanning ? (
+                            <>
+                              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                              </svg>
+                              Scanning Content...
+                            </>
+                          ) : (
+                            'Scan & Auto-Fill Form'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Manual Entry Form View */
+                  <form onSubmit={handleSubmit} className="space-y-5 py-1">
+                    {/* Auto-fill notification if populated via scanner */}
+                    {scanSuccessNotice && (
+                      <div className="flex items-start justify-between rounded-xl bg-blue-50 border border-blue-200 p-3.5 text-blue-900">
+                        <div>
+                          <p className="text-xs font-bold text-blue-900 uppercase tracking-wide">Auto-Filled from Scan</p>
+                          <p className="text-xs text-blue-700 mt-0.5">{scanSuccessNotice}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setScanSuccessNotice('')}
+                          className="text-blue-400 hover:text-blue-600 text-sm font-bold ml-2"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Quick jump to Scan if creating new and haven't scanned */}
+                    {!editingId && !scanSuccessNotice && (
+                      <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-4 py-2.5 text-xs text-slate-600">
+                        <span>Have a job link or flyer? Auto-fill these fields in seconds.</span>
+                        <button
+                          type="button"
+                          onClick={() => { setEntryMode('scan'); setScanError(''); }}
+                          className="font-semibold text-blue-600 hover:text-blue-800 hover:underline shrink-0 ml-2"
+                        >
+                          Scan Link or File
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Job Title *
+                        </label>
+                        <input
+                          type="text"
+                          name="job_title"
+                          value={formData.job_title}
+                          onChange={handleInputChange}
+                          required
+                          className={fieldClass}
+                          placeholder="e.g. Senior Software Engineer"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Company *
+                        </label>
+                        <input
+                          type="text"
+                          name="company"
+                          value={formData.company}
+                          onChange={handleInputChange}
+                          required
+                          className={fieldClass}
+                          placeholder="Company name"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Location *
+                        </label>
+                        <input
+                          type="text"
+                          name="location"
+                          value={formData.location}
+                          onChange={handleInputChange}
+                          required
+                          className={fieldClass}
+                          placeholder="e.g. Makati City or Remote"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Department
+                        </label>
+                        <select
+                          name="department"
+                          value={formData.department}
+                          onChange={handleInputChange}
+                          className={selectFieldClass}
+                        >
+                          <option value="">Select department</option>
+                          <option value="Technology">Technology</option>
+                          <option value="Marketing">Marketing</option>
+                          <option value="Analytics">Analytics</option>
+                          <option value="Finance">Finance</option>
+                          <option value="Education">Education</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Job Type *
+                        </label>
+                        <select
+                          name="type"
+                          value={formData.type}
+                          onChange={handleInputChange}
+                          required
+                          className={selectFieldClass}
+                        >
+                          <option value="">Select type</option>
+                          <option value="Full-time">Full-time</option>
+                          <option value="Part-time">Part-time</option>
+                          <option value="Contract">Contract</option>
+                          <option value="Remote">Remote</option>
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Application Link *
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="url"
+                          name="application_url"
+                          value={formData.application_url}
+                          onChange={handleInputChange}
+                          required
+                          className={fieldClass}
+                          placeholder="https://www.linkedin.com/jobs/view/... or https://company.com/apply"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Description
+                        </label>
+                        <textarea
+                          name="description"
+                          value={formData.description}
+                          onChange={handleInputChange}
+                          className={`${fieldClass} resize-none`}
+                          placeholder="Detailed description, responsibilities, and qualifications..."
+                          rows="5"
+                        />
+                      </div>
+                    </div>
+
+                    {error && (
+                      <div className="text-red-600 text-sm">
+                        {error}
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowModal(false);
+                            setEditingId(null);
+                            setError('');
+                            setScanError('');
+                            setScanSuccessNotice('');
+                          }}
+                          className={secondaryActionClass}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className={primaryActionClass}
+                        >
+                          {loading ? (
+                            <>
+                              <svg
+                                className="h-4 w-4 animate-spin"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                aria-hidden="true"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                />
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                                />
+                              </svg>
+                              Saving...
+                            </>
+                          ) : editingId ? (
+                            'Update Job'
+                          ) : (
+                            'Post Job'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           </div>
@@ -785,54 +1487,177 @@ const Employment = () => {
                     <p className="mt-2 text-lg text-slate-500">{selectedJob.company}</p>
                   </div>
 
-                  <div>
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Job Details</h3>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                          </div>
+                  {/* Posted By Information Card */}
+                  {(() => {
+                    const poster = getJobPosterInfo(selectedJob);
+                    const isOwnJob = currentAlumniId && Number(selectedJob.posted_by_alumni_id) === Number(currentAlumniId);
+
+                    return (
+                      <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/80 via-white to-slate-50/80 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          {poster.profileImage ? (
+                            <img
+                              src={poster.profileImage.startsWith('http') ? poster.profileImage : `${IMAGE_BASE_URL}/${poster.profileImage}`}
+                              alt={poster.name}
+                              className="h-14 w-14 rounded-full object-cover border-2 border-blue-200 shadow-sm shrink-0"
+                              onError={(e) => {
+                                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(poster.name)}&background=2563eb&color=ffffff&size=160`;
+                              }}
+                            />
+                          ) : (
+                            <div className="h-14 w-14 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0 border-2 border-blue-200">
+                              {poster.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
                           <div>
-                            <p className="text-xs text-slate-500">Company</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedJob.company}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Posted by</span>
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                poster.isSchoolAdmin
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+                              }`}>
+                                {poster.isSchoolAdmin ? 'Placement Office / Admin' : 'Alumni'}
+                              </span>
+                              {isOwnJob && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold">
+                                  You
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-base font-bold text-slate-900 mt-0.5">{poster.name}</p>
+                            {poster.email && (
+                              <p className="text-xs text-slate-500">{poster.email}</p>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+
+                        {canManageJob(selectedJob) && (
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleEdit(selectedJob);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-sky-700 active:bg-sky-800"
+                            >
+                              <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Edit Job
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(selectedJob.id)}
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-red-700 active:bg-red-800"
+                            >
+                              <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Delete Job
+                            </button>
                           </div>
-                          <div>
-                            <p className="text-xs text-slate-500">Location</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedJob.location || 'Not specified'}</p>
-                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Redesigned Job Details Card */}
+                  <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs hover:shadow-sm transition-shadow">
+                    <div className="flex items-center gap-2 pb-4 mb-4 border-b border-slate-100">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                      </span>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                        Job Details
+                      </h3>
+                    </div>
+
+                    {/* Responsive Details Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                      {/* Company */}
+                      <div className="flex items-center gap-3.5 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 transition hover:bg-slate-50 hover:border-slate-200">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 border border-blue-200/50">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500">Posted</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedJob.created_at ? new Date(selectedJob.created_at).toLocaleDateString() : 'N/A'}</p>
-                          </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Company</p>
+                          <p className="mt-0.5 text-sm font-bold text-slate-900 truncate" title={selectedJob.company}>
+                            {selectedJob.company || 'Not specified'}
+                          </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500">Employment Type</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedJob.job_type || 'Not specified'}</p>
-                          </div>
+                      </div>
+
+                      {/* Location */}
+                      <div className="flex items-center gap-3.5 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 transition hover:bg-slate-50 hover:border-slate-200">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-200/50">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Location</p>
+                          <p className="mt-0.5 text-sm font-bold text-slate-900 truncate" title={selectedJob.location || 'Not specified'}>
+                            {selectedJob.location || 'Not specified'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Employment Type */}
+                      <div className="flex items-center gap-3.5 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 transition hover:bg-slate-50 hover:border-slate-200">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 border border-indigo-200/50">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Employment Type</p>
+                          <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">
+                            {selectedJob.job_type || 'Full-time'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Date Posted */}
+                      <div className="flex items-center gap-3.5 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 transition hover:bg-slate-50 hover:border-slate-200">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 border border-amber-200/50">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Posted Date</p>
+                          <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">
+                            {selectedJob.created_at
+                              ? new Date(selectedJob.created_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })
+                              : 'N/A'}
+                          </p>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="prose prose-slate max-w-none text-base leading-7 text-slate-700 whitespace-pre-line">
-                      {selectedJob.description || 'No description provided.'}
+                  <div className="rounded-2xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-xs">
+                    <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-100">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </span>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                        About the Position
+                      </h3>
                     </div>
+                    {renderFormattedDescription(selectedJob.description)}
                   </div>
                 </div>
             </div>
@@ -840,6 +1665,7 @@ const Employment = () => {
         )}
       </div>
       </div>
+
     </UserLayout>
   );
 };

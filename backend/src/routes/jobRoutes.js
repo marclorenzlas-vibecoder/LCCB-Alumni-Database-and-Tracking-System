@@ -2,13 +2,18 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { broadcastUpdate } = require('../services/realtimeService');
+const { syncTableSequence } = require('../services/dbSequenceService');
 
 const prisma = require('../config/prisma');
+const multer = require('multer');
+const jobParserService = require('../services/jobParserService');
+const { cleanHtmlToFormattedText } = require('../utils/cleanText');
 const router = express.Router();
 
 const isStaffRequest = (req) => {
   const role = String(req.user?.role || '').toUpperCase();
-  return role === 'TEACHER' || role === 'ADMIN';
+  const email = String(req.user?.email || '').toLowerCase();
+  return role === 'TEACHER' || role === 'ADMIN' || email.endsWith('@lccbonline.com');
 };
 
 const getAuthenticatedAlumniId = async (req) => {
@@ -60,9 +65,11 @@ const normalizeJobRow = (row) => {
     alumni: row.alumni_id
       ? {
           id: row.alumni_id,
+          user_id: row.alumni_user_id,
           first_name: row.first_name,
           last_name: row.last_name,
-          email: row.email
+          email: row.email,
+          profile_image: row.profile_image
         }
       : null
   };
@@ -116,9 +123,11 @@ const selectJobSql = `
     jp.created_at,
     jp.updated_at,
     a.id AS alumni_id,
+    a.user_id AS alumni_user_id,
     a.first_name,
     a.last_name,
-    a.email
+    a.email,
+    a.profile_image
   FROM job_posting jp
   LEFT JOIN alumni a ON a.id = jp.posted_by_alumni_id
 `;
@@ -158,6 +167,60 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+const scanStorage = multer.memoryStorage();
+const scanUpload = multer({
+  storage: scanStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(pdf|txt|text|doc|docx)$/i;
+    if (allowed.test(file.originalname) || file.mimetype === 'application/pdf' || file.mimetype.startsWith('text/')) {
+      return cb(null, true);
+    }
+    cb(new Error('Unsupported file type. Please upload a PDF, DOC, DOCX, or TXT document.'));
+  }
+});
+
+const handleScanUpload = (req, res, next) => {
+  scanUpload.single('file')(req, res, (err) => {
+    if (err) {
+      const isSize = err.code === 'LIMIT_FILE_SIZE';
+      return res.status(400).json({
+        error: isSize ? 'File exceeds 10MB limit.' : (err.message || 'File upload error')
+      });
+    }
+    next();
+  });
+};
+
+// Scan / parse job details from URL, uploaded document, or text
+router.post('/parse-job', authenticateToken, handleScanUpload, async (req, res) => {
+  try {
+    let result = null;
+
+    if (req.file) {
+      result = await jobParserService.parseFile(req.file.buffer, req.file.mimetype, req.file.originalname);
+    } else if (req.body.url && typeof req.body.url === 'string' && req.body.url.trim()) {
+      result = await jobParserService.parseUrl(req.body.url.trim());
+    } else if (req.body.text && typeof req.body.text === 'string' && req.body.text.trim()) {
+      result = await jobParserService.parseText(req.body.text.trim());
+    } else {
+      return res.status(400).json({
+        error: 'Please provide a job URL, upload a file (PDF/Doc/Image), or paste job details text.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error parsing job posting content:', error);
+    return res.status(400).json({
+      error: error.message || 'Failed to scan and extract job details'
+    });
+  }
+});
+
 // Create new external job posting
 router.post('/', authenticateToken, async (req, res) => {
   try {
@@ -185,13 +248,18 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    const requestedPosterId = posted_by_alumni_id ? Number(posted_by_alumni_id) : null;
     const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
-    if (!isStaffRequest(req)) {
-      if (!requestedPosterId || authenticatedAlumniId !== requestedPosterId) {
-        return res.status(403).json({ error: 'You can only create job posts for your own alumni profile' });
+    let posterId = null;
+    if (isStaffRequest(req)) {
+      posterId = posted_by_alumni_id ? Number(posted_by_alumni_id) : authenticatedAlumniId;
+    } else {
+      if (!authenticatedAlumniId) {
+        return res.status(403).json({ error: 'You must have an alumni profile to post jobs' });
       }
+      posterId = authenticatedAlumniId;
     }
+
+    const sanitizedDescription = description ? cleanHtmlToFormattedText(description) : null;
 
     const job = await prisma.$transaction(async (tx) => {
       const inserted = await tx.$queryRaw`
@@ -209,7 +277,7 @@ router.post('/', authenticateToken, async (req, res) => {
           application_url,
           application_deadline
         ) VALUES (
-          ${requestedPosterId},
+          ${posterId},
           ${job_title},
           ${company},
           ${location || null},
@@ -218,7 +286,7 @@ router.post('/', authenticateToken, async (req, res) => {
           ${salary_range || null},
           ${requirements || null},
           ${benefits || null},
-          ${description || null},
+          ${sanitizedDescription},
           ${normalizedApplicationUrl},
           ${application_deadline ? new Date(application_deadline) : null}
         ) RETURNING id
@@ -260,12 +328,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Job posting not found' });
     }
 
+    const isStaff = isStaffRequest(req);
     const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
-    if (!isStaffRequest(req) && authenticatedAlumniId !== oldJob.posted_by_alumni_id) {
-      return res.status(403).json({ error: 'You can only update your own job posts' });
+
+    if (!isStaff) {
+      if (!authenticatedAlumniId || Number(oldJob.posted_by_alumni_id) !== Number(authenticatedAlumniId)) {
+        return res.status(403).json({ error: 'You can only update your own job posts' });
+      }
     }
 
     const {
+      posted_by_alumni_id,
       job_title,
       company,
       location,
@@ -279,35 +352,35 @@ router.put('/:id', authenticateToken, async (req, res) => {
       application_deadline
     } = req.body;
 
-    const updateFields = [];
-    const values = [];
-    const addField = (column, value) => {
-      updateFields.push(`${column} = ?`);
-      values.push(value);
-    };
-
-    if (job_title !== undefined) addField('job_title', job_title);
-    if (company !== undefined) addField('company', company);
-    if (location !== undefined) addField('location', location || null);
-    if (department !== undefined) addField('department', department || null);
-    if (job_type !== undefined) addField('job_type', job_type || null);
-    if (salary_range !== undefined) addField('salary_range', salary_range || null);
-    if (requirements !== undefined) addField('requirements', requirements || null);
-    if (benefits !== undefined) addField('benefits', benefits || null);
-    if (description !== undefined) addField('description', description || null);
+    const updateData = {};
+    if (job_title !== undefined) updateData.job_title = String(job_title || '').trim();
+    if (company !== undefined) updateData.company = String(company || '').trim();
+    if (location !== undefined) updateData.location = location ? String(location).trim() : null;
+    if (department !== undefined) updateData.department = department ? String(department).trim() : null;
+    if (job_type !== undefined) updateData.job_type = job_type ? String(job_type).trim() : null;
+    if (salary_range !== undefined) updateData.salary_range = salary_range || null;
+    if (requirements !== undefined) updateData.requirements = requirements || null;
+    if (benefits !== undefined) updateData.benefits = benefits || null;
+    if (description !== undefined) updateData.description = description ? cleanHtmlToFormattedText(description) : null;
     if (application_url !== undefined) {
-      addField('application_url', normalizeApplicationUrl(application_url, { required: true }));
+      updateData.application_url = normalizeApplicationUrl(application_url, { required: true });
     }
     if (application_deadline !== undefined) {
-      addField('application_deadline', application_deadline ? new Date(application_deadline) : null);
+      updateData.application_deadline = application_deadline && !isNaN(new Date(application_deadline).getTime())
+        ? new Date(application_deadline)
+        : null;
+    }
+    if (posted_by_alumni_id !== undefined && isStaffRequest(req)) {
+      const parsedAlumniId = Number.parseInt(posted_by_alumni_id, 10);
+      updateData.posted_by_alumni_id = Number.isInteger(parsedAlumniId) && parsedAlumniId > 0 ? parsedAlumniId : null;
     }
 
-    if (updateFields.length > 0) {
-      values.push(Number(id));
-      await prisma.$executeRawUnsafe(
-        `UPDATE job_posting SET ${updateFields.join(', ')} WHERE id = ?`,
-        ...values
-      );
+    if (Object.keys(updateData).length > 0) {
+      updateData.updated_at = new Date();
+      await prisma.job_posting.update({
+        where: { id: Number(id) },
+        data: updateData
+      });
     }
 
     const job = await getJobById(prisma, id);
@@ -361,9 +434,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Job posting not found' });
     }
 
+    const isStaff = isStaffRequest(req);
     const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
-    if (!isStaffRequest(req) && authenticatedAlumniId !== job.posted_by_alumni_id) {
-      return res.status(403).json({ error: 'You can only delete your own job posts' });
+
+    if (!isStaff) {
+      if (!authenticatedAlumniId || Number(job.posted_by_alumni_id) !== Number(authenticatedAlumniId)) {
+        return res.status(403).json({ error: 'You can only delete your own job posts' });
+      }
     }
 
     await prisma.job_posting.delete({

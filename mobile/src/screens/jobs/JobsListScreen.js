@@ -1,13 +1,15 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
+import JobFormModal from '../../components/JobFormModal';
 import { jobService } from '../../services/jobService';
 import { realtimeClient } from '../../services/realtimeClient';
 import { timeAgo } from '../../utils/formatters';
+import { getAlumniId, isTeacher } from '../../utils/auth';
 
 const departments = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
 const workTypes = ['Full-time', 'Part-time', 'Contract', 'Remote'];
@@ -148,15 +150,32 @@ function FilterDropdown({ visible, locations, tempLocations, tempDepartments, te
 }
 
 function JobRow({ job, onPress }) {
-  const meta = [job.location, job.department, job.job_type].filter(Boolean).join(' \u00B7 ');
+  const meta = [job.location, job.department, job.job_type].filter(Boolean).join(' · ');
+  const isSchoolAdmin = !job.alumni && !job.posted_by_alumni_id;
+  const posterName = job.alumni
+    ? `${job.alumni.first_name || ''} ${job.alumni.last_name || ''}`.trim() || 'Alumni Member'
+    : 'LCCB Admin';
 
   return (
     <Pressable style={styles.row} onPress={onPress}>
       <View style={styles.rowTop}>
         <Text style={styles.rowTitle} numberOfLines={2}>{job.job_title}</Text>
       </View>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 2 }}>{job.company}</Text>
       {meta ? <Text style={styles.rowMeta}>{meta}</Text> : null}
-      <Text style={styles.rowTimestamp}>Posted {timeAgo(job.created_at)}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+        <Text style={styles.rowTimestamp}>Posted {timeAgo(job.created_at)}</Text>
+        <Text style={[styles.rowTimestamp, { color: '#94a3b8' }]}>·</Text>
+        {isSchoolAdmin ? (
+          <View style={styles.adminBadge}>
+            <Text style={styles.adminBadgeText}>LCCB Admin</Text>
+          </View>
+        ) : (
+          <Text style={[styles.rowTimestamp, { color: '#2563eb', fontWeight: '600' }]} numberOfLines={1}>
+            by {posterName}
+          </Text>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -170,6 +189,31 @@ export default function JobsListScreen({ navigation, user }) {
   const [selectedDepartments, setSelectedDepartments] = useState([]);
   const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+
+  const handleCreateJob = async (formData) => {
+    setIsPosting(true);
+    try {
+      const myAlumniId = getAlumniId(user);
+      const payload = {
+        posted_by_alumni_id: isTeacher(user) ? null : myAlumniId,
+        ...formData
+      };
+      await jobService.createJob(payload);
+      realtimeClient.emit('job.created');
+      setShowCreateModal(false);
+      await loadData();
+      Alert.alert('Success', 'Job posting created successfully!');
+    } catch (err) {
+      Alert.alert(
+        'Post Failed',
+        err?.response?.data?.error || err?.message || 'Failed to post job.'
+      );
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   const [tempLocations, setTempLocations] = useState([]);
   const [tempDepartments, setTempDepartments] = useState([]);
@@ -273,8 +317,19 @@ export default function JobsListScreen({ navigation, user }) {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.screenTitle}>Job Board</Text>
-        <Text style={styles.screenSubtitle}>Explore openings posted across alumni network.</Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.screenTitle}>Job Board</Text>
+            <Text style={styles.screenSubtitle}>Explore openings posted across alumni network.</Text>
+          </View>
+          <Pressable
+            style={styles.postJobBtn}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.postJobBtnText}>Post Job</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.searchRow}>
           <View style={styles.searchShell}>
@@ -331,6 +386,14 @@ export default function JobsListScreen({ navigation, user }) {
           </React.Fragment>
         ))}
       </ScrollView>
+
+      <JobFormModal
+        visible={showCreateModal}
+        initialJob={null}
+        loading={isPosting}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateJob}
+      />
     </ScreenContainer>
   );
 }
@@ -339,17 +402,55 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 32
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 8
+  },
+  postJobBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  postJobBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  adminBadge: {
+    backgroundColor: '#faf5ff',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f3e8ff'
+  },
+  adminBadgeText: {
+    color: '#7c3aed',
+    fontSize: 10,
+    fontWeight: '700'
+  },
   screenTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0f172a',
-    marginTop: 8
+    color: '#0f172a'
   },
   screenSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748b',
-    marginTop: 4,
-    marginBottom: 12
+    marginTop: 2
   },
   searchRow: {
     flexDirection: 'row',

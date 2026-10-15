@@ -102,6 +102,8 @@ const EventDetail = () => {
     }
   };
 
+  const [isJoining, setIsJoining] = useState(false);
+
   const handleJoinEvent = async () => {
     try {
       const alumniId = user.alumni?.id;
@@ -110,12 +112,15 @@ const EventDetail = () => {
         return;
       }
 
+      setIsJoining(true);
       await eventService.joinEvent(id, alumniId);
       setIsAttending(true);
-      loadEventDetails();
+      await loadEventDetails();
     } catch (error) {
       console.error("Error joining event:", error);
       toast.error(error.response?.data?.error || "Failed to join event");
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -126,12 +131,11 @@ const EventDetail = () => {
   const [leaveConfirm, setLeaveConfirm] = useState({ isOpen: false });
 
   const performLeaveConfirmed = async () => {
-    setLeaveConfirm({ isOpen: false });
     try {
       const alumniId = user.alumni?.id;
       await eventService.leaveEvent(id, alumniId);
       setIsAttending(false);
-      loadEventDetails();
+      await loadEventDetails();
       toast.success("You have left the event");
     } catch (error) {
       console.error("Error leaving event:", error);
@@ -277,13 +281,13 @@ const EventDetail = () => {
 
   const performDeleteConfirmed = async () => {
     const photoId = confirmPhotoId;
-    setShowConfirm(false);
-    setConfirmPhotoId(null);
     if (!photoId) return;
     try {
       await eventService.deleteGalleryPhoto(id, photoId);
       setGallery((prev) => prev.filter((p) => p.id !== photoId));
       toast.success("Photo deleted successfully");
+      setShowConfirm(false);
+      setConfirmPhotoId(null);
     } catch (error) {
       console.error("Error deleting photo:", error);
       toast.error("Failed to delete photo");
@@ -420,6 +424,7 @@ const EventDetail = () => {
         title="Leave Event"
         message="Are you sure you want to leave this event? You can always rejoin later if you change your mind."
         confirmText="Leave"
+        confirmLoadingText="Leaving..."
         cancelText="Cancel"
         type="danger"
       />
@@ -826,9 +831,36 @@ const EventDetail = () => {
                     </p>
                     <button
                       onClick={handleJoinEvent}
-                      className="w-full app-primary-button px-4 py-3 text-sm"
+                      disabled={isJoining}
+                      className="w-full app-primary-button px-4 py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Join Event
+                      {isJoining ? (
+                        <>
+                          <svg
+                            className="h-4 w-4 animate-spin text-white"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                            />
+                          </svg>
+                          <span>Joining Event...</span>
+                        </>
+                      ) : (
+                        <span>Join Event</span>
+                      )}
                     </button>
                   </div>
                 )}

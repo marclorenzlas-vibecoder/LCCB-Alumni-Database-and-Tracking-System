@@ -24,6 +24,7 @@ const eventStatusService = require('./services/eventStatusService');
 const birthdayNotificationService = require('./services/birthdayNotificationService');
 const { initRealtime } = require('./services/realtimeService');
 const { ensureActivityLogTable } = require('./services/activityLogService');
+const { syncAllSequences } = require('./services/dbSequenceService');
 
 // Load environment variables
 dotenv.config();
@@ -39,42 +40,44 @@ const app = express();
 const PORT = Number(process.env.PORT) || 5001;
 
 
-// Restore strict CORS for credentialed requests from frontend
-// Support both development (localhost) and production (custom domain)
-const parseAllowedOrigins = () => {
-  const envOrigins = process.env.ALLOWED_ORIGINS || '';
-  const defaultOrigins = [
-    'http://localhost:3002', 
-    'http://localhost:5001',
-    'http://192.168.5.248:3002'  // Allow access from network IP (for phone scanning)
-  ];
-  
-  if (envOrigins.trim()) {
-    // Parse comma-separated origins from env var
-    return [...defaultOrigins, ...envOrigins.split(',').map(o => o.trim())];
-  }
-  
-  return defaultOrigins;
+// Flexible CORS setup for development (localhost, 127.0.0.1, LAN IPs) and production
+const customOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+if (process.env.FRONTEND_URL) {
+  customOrigins.push(process.env.FRONTEND_URL.trim().replace(/\/+$/, ''));
+}
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  const cleanOrigin = origin.trim().replace(/\/+$/, '');
+  // Allow localhost or 127.0.0.1 on any port (3000, 3002, 5173, etc.)
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin)) return true;
+  // Allow LAN IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x) on any port
+  if (/^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(cleanOrigin)) return true;
+  // Allow custom configured origins
+  if (customOrigins.includes(cleanOrigin)) return true;
+  return false;
 };
 
-const allowedOrigins = parseAllowedOrigins();
-console.log('CORS Allowed Origins:', allowedOrigins);
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('[CORS] Blocked request from origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+};
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
-    res.header('Vary', 'Origin');
-  }
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  // Only send credentials header if coming from an allowed frontend origin
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Body parser middleware
 app.use(express.json());
@@ -180,14 +183,19 @@ async function main() {
   try {
     await prisma.$connect();
     console.log('Database connection successful');
-    await ensureActivityLogTable();
-    console.log('Activity log table ready');
     
-    // Start event status checker
+    // Start HTTP server immediately so port 5001 is listening without delay
+    startServer(PORT);
+
+    // Run table initialization and sequence sync asynchronously in background
+    ensureActivityLogTable()
+      .then(() => console.log('Activity log table ready'))
+      .catch(err => console.warn('Activity log table init:', err.message));
+
+    
+    // Start background checkers
     eventStatusService.startEventStatusChecker();
     birthdayNotificationService.startBirthdayNotificationChecker();
-    
-    startServer(PORT);
   } catch (error) {
     console.error('Database connection failed:', error);
     process.exit(1);

@@ -194,15 +194,7 @@ const UserLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const readCollapsedPreference = () => {
-    try {
-      return localStorage.getItem("sidebarCollapsed") === "true";
-    } catch {
-      return false;
-    }
-  };
-
-  const [collapsed, setCollapsed] = useState(readCollapsedPreference);
+  const [collapsed, setCollapsed] = useState(true);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutStatus, setLogoutStatus] = useState("processing");
@@ -225,20 +217,18 @@ const UserLayout = ({ children }) => {
   const isDesktopCollapsed = collapsed && isLargeScreen;
 
   const toggleCollapsed = () => {
-    const next = !collapsed;
-    setCollapsed(next);
+    setCollapsed((prev) => !prev);
     if (!isLargeScreen) {
       setSidebarOpen(false);
-    }
-    try {
-      localStorage.setItem("sidebarCollapsed", String(next));
-    } catch {
-      /* ignore */
     }
   };
 
   useEffect(() => {
-    if (!isLargeScreen) setSidebarOpen(false);
+    if (!isLargeScreen) {
+      setSidebarOpen(false);
+    } else {
+      setCollapsed(true);
+    }
   }, [location.pathname, isLargeScreen]);
 
   useEffect(() => {
@@ -300,11 +290,14 @@ const UserLayout = ({ children }) => {
     if (isItemActive(location.pathname, path)) {
       if (!isLargeScreen) {
         setSidebarOpen(false);
+      } else {
+        setCollapsed(true);
       }
       return;
     }
 
     if (isLargeScreen) {
+      setCollapsed(true);
       navigate(path);
       return;
     }
@@ -514,12 +507,20 @@ const UserLayout = ({ children }) => {
 
       {isLargeScreen ? (
         <div className="app-sidebar-shell h-full">
+          <div className="app-sidebar-rail-spacer" aria-hidden="true" />
           <aside
             className="app-sidebar-aside flex h-full flex-col overflow-hidden border-r border-blue-800/50 bg-blue-950 text-white"
             data-collapsed={isDesktopCollapsed ? "true" : "false"}
           >
             {sidebarContent}
           </aside>
+          {!isDesktopCollapsed && (
+            <div
+              className="fixed inset-0 z-20 bg-slate-950/20 backdrop-blur-[0.5px] transition-opacity duration-200"
+              onClick={toggleCollapsed}
+              aria-label="Close sidebar overlay"
+            />
+          )}
           <div
             className="app-sidebar-main h-full overflow-y-auto overflow-x-hidden bg-white"
             data-sidebar-collapsed={isDesktopCollapsed ? "true" : "false"}

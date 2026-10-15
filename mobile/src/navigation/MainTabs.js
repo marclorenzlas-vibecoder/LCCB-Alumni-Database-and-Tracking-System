@@ -158,7 +158,7 @@ function CustomDrawerContent(props) {
         style={[styles.drawerItem, focused && styles.drawerItemActive]}
       >
         <View style={[styles.iconTrack, focused && styles.iconTrackActive]}>
-          <RouteIcon routeName={route.name} focused={focused} size={20} color={color} />
+          <RouteIcon routeName={route.name} focused={focused} size={22} color={color} />
         </View>
         <Text style={[styles.drawerLabel, { color }]} numberOfLines={1}>
           {label}
@@ -214,7 +214,7 @@ function CustomDrawerContent(props) {
           .map(renderItem)}
         <Pressable onPress={handleLogout} style={[styles.drawerItem, styles.logoutItem]}>
           <View style={[styles.iconTrack, styles.logoutIconTrack]}>
-            <Ionicons name="log-out-outline" size={20} color="#fecaca" />
+            <Ionicons name="log-out-outline" size={22} color="#f87171" />
           </View>
           <Text style={[styles.drawerLabel, styles.logoutLabel]} numberOfLines={1}>
             Logout
@@ -413,13 +413,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   iconTrackActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    backgroundColor: "transparent",
   },
   logoutItem: {
     marginTop: 2,
   },
   logoutIconTrack: {
-    backgroundColor: "rgba(239, 68, 68, 0.14)",
+    backgroundColor: "transparent",
   },
   logoutLabel: {
     color: "#fecaca",

@@ -61,7 +61,7 @@ apiClient.interceptors.response.use(
     const isBlockedAccount = status === 403 && responseCode === 'ACCOUNT_BLOCKED';
 
     if (isExpiredToken || isBlockedAccount) {
-      console.warn('[apiClient] auth error received:', status, serverMessage);
+      console.log('[apiClient] auth error received:', status, serverMessage);
       await AsyncStorage.removeItem(TOKEN_KEY);
       await AsyncStorage.removeItem(USER_KEY);
       if (onAuthError) {

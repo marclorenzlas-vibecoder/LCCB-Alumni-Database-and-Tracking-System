@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '../../components/ScreenContainer';
 import LoadingState from '../../components/LoadingState';
@@ -203,9 +204,12 @@ const COUNTRY_OPTIONS = [
 const CURRENCY_SYMBOLS = { PHP: '\u20B1', USD: '$', EUR: '\u20AC', GBP: '\u00A3', JPY: '\u00A5', AUD: 'A$', CAD: 'C$', SGD: 'S$' };
 const PRESET_AMOUNTS = [100, 250, 500, 1000];
 
+const GCASH_LOGO = require('../../../assets/gcash.png');
+const PAYMAYA_LOGO = require('../../../assets/paymaya.png');
+
 const PAYMENT_METHODS = [
-  { key: 'gcash', label: 'GCash', icon: 'wallet-outline' },
-  { key: 'paymaya', label: 'PayMaya', icon: 'phone-portrait-outline' }
+  { key: 'gcash', label: 'GCash', image: GCASH_LOGO },
+  { key: 'paymaya', label: 'PayMaya', image: PAYMAYA_LOGO }
 ];
 
 const ITEM_CATEGORIES = [
@@ -222,7 +226,7 @@ const ITEM_CONDITIONS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
 export default function DonationDetailScreen({ route, navigation, user }) {
   const { donationId } = route.params || {};
   const alumniUser = isAlumni(user);
-  const canDonate = alumniUser;
+  const canDonate = Boolean(user);
 
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -555,7 +559,6 @@ export default function DonationDetailScreen({ route, navigation, user }) {
     setSuccessState(receipt);
     setReceiptSubmitted(false);
     setCurrentStep(4);
-
   };
 
   const handleReceiptSubmission = async () => {
@@ -1063,25 +1066,82 @@ export default function DonationDetailScreen({ route, navigation, user }) {
 
             <Text style={styles.stepCardTitle}>Please select a payment method:</Text>
 
-            <View style={styles.paymentMethods}>
-              {PAYMENT_METHODS.map(method => (
-                <Pressable key={method.key} style={[styles.paymentMethodBtn, paymentMethod === method.key && styles.paymentMethodActive]} onPress={() => setPaymentMethod(method.key)}>
-                  <Ionicons name={method.icon} size={22} color={paymentMethod === method.key ? '#1d4ed8' : '#64748b'} />
-                  <Text style={[styles.paymentMethodLabel, paymentMethod === method.key && styles.paymentMethodLabelActive]}>{method.label}</Text>
-                  {paymentMethod === method.key && <Ionicons name="checkmark-circle" size={18} color="#1d4ed8" />}
-                </Pressable>
-              ))}
+            <View style={styles.paymentMethodsRow}>
+              {PAYMENT_METHODS.map(method => {
+                const isSelected = paymentMethod === method.key;
+                return (
+                  <Pressable
+                    key={method.key}
+                    style={styles.paymentMethodCard}
+                    onPress={() => setPaymentMethod(method.key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={method.label}
+                  >
+                    <Image
+                      source={method.image}
+                      style={[
+                        styles.paymentMethodLogo,
+                        !isSelected && styles.paymentMethodLogoInactive
+                      ]}
+                      resizeMode="contain"
+                    />
+                    <View
+                      style={[
+                        styles.paymentMethodIndicator,
+                        isSelected && styles.paymentMethodIndicatorActive
+                      ]}
+                    />
+                  </Pressable>
+                );
+              })}
             </View>
 
             {(paymentMethod === 'gcash' || paymentMethod === 'paymaya') && (
-              <View style={styles.redirectInfo}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.redirectText}>
-                    Send your donation to this {PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label} number.
-                  </Text>
-                  <Text style={styles.walletNumberText}>{selectedWalletNumber || 'Not set'}</Text>
-                  <Text style={styles.redirectText}>Open your wallet app, use this number to donate, take a screenshot of the payment, then tap Proceed.</Text>
+              <View style={styles.walletCard}>
+                <View style={styles.walletCardHeader}>
+                  <View style={styles.walletLogoWrap}>
+                    <Image
+                      source={paymentMethod === 'gcash' ? GCASH_LOGO : PAYMAYA_LOGO}
+                      style={styles.walletHeaderLogo}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.walletTitle}>
+                      {paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} Payment
+                    </Text>
+                    <Text style={styles.walletMerchant}>Recipient: LCCB ALUMNI HUB</Text>
+                  </View>
+                  <Text style={styles.walletAmountDue}>{formatAmount(amount, currency)}</Text>
                 </View>
+
+                {/* Admin Wallet Number Box with Copy Button */}
+                <View style={styles.walletNumberBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.walletNumberLabel}>
+                      {paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} Number:
+                    </Text>
+                    <Text style={styles.walletNumberVal} selectable>
+                      {selectedWalletNumber || 'Not set'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.copyBtn}
+                    onPress={async () => {
+                      if (selectedWalletNumber) {
+                        await Clipboard.setStringAsync(selectedWalletNumber);
+                        Alert.alert('Copied!', `${paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} number copied to clipboard.`);
+                      }
+                    }}
+                  >
+                    <Ionicons name="copy-outline" size={16} color="#1e3a8a" />
+                    <Text style={styles.copyBtnText}>Copy</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={styles.walletNoteText}>
+                  Send your donation of {formatAmount(amount, currency)} to the number above using your {paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} app. Take a screenshot of the confirmation, then tap Proceed to upload your receipt proof.
+                </Text>
               </View>
             )}
           </View>
@@ -1098,11 +1158,20 @@ export default function DonationDetailScreen({ route, navigation, user }) {
               <Text style={styles.nextBtnText}>Next</Text>
             </Pressable>
           ) : (
-            <Pressable style={[styles.nextBtn, (submitting || !user || !canDonate) && styles.btnDisabled]} onPress={handleSubmit} disabled={submitting || !user || !canDonate}>
+            <Pressable
+              style={[
+                styles.nextBtn,
+                (submitting || !user || !canDonate) && styles.btnDisabled
+              ]}
+              onPress={handleSubmit}
+              disabled={submitting || !user || !canDonate}
+            >
               <Text style={styles.nextBtnText}>
                 {submitting
                   ? 'Processing...'
-                  : isMoneyPath ? 'Proceed' : 'Submit Donation Request'}
+                  : isMoneyPath && isWalletPaymentMethod
+                    ? 'Proceed to Upload Proof'
+                    : isMoneyPath ? 'Proceed' : 'Submit Donation Request'}
               </Text>
             </Pressable>
           )}
@@ -1308,17 +1377,56 @@ const styles = StyleSheet.create({
   paymentSummary: { backgroundColor: '#f1f5f9', borderRadius: 10, padding: 14, alignItems: 'center', gap: 2 },
   paymentSummaryLabel: { fontSize: 11, color: '#64748b', fontWeight: '600' },
   paymentSummaryAmount: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
-  paymentMethods: { gap: 8 },
-  paymentMethodBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 14, backgroundColor: '#fff' },
-  paymentMethodActive: { borderColor: '#1d4ed8', backgroundColor: '#eff6ff' },
-  paymentMethodLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#475569' },
-  paymentMethodLabelActive: { color: '#0f172a' },
+  paymentMethodsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 2
+  },
+  paymentMethodCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8
+  },
+  paymentMethodLogo: {
+    width: '100%',
+    height: 52,
+    maxWidth: 160
+  },
+  paymentMethodLogoInactive: {
+    opacity: 0.38
+  },
+  paymentMethodIndicator: {
+    marginTop: 8,
+    height: 3,
+    width: 48,
+    borderRadius: 2,
+    backgroundColor: 'transparent'
+  },
+  paymentMethodIndicatorActive: {
+    backgroundColor: '#1d4ed8'
+  },
   row2: { flexDirection: 'row', gap: 10 },
   quantityField: { flex: 0.7 },
   categoryField: { flex: 1.3, minWidth: 0 },
-  redirectInfo: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12 },
-  redirectText: { flex: 1, fontSize: 13, color: '#475569', lineHeight: 19 },
-  walletNumberText: { marginVertical: 8, borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 10, fontSize: 18, fontWeight: '800', color: '#1e3a8a', textAlign: 'center' },
+  walletCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, padding: 14, gap: 12 },
+  walletCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  walletLogoWrap: { width: 56, height: 36, alignItems: 'center', justifyContent: 'center' },
+  walletHeaderLogo: { width: 52, height: 32 },
+  walletTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  walletMerchant: { fontSize: 11, color: '#64748b', marginTop: 1 },
+  walletAmountDue: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  walletNumberBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 12, gap: 10 },
+  walletNumberLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+  walletNumberVal: { fontSize: 18, fontWeight: '800', color: '#1e3a8a', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginTop: 2 },
+  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  copyBtnText: { fontSize: 13, fontWeight: '700', color: '#1e3a8a' },
+  walletNoteText: { fontSize: 11, color: '#64748b', textAlign: 'center', lineHeight: 16, paddingHorizontal: 6 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   cancelBtn: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingVertical: 13, alignItems: 'center', backgroundColor: '#fff' },
   cancelBtnText: { fontSize: 14, fontWeight: '700', color: '#64748b' },

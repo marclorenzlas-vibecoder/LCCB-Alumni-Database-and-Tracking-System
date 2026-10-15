@@ -597,6 +597,8 @@ const DonatePage = () => {
       ? gcashNumber
       : paymentNumber;
 
+  const isMobileDevice = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
+
   const paymentProviders = {
     paymaya: { label: 'PayMaya' },
     gcash: { label: 'GCash' }
@@ -868,8 +870,38 @@ const DonatePage = () => {
     };
   };
 
+  const handleDirectPay = () => {
+    if (!isLoggedIn) {
+      toast.warning('Please log in to make a donation');
+      navigate('/login', { state: { returnTo: `/donate/${campaignId}` } });
+      return;
+    }
+
+    if (!canDonate) {
+      toast.warning('Only alumni or admin accounts can make donations.');
+      return;
+    }
+
+    if (!validateStepOne()) return;
+    if (isMoneyPath && !validateMoneyPaymentDetails()) return;
+
+    // Advance to Step 4 so donor can attach receipt/screenshot
+    const receipt = buildDonationReceipt();
+    setSuccessState({
+      campaign: campaign,
+      receipt
+    });
+    setReceiptSubmitted(false);
+    setCurrentStep(4);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    if (isMoneyPath && isWalletPaymentMethod) {
+      handleDirectPay();
+      return;
+    }
 
     if (!isLoggedIn) {
       toast.warning('Please log in to make a donation');
@@ -899,12 +931,13 @@ const DonatePage = () => {
 
   };
 
-  const handleReceiptSubmission = async () => {
+  const handleReceiptSubmission = async (explicitScreenshot = null) => {
     try {
       setSubmitting(true);
       setError('');
+      const effectiveScreenshot = explicitScreenshot || paymentScreenshot;
 
-      if (isMoneyPath && isWalletPaymentMethod && !paymentScreenshot) {
+      if (isMoneyPath && isWalletPaymentMethod && !effectiveScreenshot) {
         toast.warning('Please upload a screenshot of your GCash or PayMaya payment first.');
         return;
       }
@@ -967,7 +1000,7 @@ const DonatePage = () => {
         fd.append('description', withDonationMeta(donorSummary, donationMeta));
         fd.append('date', formData.date);
         fd.append('donation_type', 'money');
-        fd.append('payment_screenshot', paymentScreenshot);
+        fd.append('payment_screenshot', effectiveScreenshot);
         updatedCampaign = await donationService.contributeToDonation(campaign.id, fd);
       } else {
         updatedCampaign = await donationService.contributeToDonation(campaign.id, payload);
@@ -997,7 +1030,7 @@ const DonatePage = () => {
       }, 1500);
     } catch (err) {
       console.error('Error submitting donation receipt:', err);
-      const rawErrorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to submit donation receipt';
+      const rawErrorMsg = err.response?.data?.details || err.response?.data?.message || err.response?.data?.error || 'Failed to submit donation receipt';
       const errorMsg = isMoneyPath && isWalletPaymentMethod && /item photos/i.test(rawErrorMsg)
         ? 'You can only upload 1 payment screenshot.'
         : rawErrorMsg;
@@ -1691,50 +1724,93 @@ const DonatePage = () => {
                     </div>
 
                     <h3 className="text-base font-semibold text-slate-900">Please select a payment method:</h3>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {paymentMethodOptions.map((method) => (
-                        <button
-                          key={method.key}
-                          type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({ ...prev, paymentMethod: method.key }));
-                          }}
-                          className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-all flex items-center gap-3 ${
-                            formData.paymentMethod === method.key
-                              ? 'border-slate-900 bg-white text-slate-900 shadow-md'
-                              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex-shrink-0">
-                            {method.icon}
-                          </div>
-                          <span>{method.label}</span>
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-2 gap-4 my-2">
+                      {paymentMethodOptions.map((method) => {
+                        const isSelected = formData.paymentMethod === method.key;
+                        return (
+                          <button
+                            key={method.key}
+                            type="button"
+                            onClick={() => {
+                              setFormData((prev) => ({ ...prev, paymentMethod: method.key }));
+                            }}
+                            className="flex flex-col items-center justify-center p-3 transition-all focus:outline-none group"
+                          >
+                            <img
+                              src={method.key === 'gcash' ? gcashLogo : paymayaLogo}
+                              alt={method.label}
+                              className={`h-12 w-auto max-w-[160px] object-contain transition-opacity ${
+                                isSelected ? 'opacity-100' : 'opacity-40 group-hover:opacity-75'
+                              }`}
+                            />
+                            <div
+                              className={`mt-2.5 h-1 w-12 rounded-full transition-colors ${
+                                isSelected ? 'bg-blue-600' : 'bg-transparent'
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    {formData.paymentMethod === 'paymaya' && (
-                      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
-                        {paymentMethodOptions.find((method) => method.key === 'paymaya')?.logo}
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">Send your donation to this PayMaya number:</p>
-                          <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 font-mono text-lg font-bold text-blue-900">
-                            {paymayaNumber || 'Not set'}
-                          </p>
-                          <p className="mt-3 text-sm text-slate-600">Open PayMaya, use this number to donate, take a screenshot of the payment, then click Proceed.</p>
+                    {(formData.paymentMethod === 'gcash' || formData.paymentMethod === 'paymaya') && (
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5 shadow-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={formData.paymentMethod === 'gcash' ? gcashLogo : paymayaLogo}
+                              alt={formData.paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'}
+                              className="h-10 w-auto max-w-[110px] object-contain"
+                            />
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-base">
+                                {formData.paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} Payment
+                              </h4>
+                              <p className="text-xs text-slate-500">
+                                Recipient: <span className="font-semibold text-slate-700">LCCB ALUMNI HUB</span>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-left sm:text-right">
+                            <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">Amount Due</div>
+                            <div className="text-xl font-black text-slate-900">
+                              {formatAmount(formData.amount, formData.currency)}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
 
-                    {formData.paymentMethod === 'gcash' && (
-                      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
-                        {paymentMethodOptions.find((method) => method.key === 'gcash')?.logo}
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">Send your donation to this GCash number:</p>
-                          <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 font-mono text-lg font-bold text-blue-900">
-                            {gcashNumber || 'Not set'}
+                        {/* Account Number Box with 1-click Copy */}
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div>
+                            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500">
+                              Send payment to this {formData.paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} number:
+                            </span>
+                            <p className="font-mono text-xl font-black text-blue-900 mt-0.5 select-all">
+                              {selectedWalletNumber || 'Not set'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedWalletNumber) {
+                                navigator.clipboard?.writeText(selectedWalletNumber);
+                                toast.success(`${formData.paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} number copied!`);
+                              }
+                            }}
+                            className="px-4 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700 shadow-xs transition-colors flex items-center gap-1.5"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Copy Number
+                          </button>
+                        </div>
+
+                        {/* Instructions Note */}
+                        <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4 text-center">
+                          <p className="text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
+                            Send your donation of {formatAmount(formData.amount, formData.currency)} to the {formData.paymentMethod === 'gcash' ? 'GCash' : 'PayMaya'} number above. Take a screenshot of your payment confirmation, then click Proceed to upload your receipt proof.
                           </p>
-                          <p className="mt-3 text-sm text-slate-600">Open GCash, use this number to donate, take a screenshot of the payment, then click Proceed.</p>
                         </div>
                       </div>
                     )}
@@ -1750,8 +1826,16 @@ const DonatePage = () => {
                       {stepLoading ? 'Processing...' : 'Next'}
                     </button>
                   ) : (
-                    <button type="submit" disabled={!isLoggedIn || !canDonate || submitting} className="flex-1 rounded-xl bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400">
-                      {submitting ? 'Processing...' : isMoneyPath ? 'Proceed' : 'Submit Donation Request'}
+                    <button
+                      type="submit"
+                      disabled={!isLoggedIn || !canDonate || submitting}
+                      className="flex-1 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-700 transition-all shadow-sm hover:shadow-md disabled:bg-gray-400"
+                    >
+                      {submitting
+                        ? 'Processing...'
+                        : isMoneyPath && isWalletPaymentMethod
+                          ? 'Proceed to Upload Proof'
+                          : isMoneyPath ? 'Proceed' : 'Submit Donation Request'}
                     </button>
                   )}
                 </div>

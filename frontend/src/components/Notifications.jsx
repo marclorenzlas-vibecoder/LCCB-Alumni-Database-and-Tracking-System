@@ -3,7 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import UserLayout from './UserLayout';
 import BirthdayGreetingComposer from './BirthdayGreetingComposer';
-import { API_BASE_URL } from '../config/apiBaseUrl';
+import { API_BASE_URL, getImageUrl } from '../config/apiBaseUrl';
+
+const BIRTHDAY_ICON = 'M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7';
+
+const resolveNotificationThumbnail = (notification) => {
+  const img = notification?.thumbnail_image || notification?.event?.image || notification?.target_image;
+  if (!img || typeof img !== 'string') return '';
+  return img.startsWith('http') ? img : getImageUrl(img);
+};
+
+const getNotificationImageSrc = (notification) => {
+  const imagePath = notification?.sender_profile_image;
+  if (!imagePath) return '';
+  return imagePath.startsWith('http') ? imagePath : getImageUrl(imagePath);
+};
 
 const getRelativeTime = (value) => {
   if (!value) return 'Unknown time';
@@ -27,13 +41,13 @@ const getRelativeTime = (value) => {
 };
 
 const TYPE_CONFIG = {
-  EVENT:        { color: 'from-purple-500 to-indigo-600', label: 'Event',       icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-  ACHIEVEMENT:  { color: 'from-amber-400 to-orange-500',  label: 'Achievement', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
-  ANNOUNCEMENT: { color: 'from-sky-500 to-cyan-600',      label: 'Notice',     icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
-  DONATION:     { color: 'from-emerald-500 to-teal-600',  label: 'Donation',   icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-  JOB_APPLICATION: { color: 'from-rose-500 to-red-600',   label: 'Job Application', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-  REGISTRATION: { color: 'from-red-500 to-rose-600',      label: 'Registration', icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  GENERAL:      { color: 'from-blue-500 to-blue-700',      label: 'System',    icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  EVENT:        { color: 'from-purple-500 to-indigo-600', badgeBg: 'bg-indigo-600', label: 'Event',       icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+  ACHIEVEMENT:  { color: 'from-amber-400 to-orange-500',  badgeBg: 'bg-amber-500',  label: 'Achievement', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
+  ANNOUNCEMENT: { color: 'from-sky-500 to-cyan-600',      badgeBg: 'bg-sky-500',    label: 'Notice',     icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
+  DONATION:     { color: 'from-emerald-500 to-teal-600',  badgeBg: 'bg-emerald-600', label: 'Donation',   icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+  JOB_APPLICATION: { color: 'from-rose-500 to-red-600',   badgeBg: 'bg-rose-500',    label: 'Job Application', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  REGISTRATION: { color: 'from-red-500 to-rose-600',      badgeBg: 'bg-red-600',     label: 'Registration', icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
+  GENERAL:      { color: 'from-blue-500 to-blue-700',     badgeBg: 'bg-blue-600',    label: 'System',    icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
 };
 
 const isPendingRegistrationNotification = (notification) => {
@@ -442,13 +456,16 @@ const Notifications = () => {
                       const isUnread = !notification.is_read;
                       const isBirthday = isBirthdayNotification(notification);
                       const isUrgent = isUrgentNotification(notification);
+                      const senderImg = resolveNotificationThumbnail(notification) || getNotificationImageSrc(notification);
+                      const badgeBg = isBirthday ? 'bg-pink-500' : (cfg.badgeBg || 'bg-blue-600');
+                      const iconPath = isBirthday ? BIRTHDAY_ICON : cfg.icon;
 
                       return (
                         <button
                           type="button"
                           key={notification.id}
                           onClick={() => handleNotificationClick(notification)}
-                          className={`w-full px-5 py-4 text-left transition-all duration-200 group cursor-pointer ${
+                          className={`w-full px-5 py-4 text-left transition-all duration-200 group cursor-pointer flex items-start gap-4 ${
                             isUrgent
                               ? 'bg-red-50/80 hover:bg-red-100/80'
                               : isUnread
@@ -456,57 +473,70 @@ const Notifications = () => {
                               : 'bg-white hover:bg-gray-50/80'
                           }`}
                         >
-                          <div className="flex items-start gap-4">
-                            <div className="relative mt-0.5 flex-shrink-0">
-                              <div className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${cfg.color} text-white shadow-sm`}>
-                                {isBirthday ? (
-                                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+                          {/* Left Avatar / Page Icon with mini badge */}
+                          <div className="relative mt-0.5 shrink-0">
+                            {senderImg ? (
+                              <div className="relative">
+                                <img
+                                  src={senderImg}
+                                  alt={notification.sender_name || "Sender"}
+                                  className="h-12 w-12 rounded-full border border-gray-200 object-cover shadow-sm ring-1 ring-black/5"
+                                />
+                                <span className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full ${badgeBg} text-white ring-2 ring-white shadow-sm`}>
+                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d={iconPath} />
                                   </svg>
-                                ) : (
-                                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d={cfg.icon} />
-                                  </svg>
-                                )}
-                              </div>
-                              {isUnread && (
-                                <span className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${isUrgent ? 'bg-red-600' : 'bg-blue-500'}`} />
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <p className={`text-sm leading-snug line-clamp-1 ${
-                                  isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'
-                                } group-hover:text-blue-900 transition-colors`}>
-                                  {notification.title || 'Notification'}
-                                </p>
-                                <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                                  isUrgent
-                                    ? 'bg-red-100 text-red-700'
-                                    : isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
-                                }`}>
-                                  {isBirthday ? 'Birthday' : cfg.label}
                                 </span>
                               </div>
-                              <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2">
-                                {formatNotificationPreview(notification.message) || 'No details available.'}
-                              </p>
-                              <div className="mt-1.5 flex items-center gap-2">
-                                <p className="text-xs text-gray-400 font-medium">{getRelativeTime(notification.created_at)}</p>
-                                {notification.link && !isBirthday && (
-                                  <span className="text-[11px] text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                                    Click to view &rarr;
-                                  </span>
-                                )}
-                                {isBirthday && (
-                                  <span className="text-[11px] text-pink-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                                    Send greeting &rarr;
-                                  </span>
-                                )}
+                            ) : (
+                              <div className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${cfg.color} text-white shadow-sm ring-1 ring-black/5`}>
+                                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d={iconPath} />
+                                </svg>
                               </div>
+                            )}
+                          </div>
+
+                          {/* Middle Content */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <p className={`text-sm leading-snug line-clamp-1 ${
+                                isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'
+                              } group-hover:text-blue-900 transition-colors`}>
+                                {notification.title || 'Notification'}
+                              </p>
+                              <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                                isUrgent
+                                  ? 'bg-red-100 text-red-700'
+                                  : isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
+                              }`}>
+                                {isBirthday ? 'Birthday' : cfg.label}
+                              </span>
+                            </div>
+                            <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2">
+                              {formatNotificationPreview(notification.message) || 'No details available.'}
+                            </p>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <p className="text-xs text-gray-400 font-medium">{getRelativeTime(notification.created_at)}</p>
+                              {notification.link && !isBirthday && (
+                                <span className="text-[11px] text-blue-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                                  Click to view &rarr;
+                                </span>
+                              )}
+                              {isBirthday && (
+                                <span className="text-[11px] text-pink-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                                  Send greeting &rarr;
+                                </span>
+                              )}
                             </div>
                           </div>
+
+                          {/* Unread indicator dot */}
+                          {isUnread && (
+                            <div className="shrink-0 self-center">
+                              <span className="h-2.5 w-2.5 rounded-full bg-blue-600 inline-block ring-2 ring-blue-100" />
+                            </div>
+                          )}
                         </button>
                       );
                     })}

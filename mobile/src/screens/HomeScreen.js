@@ -258,7 +258,7 @@ function HeroSection({ navigation }) {
   return (
     <ImageBackground source={require('../../assets/homeimage.jpg')} style={styles.heroBg} resizeMode="cover">
       <View style={styles.heroOverlay}>
-        <Text style={styles.heroTitle}>Welcome to LCCB{'\n'}<Text style={styles.heroTitleAccent}>Alumni Network</Text></Text>
+        <Text style={styles.heroTitle}>Welcome to LCCB{'\n'}<Text style={styles.heroTitleAccent}>Alumni Hub</Text></Text>
         <Text style={styles.heroSub}>Connect, grow, and stay updated with your fellow LCCB alumni. Our platform helps you maintain professional connections, discover career opportunities, and stay informed about alumni events.</Text>
         <Pressable style={styles.heroPrimaryBtn} onPress={() => navigation.navigate('Alumni')}>
           <Text style={styles.heroPrimaryText}>Explore Alumni Directory</Text>

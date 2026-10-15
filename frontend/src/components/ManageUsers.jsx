@@ -21,6 +21,7 @@ const ManageUsers = () => {
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const statusMenuRef = useRef(null);
   const token = localStorage.getItem('token');
 
@@ -66,7 +67,7 @@ const ManageUsers = () => {
             Authorization: `Bearer ${token}`,
           },
         }),
-        fetch(`${API_BASE_URL}/alumni`, {
+        fetch(`${API_BASE_URL}/alumni?all=true`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -87,7 +88,9 @@ const ManageUsers = () => {
       ]);
 
       const userRecords = Array.isArray(userRecordsRaw) ? userRecordsRaw : [];
-      const alumniRecords = Array.isArray(alumniRecordsRaw) ? alumniRecordsRaw : [];
+      const alumniRecords = Array.isArray(alumniRecordsRaw)
+        ? alumniRecordsRaw
+        : (Array.isArray(alumniRecordsRaw?.alumni) ? alumniRecordsRaw.alumni : []);
 
       const alumniAccounts = userRecords.filter((user) => {
         const email = normalizeEmail(user.email);
@@ -169,9 +172,10 @@ const ManageUsers = () => {
   };
 
   const toggleBlockUser = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || isSubmitting) return;
 
     try {
+      setIsSubmitting(true);
       if (!selectedUser.hasLinkedAccount) {
         setUsers(
           users.map((user) =>
@@ -208,6 +212,8 @@ const ManageUsers = () => {
     } catch (err) {
       console.error('Error toggling user block status:', err);
       toast.error('An error occurred');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -441,21 +447,32 @@ const ManageUsers = () => {
 
               <div className="flex gap-3">
                 <button
+                  type="button"
+                  disabled={isSubmitting}
                   onClick={() => {
+                    if (isSubmitting) return;
                     setShowBlockModal(false);
                     setSelectedUser(null);
                   }}
-                  className="flex-1 rounded-md bg-gray-200 px-4 py-2 font-medium text-gray-800 transition-colors hover:bg-gray-300"
+                  className="flex-1 rounded-md bg-gray-200 px-4 py-2 font-medium text-gray-800 transition-colors hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
+                  disabled={isSubmitting}
                   onClick={toggleBlockUser}
-                  className={`flex-1 rounded-md px-4 py-2 font-medium text-white transition-colors ${
+                  className={`flex-1 inline-flex items-center justify-center rounded-md px-4 py-2 font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                     selectedUser.is_blocked ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
                   }`}
                 >
-                  {selectedUser.is_blocked ? 'Yes, Unblock' : 'Yes, Block'}
+                  {isSubmitting && (
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                  )}
+                  {isSubmitting ? 'Processing...' : (selectedUser.is_blocked ? 'Yes, Unblock' : 'Yes, Block')}
                 </button>
               </div>
             </div>

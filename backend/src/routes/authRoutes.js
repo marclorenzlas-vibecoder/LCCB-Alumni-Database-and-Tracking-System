@@ -266,7 +266,8 @@ router.post('/register-teacher', teacherAuthMiddleware, async (req, res) => {
 
     // Respond appropriately depending on requester
     if (req.headers.accept && req.headers.accept.includes('text/html')) {
-      return res.status(201).send('<p style="font-family:sans-serif;color:#090">Account created. <a href="http://localhost:3002/login">Login</a></p>');
+      const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3002';
+      return res.status(201).send(`<p style="font-family:sans-serif;color:#090">Account created. <a href="${frontendBase}/login">Login</a></p>`);
     }
     res.status(201).json({ message: 'Teacher account created successfully', teacher });
   } catch (error) {

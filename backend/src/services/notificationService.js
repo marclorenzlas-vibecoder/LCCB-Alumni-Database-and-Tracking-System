@@ -101,6 +101,89 @@ async function createNotifications({ type, title, message, link, eventId = null,
   }
 }
 
+async function attachThumbnailsToNotifications(notifications) {
+  if (!Array.isArray(notifications) || notifications.length === 0) {
+    return [];
+  }
+
+  const eventIds = new Set();
+  const achievementIds = new Set();
+  const donationIds = new Set();
+
+  for (const n of notifications) {
+    if (n.event_id) eventIds.add(Number(n.event_id));
+    const link = String(n.link || '');
+    const eventMatch = link.match(/\/events\/(\d+)/i);
+    if (eventMatch) eventIds.add(Number(eventMatch[1]));
+
+    const achievementMatch = link.match(/\/achievements\/(\d+)/i);
+    if (achievementMatch) achievementIds.add(Number(achievementMatch[1]));
+
+    const donationMatch = link.match(/\/(?:donate|donations)\/(\d+)/i);
+    if (donationMatch) donationIds.add(Number(donationMatch[1]));
+  }
+
+  const [events, achievements, donations] = await Promise.all([
+    eventIds.size > 0
+      ? prisma.event.findMany({
+          where: { id: { in: Array.from(eventIds) } },
+          select: { id: true, image: true }
+        }).catch(() => [])
+      : [],
+    achievementIds.size > 0
+      ? prisma.achievement.findMany({
+          where: { id: { in: Array.from(achievementIds) } },
+          select: { id: true, image: true }
+        }).catch(() => [])
+      : [],
+    donationIds.size > 0
+      ? prisma.donation.findMany({
+          where: { id: { in: Array.from(donationIds) } },
+          select: { id: true, image: true }
+        }).catch(() => [])
+      : []
+  ]);
+
+  const eventMap = new Map((events || []).map((e) => [e.id, e.image]));
+  const achievementMap = new Map((achievements || []).map((a) => [a.id, a.image]));
+  const donationMap = new Map((donations || []).map((d) => [d.id, d.image]));
+
+  return notifications.map((n) => {
+    let thumbnailImage = n.event?.image || null;
+
+    if (!thumbnailImage && n.event_id && eventMap.has(Number(n.event_id))) {
+      thumbnailImage = eventMap.get(Number(n.event_id));
+    }
+
+    const link = String(n.link || '');
+    if (!thumbnailImage) {
+      const eventMatch = link.match(/\/events\/(\d+)/i);
+      if (eventMatch && eventMap.has(Number(eventMatch[1]))) {
+        thumbnailImage = eventMap.get(Number(eventMatch[1]));
+      }
+    }
+
+    if (!thumbnailImage) {
+      const achievementMatch = link.match(/\/achievements\/(\d+)/i);
+      if (achievementMatch && achievementMap.has(Number(achievementMatch[1]))) {
+        thumbnailImage = achievementMap.get(Number(achievementMatch[1]));
+      }
+    }
+
+    if (!thumbnailImage) {
+      const donationMatch = link.match(/\/(?:donate|donations)\/(\d+)/i);
+      if (donationMatch && donationMap.has(Number(donationMatch[1]))) {
+        thumbnailImage = donationMap.get(Number(donationMatch[1]));
+      }
+    }
+
+    return {
+      ...n,
+      thumbnail_image: thumbnailImage || null
+    };
+  });
+}
+
 /**
  * Get all notifications for a user
  * @param {number} userId - User ID
@@ -116,13 +199,22 @@ async function getUserNotifications(userId, unreadOnly = false) {
 
     const notifications = await prisma.notification.findMany({
       where,
+      include: {
+        event: {
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
+        }
+      },
       orderBy: {
         created_at: 'desc'
       },
       take: 50 // Limit to 50 most recent notifications
     });
 
-    return notifications;
+    return await attachThumbnailsToNotifications(notifications);
   } catch (error) {
     console.error('Error fetching notifications:', error);
     throw error;

@@ -45,7 +45,12 @@ export default function AppNavigator() {
               await authService.saveUser(freshUser);
             }
           } catch (e) {
-             console.warn("Could not fetch fresh user details in background", e);
+            const status = e?.response?.status;
+            if (status === 401 || status === 403) {
+              setUser(null);
+            } else {
+              console.log("Could not fetch fresh user details in background:", e?.message || e);
+            }
           }
         } else {
           setIsLoading(false);

@@ -202,7 +202,7 @@ function FilterDropdown({ visible, categories, years, tempCategories, tempYears,
 export default function AchievementsScreen({ user, navigation }) {
   const alumniId = useMemo(() => getAlumniId(user), [user]);
   const teacher = useMemo(() => isTeacher(user), [user]);
-  const categories = useMemo(() => ['Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'], []);
+  const standardCategories = useMemo(() => ['Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'], []);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -215,9 +215,12 @@ export default function AchievementsScreen({ user, navigation }) {
   const [tempCategories, setTempCategories] = useState([]);
   const [tempYears, setTempYears] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categorySelect, setCategorySelect] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
   const [form, setForm] = useState({
     alumni_id: alumniId ? String(alumniId) : '',
     title: '',
+    category: '',
     description: '',
     date: ''
   });
@@ -253,6 +256,25 @@ export default function AchievementsScreen({ user, navigation }) {
       return () => {};
     }, [loadItems])
   );
+
+  const availableCategories = useMemo(() => {
+    const customCats = items
+      .map((item) => (item.category ? item.category.trim() : null))
+      .filter(Boolean)
+      .filter((cat) => !standardCategories.some((std) => std.toLowerCase() === cat.toLowerCase()));
+
+    const seen = new Set();
+    const uniqueCustom = [];
+    for (const cat of customCats) {
+      const lower = cat.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        uniqueCustom.push(cat);
+      }
+    }
+
+    return [...standardCategories, ...uniqueCustom];
+  }, [items, standardCategories]);
 
   const availableYears = useMemo(() => {
     const years = items
@@ -359,6 +381,8 @@ export default function AchievementsScreen({ user, navigation }) {
       const fd = new FormData();
       fd.append('alumni_id', form.alumni_id);
       fd.append('title', form.title);
+      const categoryToSave = categorySelect === 'Other' ? customCategory.trim() : form.category;
+      if (categoryToSave) fd.append('category', categoryToSave);
       if (form.description) fd.append('description', form.description);
       if (form.date) fd.append('date', form.date);
       if (imageAsset) {
@@ -379,7 +403,9 @@ export default function AchievementsScreen({ user, navigation }) {
       setEditingId(null);
       setImageAsset(null);
       setVideoAsset(null);
-      setForm({ alumni_id: alumniId ? String(alumniId) : '', title: '', description: '', date: '' });
+      setCategorySelect('');
+      setCustomCategory('');
+      setForm({ alumni_id: alumniId ? String(alumniId) : '', title: '', category: '', description: '', date: '' });
       await loadItems(false);
     } catch (error) {
       Alert.alert('Unable to save', error?.response?.data?.error || 'Request failed.');
@@ -390,9 +416,21 @@ export default function AchievementsScreen({ user, navigation }) {
 
   const onEdit = (item) => {
     setEditingId(item.id);
+    const cat = item.category || '';
+    if (standardCategories.includes(cat)) {
+      setCategorySelect(cat);
+      setCustomCategory('');
+    } else if (cat) {
+      setCategorySelect('Other');
+      setCustomCategory(cat);
+    } else {
+      setCategorySelect('');
+      setCustomCategory('');
+    }
     setForm({
       alumni_id: String(item.alumni_id || alumniId || ''),
       title: item.title || '',
+      category: cat,
       description: item.description || '',
       date: item.date ? String(item.date).slice(0, 10) : ''
     });
@@ -462,7 +500,7 @@ export default function AchievementsScreen({ user, navigation }) {
 
       <FilterDropdown
         visible={showFilterDropdown}
-        categories={categories}
+        categories={availableCategories}
         years={availableYears}
         tempCategories={tempCategories}
         tempYears={tempYears}
@@ -478,6 +516,40 @@ export default function AchievementsScreen({ user, navigation }) {
           <Text style={styles.formTitle}>{editingId ? 'Edit Achievement' : 'Add Achievement'}</Text>
           <TextInput style={styles.input} placeholder="Alumni ID" keyboardType="number-pad" value={form.alumni_id} onChangeText={(v) => setForm((p) => ({ ...p, alumni_id: v }))} />
           <TextInput style={styles.input} placeholder="Title" value={form.title} onChangeText={(v) => setForm((p) => ({ ...p, title: v }))} />
+          <Text style={styles.formSectionLabel}>Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsRow}>
+            {[...standardCategories, 'Other'].map((cat) => {
+              const isSelected = categorySelect === cat;
+              return (
+                <Pressable
+                  key={cat}
+                  style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
+                  onPress={() => {
+                    setCategorySelect(cat);
+                    if (cat !== 'Other') {
+                      setForm((p) => ({ ...p, category: cat }));
+                    }
+                  }}
+                >
+                  <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextSelected]}>
+                    {cat}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {categorySelect === 'Other' && (
+            <TextInput
+              style={[styles.input, styles.customCategoryInput]}
+              placeholder="Enter custom category..."
+              placeholderTextColor="#94a3b8"
+              value={customCategory}
+              onChangeText={(val) => {
+                setCustomCategory(val);
+                setForm((p) => ({ ...p, category: val }));
+              }}
+            />
+          )}
           <TextInput style={[styles.input, styles.textArea]} placeholder="Description" multiline value={form.description} onChangeText={(v) => setForm((p) => ({ ...p, description: v }))} />
           <TextInput style={styles.input} placeholder="Date (YYYY-MM-DD)" value={form.date} onChangeText={(v) => setForm((p) => ({ ...p, date: v }))} />
           <Pressable style={styles.pickBtn} onPress={pickImage}>
@@ -892,5 +964,42 @@ const styles = StyleSheet.create({
   pickerOptionTextActive: {
     color: '#1e3a8a',
     fontWeight: '700'
+  },
+  formSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginTop: 4,
+    marginBottom: -4,
+  },
+  categoryChipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  categoryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  categoryChipSelected: {
+    backgroundColor: '#1d4ed8',
+    borderColor: '#1d4ed8',
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  categoryChipTextSelected: {
+    color: '#fff',
+  },
+  customCategoryInput: {
+    borderWidth: 1.5,
+    borderColor: '#3b82f6',
+    backgroundColor: '#fff',
   }
 });

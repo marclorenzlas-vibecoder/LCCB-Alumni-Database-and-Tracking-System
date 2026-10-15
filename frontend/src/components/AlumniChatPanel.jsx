@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   acceptMessageRequest,
   blockMessageRequest,
@@ -215,7 +215,13 @@ const ContactAvatar = ({ contact, status }) => (
   </div>
 );
 
-const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
+const AlumniChatPanel = ({
+  currentUser,
+  alumniContacts,
+  externalSelectedContactId = null,
+  externalOpen = false,
+  onExternalOpenHandled = null
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [showMessageRequests, setShowMessageRequests] = useState(true);
@@ -232,14 +238,40 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   const [requestActionId, setRequestActionId] = useState('');
   const [clickedMessageId, setClickedMessageId] = useState(null);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const scrolledChatIdRef = useRef(null);
+  const previousMessageCountRef = useRef(0);
   const closeTimerRef = useRef(null);
 
   const currentUserId = getSystemUserId(currentUser);
 
+  useEffect(() => {
+    if (externalOpen) {
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setIsClosing(false);
+      setIsOpen(true);
+      if (externalSelectedContactId) {
+        setSelectedContactId(String(externalSelectedContactId));
+      }
+      if (onExternalOpenHandled) {
+        onExternalOpenHandled();
+      }
+    }
+  }, [externalOpen, externalSelectedContactId, onExternalOpenHandled]);
+
+  const safeAlumniContacts = useMemo(() => {
+    if (Array.isArray(alumniContacts)) return alumniContacts;
+    if (Array.isArray(alumniContacts?.alumni)) return alumniContacts.alumni;
+    return [];
+  }, [alumniContacts]);
+
   const alumniSearchContacts = useMemo(() => {
     const seen = new Set();
 
-    return (alumniContacts || [])
+    return (safeAlumniContacts || [])
       .filter(isSearchableAlumniAccount)
       .map((entry) => {
         const contact = normalizeChatUser(entry);
@@ -254,7 +286,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
         return true;
       })
       .sort((first, second) => first.displayName.localeCompare(second.displayName));
-  }, [alumniContacts, currentUserId]);
+  }, [safeAlumniContacts, currentUserId]);
 
   const knownProfilesByUserId = useMemo(() => {
     const profiles = new Map();
@@ -300,7 +332,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   );
 
   const currentChatUser = useMemo(() => {
-    const ownProfile = (alumniContacts || []).find((entry) => {
+    const ownProfile = (safeAlumniContacts || []).find((entry) => {
       const user = normalizeChatUser(entry);
       return user.userId === currentUserId;
     });
@@ -313,7 +345,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
       email: currentUser?.email,
       profileImage: ownProfile?.profileImage
     });
-  }, [alumniContacts, currentUser, currentUserId]);
+  }, [safeAlumniContacts, currentUser, currentUserId]);
 
   const messageRequests = useMemo(
     () =>
@@ -425,10 +457,18 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
 
   const statusUserIdKey = useMemo(() => statusUserIds.join('|'), [statusUserIds]);
 
-  const selectedContact = useMemo(
-    () => selectableContacts.find((contact) => contact.userId === selectedContactId) || null,
-    [selectableContacts, selectedContactId]
-  );
+  const selectedContact = useMemo(() => {
+    if (!selectedContactId) return null;
+    const fromSelectable = selectableContacts.find((contact) => String(contact.userId) === String(selectedContactId));
+    if (fromSelectable) return fromSelectable;
+    const fromAlumniSearch = alumniSearchContacts.find((contact) => String(contact.userId) === String(selectedContactId));
+    if (fromAlumniSearch) return fromAlumniSearch;
+    const fromKnown = knownProfilesByUserId.get(String(selectedContactId));
+    if (fromKnown) return fromKnown;
+    const fromStaff = staffContacts.find((contact) => String(contact.userId) === String(selectedContactId));
+    if (fromStaff) return fromStaff;
+    return null;
+  }, [selectableContacts, selectedContactId, alumniSearchContacts, knownProfilesByUserId, staffContacts]);
 
   const selectedChatId = selectedContact
     ? resolveContactChatId(currentUserId, selectedContact, conversationSummaries)
@@ -553,8 +593,32 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
   }, [currentUserId, isClosing, isOpen, messages.length, selectedChatId, selectedUnreadCount]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages]);
+    if (!isOpen) {
+      scrolledChatIdRef.current = null;
+      previousMessageCountRef.current = 0;
+    }
+  }, [isOpen]);
+
+  useLayoutEffect(() => {
+    if (!messages.length) return;
+
+    if (scrolledChatIdRef.current !== selectedChatId) {
+      scrolledChatIdRef.current = selectedChatId;
+      previousMessageCountRef.current = messages.length;
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
+    } else if (messages.length > previousMessageCountRef.current) {
+      previousMessageCountRef.current = messages.length;
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages, selectedChatId]);
 
   useEffect(() => {
     if (messageRequests.length > 0) {
@@ -715,7 +779,9 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
             <div className="border-b border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-950">Alumni Chat</h3>
+                  <h3 className="text-lg font-bold tracking-tight text-slate-900">
+                    Alumni Chat
+                  </h3>
                 </div>
                 <button
                   type="button"
@@ -1105,7 +1171,7 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
                   </div>
                 )}
 
-                <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
+                <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
                   {messages.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
                       Start a conversation with {selectedContact.displayName}.
@@ -1141,10 +1207,10 @@ const AlumniChatPanel = ({ currentUser, alumniContacts }) => {
                               <div className={`lccb-chat-message flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                                 <div
                                   onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
-                                  className={`cursor-pointer max-w-[78%] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-all ${
+                                  className={`cursor-pointer max-w-[78%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-xs transition-all ${
                                     isOwn
-                                      ? 'rounded-br-md bg-blue-700 text-white hover:bg-blue-800'
-                                      : 'rounded-bl-md border border-slate-200 bg-white text-slate-900 hover:bg-slate-50'
+                                      ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
+                                      : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
                                   }`}
                                 >
                                   <p className="whitespace-pre-wrap break-words">{message.text || message.message}</p>

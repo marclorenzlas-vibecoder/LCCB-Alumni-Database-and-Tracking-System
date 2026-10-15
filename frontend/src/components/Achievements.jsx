@@ -13,7 +13,7 @@ import FilterMenu from './FilterMenu';
 import MobileFilterButton from './MobileFilterButton';
 import CardSkeleton from './CardSkeleton';
 
-const ACHIEVEMENT_CATEGORIES = ['All', 'Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
+const STANDARD_CATEGORIES = ['Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
 
 const getAchievementYear = (dateValue) => {
   if (!dateValue) return null;
@@ -180,6 +180,34 @@ const Achievements = () => {
 
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
+  const [modalCategorySelect, setModalCategorySelect] = useState('');
+  const [customModalCategory, setCustomModalCategory] = useState('');
+
+  const categoryFilterLabel = selectedCategory === 'All' ? 'All Categories' : selectedCategory;
+
+  const handleCategorySelect = (value) => {
+    setSelectedCategory(value);
+    setShowCategoryMenu(false);
+  };
+
+  const availableCategories = useMemo(() => {
+    const customCats = achievements
+      .map((a) => (a.category ? a.category.trim() : null))
+      .filter(Boolean)
+      .filter((cat) => !STANDARD_CATEGORIES.some((std) => std.toLowerCase() === cat.toLowerCase()));
+
+    const seen = new Set();
+    const uniqueCustom = [];
+    for (const cat of customCats) {
+      const lower = cat.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        uniqueCustom.push(cat);
+      }
+    }
+
+    return ['All', ...STANDARD_CATEGORIES, ...uniqueCustom];
+  }, [achievements]);
 
   const availableYears = useMemo(() => {
     const years = achievements
@@ -193,12 +221,12 @@ const Achievements = () => {
     {
       key: 'ACHIEVEMENT_CATEGORIES',
       title: '',
-      items: ACHIEVEMENT_CATEGORIES.map((category) => ({
+      items: availableCategories.map((category) => ({
         value: category,
         label: category === 'All' ? 'All Categories' : category
       }))
     }
-  ]), []);
+  ]), [availableCategories]);
 
   const yearMenuSections = useMemo(() => ([
     {
@@ -294,13 +322,17 @@ const Achievements = () => {
 
   const fetchAlumniList = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/alumni`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const response = await fetch(`${API_BASE_URL}/alumni?all=true`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
       if (response.ok) {
         const data = await response.json();
-        setAlumniList(data);
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.alumni) ? data.alumni : []);
+        setAlumniList(list);
       }
     } catch (err) {
       console.error('Error fetching alumni list:', err);
+      setAlumniList([]);
     }
   };
 
@@ -327,12 +359,16 @@ const Achievements = () => {
     setError('');
 
     try {
+      const categoryToSave = modalCategorySelect === 'Other'
+        ? customModalCategory.trim()
+        : formData.category;
+
       let payload;
       if (formData.image || formData.video) {
         const fd = new FormData();
         fd.append('alumni_id', formData.alumni_id);
         fd.append('title', formData.title);
-        fd.append('category', formData.category);
+        fd.append('category', categoryToSave);
         if (formData.description) fd.append('description', formData.description);
         if (formData.date) fd.append('date', formData.date);
         if (formData.image) fd.append('image', formData.image);
@@ -342,7 +378,7 @@ const Achievements = () => {
         payload = {
           alumni_id: formData.alumni_id,
           title: formData.title,
-          category: formData.category,
+          category: categoryToSave,
           description: formData.description,
           date: formData.date
         };
@@ -362,6 +398,8 @@ const Achievements = () => {
       
       setShowModal(false);
       setEditingId(null);
+      setModalCategorySelect('');
+      setCustomModalCategory('');
       setFormData({
         alumni_id: '',
         title: '',
@@ -381,10 +419,21 @@ const Achievements = () => {
 
   const handleEdit = (achievement) => {
     setEditingId(achievement.id);
+    const cat = achievement.category || '';
+    if (STANDARD_CATEGORIES.includes(cat)) {
+      setModalCategorySelect(cat);
+      setCustomModalCategory('');
+    } else if (cat) {
+      setModalCategorySelect('Other');
+      setCustomModalCategory(cat);
+    } else {
+      setModalCategorySelect('');
+      setCustomModalCategory('');
+    }
     setFormData({
       alumni_id: achievement.alumni_id || '',
       title: achievement.title || '',
-      category: achievement.category || '',
+      category: cat,
       description: achievement.description || '',
       date: achievement.date ? achievement.date.split('T')[0] : '',
       image: null,
@@ -417,7 +466,7 @@ const Achievements = () => {
   const filteredAchievements = useMemo(() => {
     let result = selectedCategory === 'All'
       ? achievements
-      : achievements.filter(a => a.category === selectedCategory);
+      : achievements.filter(a => (a.category || '').trim().toLowerCase() === selectedCategory.trim().toLowerCase());
 
     if (selectedYear !== 'All') {
       result = result.filter(a => getAchievementYear(a.date) === selectedYear);
@@ -474,6 +523,8 @@ const Achievements = () => {
             <button 
               onClick={() => {
                 setEditingId(null);
+                setModalCategorySelect('');
+                setCustomModalCategory('');
                 setFormData({
                   alumni_id: '',
                   title: '',
@@ -537,14 +588,11 @@ const Achievements = () => {
                 isOpen={showCategoryMenu}
                 setIsOpen={setOnlyCategoryMenuOpen}
                 buttonLabel="Category"
-                selectedLabel={selectedCategory === 'All' ? 'All Categories' : selectedCategory}
+                selectedLabel={categoryFilterLabel}
                 selectedValue={selectedCategory}
                 icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
                 sections={categoryMenuSections}
-                onSelect={(value) => {
-                  setSelectedCategory(value);
-                  setShowCategoryMenu(false);
-                }}
+                onSelect={handleCategorySelect}
                 panelTitle="Categories"
                 panelWidthClass="w-64"
                 alignClass="left-0"
@@ -552,11 +600,11 @@ const Achievements = () => {
             </div>
             <MobileFilterButton
               buttonLabel="Category"
-              selectedLabel={selectedCategory === 'All' ? 'All Categories' : selectedCategory}
+              selectedLabel={categoryFilterLabel}
               selectedValue={selectedCategory}
               icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
               sections={categoryMenuSections}
-              onSelect={(value) => setSelectedCategory(value)}
+              onSelect={handleCategorySelect}
               panelTitle="Categories"
             />
 
@@ -650,9 +698,9 @@ const Achievements = () => {
                         className="app-input"
                       >
                         <option value="">Select an alumni</option>
-                        {alumniList.map((a) => (
+                        {Array.isArray(alumniList) && alumniList.map((a) => (
                           <option key={a.id} value={a.id}>
-                            {a.first_name} {a.last_name}
+                            {a.first_name || a.firstName} {a.last_name || a.lastName}
                           </option>
                         ))}
                       </select>
@@ -679,17 +727,39 @@ const Achievements = () => {
                       </label>
                       <select
                         name="category"
-                        value={formData.category}
-                        onChange={handleInputChange}
+                        value={modalCategorySelect}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setModalCategorySelect(val);
+                          if (val !== 'Other') {
+                            setFormData(prev => ({ ...prev, category: val }));
+                          }
+                        }}
                         className="app-input"
                       >
                         <option value="">Select a category</option>
-                        <option value="Professional">Professional</option>
-                        <option value="Leadership">Leadership</option>
-                        <option value="Business">Business</option>
-                        <option value="Community Service">Community Service</option>
-                        <option value="Affiliate">Affiliate</option>
+                        {STANDARD_CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                        <option value="Other">Other</option>
                       </select>
+                      {modalCategorySelect === 'Other' && (
+                        <div className="mt-2 animate-fadeIn">
+                          <input
+                            type="text"
+                            placeholder="Enter custom category name..."
+                            value={customModalCategory}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomModalCategory(val);
+                              setFormData(prev => ({ ...prev, category: val }));
+                            }}
+                            required
+                            className="app-input"
+                            autoFocus
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">

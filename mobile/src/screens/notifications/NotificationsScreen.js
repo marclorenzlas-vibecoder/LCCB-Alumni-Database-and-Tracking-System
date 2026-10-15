@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenContainer from '../../components/ScreenContainer';
 import { notificationService } from '../../services/notificationService';
+import { API_ORIGIN } from '../../config/api';
 import { realtimeClient } from '../../services/realtimeClient';
 import { formatDate } from '../../utils/formatters';
 import { theme } from '../../theme';
@@ -51,6 +52,27 @@ const TYPE_LABELS = {
   ANNOUNCEMENT: 'Announcements',
   GENERAL: 'System'
 };
+
+const TYPE_VISUALS = {
+  EVENT: { icon: 'calendar', colors: ['#7c3aed', '#4f46e5'] },
+  ACHIEVEMENT: { icon: 'trophy', colors: ['#f59e0b', '#ea580c'] },
+  ANNOUNCEMENT: { icon: 'megaphone', colors: ['#0ea5e9', '#0891b2'] },
+  DONATION: { icon: 'heart', colors: ['#10b981', '#0d9488'] },
+  JOB_APPLICATION: { icon: 'briefcase', colors: ['#f43f5e', '#dc2626'] },
+  REGISTRATION: { icon: 'person-add', colors: ['#ef4444', '#e11d48'] },
+  GENERAL: { icon: 'notifications', colors: ['#3b82f6', '#1d4ed8'] }
+};
+
+const toImageUrl = (path) => {
+  if (!path || typeof path !== 'string') return '';
+  if (/^(https?:|data:|file:)/i.test(path)) return path;
+  return `${API_ORIGIN}${path.startsWith('/') ? '' : '/'}${path}`;
+};
+
+// Event/achievement/donation image first, then sender photo; empty means show page icon.
+const getNotificationImage = (item) => (
+  toImageUrl(item?.thumbnail_image || item?.event?.image) || toImageUrl(item?.sender_profile_image)
+);
 
 const isPendingRegistrationNotification = (item) => {
   const title = String(item?.title || '').toLowerCase();
@@ -105,6 +127,7 @@ export default function NotificationsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [failedImages, setFailedImages] = useState({});
 
   const loadNotifications = useCallback(async () => {
     setError(null);
@@ -287,11 +310,28 @@ export default function NotificationsScreen({ navigation }) {
               }
               const item = entry.data;
               const isUrgent = isUrgentNotification(item);
+              const imageUri = getNotificationImage(item);
+              const visual = TYPE_VISUALS[getEffectiveType(item)] || TYPE_VISUALS.GENERAL;
               return (
                 <Pressable key={entry.key} style={[styles.card, !item.is_read && styles.unread, isUrgent && styles.urgent]} onPress={() => onPressNotification(item)}>
                   <View style={styles.cardTopRow}>
-                    <View style={[styles.itemIconWrap, isUrgent && styles.urgentIconWrap]}>
-                      <Ionicons name={item.is_read ? 'mail-open-outline' : 'mail-unread-outline'} size={16} color={isUrgent ? '#b91c1c' : item.is_read ? '#475569' : '#1d4ed8'} />
+                    <View style={styles.avatarWrap}>
+                      {imageUri && !failedImages[item.id] ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.avatarImage}
+                          onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
+                        />
+                      ) : (
+                        <View style={[styles.avatarImage, styles.avatarIcon, { backgroundColor: visual.colors[0] }]}>
+                          <Ionicons name={visual.icon} size={22} color="#fff" />
+                        </View>
+                      )}
+                      {imageUri && !failedImages[item.id] ? (
+                        <View style={[styles.avatarBadge, { backgroundColor: visual.colors[1] }]}>
+                          <Ionicons name={visual.icon} size={10} color="#fff" />
+                        </View>
+                      ) : null}
                     </View>
                     <View style={styles.cardTextWrap}>
                       <Text style={styles.title}>{item.title || 'Notification'}</Text>
@@ -418,6 +458,34 @@ const styles = StyleSheet.create({
   urgentIconWrap: {
     backgroundColor: '#fee2e2'
   },
+  avatarWrap: {
+    marginTop: 1,
+    width: 44,
+    height: 44,
+    flexShrink: 0
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e2e8f0'
+  },
+  avatarIcon: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  avatarBadge: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   cardTextWrap: {
     flex: 1,
     gap: 3
@@ -444,7 +512,7 @@ const styles = StyleSheet.create({
   date: {
     color: theme.colors.muted,
     fontSize: 11,
-    marginLeft: 44,
+    marginLeft: 54,
     marginTop: 1
   }
 });

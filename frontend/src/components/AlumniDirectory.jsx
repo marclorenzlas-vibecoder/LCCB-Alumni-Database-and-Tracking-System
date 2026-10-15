@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getImageUrl } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
 import alumniService from '../services/alumniService';
@@ -218,6 +219,17 @@ const AlumniDirectory = () => {
   // Role
   const isTeacher = authService.isTeacher();
   const currentUser = useMemo(() => authService.getCurrentUser(), []);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const chatUserIdParam = searchParams.get('chatUserId');
+  const [chatContactId, setChatContactId] = useState(chatUserIdParam || null);
+  const [isChatOpen, setIsChatOpen] = useState(Boolean(chatUserIdParam));
+
+  useEffect(() => {
+    if (chatUserIdParam) {
+      setChatContactId(chatUserIdParam);
+      setIsChatOpen(true);
+    }
+  }, [chatUserIdParam]);
   const privateLabel = 'Hidden by User';
 
   const parseBooleanFlag = (value, fallback = false) => {
@@ -323,6 +335,7 @@ const AlumniDirectory = () => {
   const [showOfficersModal, setShowOfficersModal] = useState(false);
   const [showAssignOfficerModal, setShowAssignOfficerModal] = useState(false);
   const [officerForm, setOfficerForm] = useState({ alumni_id: '', position: '', batch: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // New record states
   const [newAchievement, setNewAchievement] = useState({ title: '', description: '', date: '' });
@@ -815,6 +828,8 @@ const AlumniDirectory = () => {
   // Add alumni
   const handleAddAlumni = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const cleanedHistory = educationHistory
         .filter((entry) => entry.level)
@@ -837,13 +852,16 @@ const AlumniDirectory = () => {
       setEducationHistory([createEducationEntry()]);
     } catch (err) {
       toast.error(err.message || 'Failed to add alumni');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Edit alumni
   const handleEditAlumni = async (e) => {
     e.preventDefault();
-    if (!editingAlumni) return;
+    if (!editingAlumni || isSubmitting) return;
+    setIsSubmitting(true);
     try {
       let payload = { ...newAlumni };
       let updated;
@@ -869,6 +887,8 @@ const AlumniDirectory = () => {
       setNewAlumni(blankAlumni);
     } catch (err) {
       toast.error(err.message || 'Failed to update alumni');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1004,7 +1024,8 @@ const AlumniDirectory = () => {
   // Create related records
   const handleAddAchievement = async (e) => {
     e.preventDefault();
-    if (!viewingAlumni) return;
+    if (!viewingAlumni || isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const payload = { ...newAchievement, alumni_id: Number(viewingAlumni.id) };
       const created = await achievementService.createAchievement(payload);
@@ -1012,10 +1033,12 @@ const AlumniDirectory = () => {
       setShowAchievementModal(false);
       setNewAchievement({ title: '', description: '', date: '' });
     } catch (err) { toast.error('Failed to add achievement'); }
+    finally { setIsSubmitting(false); }
   };
   const handleAddCareer = async (e) => {
     e.preventDefault();
-    if (!viewingAlumni) return;
+    if (!viewingAlumni || isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const payload = { ...newCareer, alumni_id: Number(viewingAlumni.id) };
       const created = await careerService.createCareer(payload);
@@ -1032,6 +1055,7 @@ const AlumniDirectory = () => {
         description: ''
       });
     } catch (err) { toast.error('Failed to add employment'); }
+    finally { setIsSubmitting(false); }
   };
 
   const handleReviewCareerMatch = async (careerId, programAlignment) => {
@@ -1610,8 +1634,20 @@ const AlumniDirectory = () => {
                   </div>
 
                   <div className="flex justify-end gap-3 border-t border-slate-200 pt-5">
-                    <button type="button" onClick={() => setShowAddModal(false)} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
-                    <button type="submit" className="rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800">Add Alumni</button>
+                    <button type="button" disabled={isSubmitting} onClick={() => setShowAddModal(false)} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                    <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {isSubmitting ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                          </svg>
+                          Adding...
+                        </>
+                      ) : (
+                        'Add Alumni'
+                      )}
+                    </button>
                   </div>
                 </form>
               </div>
@@ -1676,7 +1712,22 @@ const AlumniDirectory = () => {
                     <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Skills</label><textarea name="skills" value={newAlumni.skills || ''} onChange={handleInputChange} rows="3" className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none" placeholder="Comma-separated skills" /></div>
                   </div>
                 </div>
-                <div className="mt-6 flex justify-end space-x-3"><button type="button" onClick={() => { setShowEditModal(false); setEditingAlumni(null); setNewAlumni(blankAlumni); }} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button><button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800">Save Changes</button></div>
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button type="button" disabled={isSubmitting} onClick={() => { setShowEditModal(false); setEditingAlumni(null); setNewAlumni(blankAlumni); }} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                  <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isSubmitting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -1719,8 +1770,20 @@ const AlumniDirectory = () => {
                   />
                 </div>
                 <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-6 sm:mt-8 pt-4 border-t border-gray-200">
-                  <button type="button" onClick={() => setShowAchievementModal(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button type="submit" className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Add Achievement</button>
+                  <button type="button" disabled={isSubmitting} onClick={() => setShowAchievementModal(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">Cancel</button>
+                  <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isSubmitting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        Adding...
+                      </>
+                    ) : (
+                      'Add Achievement'
+                    )}
+                  </button>
                 </div>
               </form>
             </div>
@@ -1820,8 +1883,20 @@ const AlumniDirectory = () => {
                   </div>
                 </div>
                 <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-6 sm:mt-8 pt-4 border-t border-gray-200">
-                  <button type="button" onClick={() => setShowCareerModal(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button type="submit" className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Add Employment</button>
+                  <button type="button" disabled={isSubmitting} onClick={() => setShowCareerModal(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">Cancel</button>
+                  <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isSubmitting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        Adding...
+                      </>
+                    ) : (
+                      'Add Employment'
+                    )}
+                  </button>
                 </div>
               </form>
             </div>
@@ -2356,7 +2431,18 @@ const AlumniDirectory = () => {
           </div>
         )}
       </div>
-      <AlumniChatPanel currentUser={currentUser} alumniContacts={alumni} />
+      <AlumniChatPanel
+        currentUser={currentUser}
+        alumniContacts={alumni}
+        externalSelectedContactId={chatContactId}
+        externalOpen={isChatOpen}
+        onExternalOpenHandled={() => {
+          setIsChatOpen(false);
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete('chatUserId');
+          setSearchParams(newParams, { replace: true });
+        }}
+      />
     </UserLayout>
   );
 };

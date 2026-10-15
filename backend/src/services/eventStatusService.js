@@ -141,12 +141,15 @@ async function updateEventStatuses() {
  * Initialize event status checker - runs every hour
  */
 function startEventStatusChecker() {
-  // Run immediately on start
-  updateEventStatuses().then(result => {
-    console.log('Event status check complete:', result);
-  }).catch(error => {
-    console.error('Initial event status check failed:', error);
-  });
+  // Give database connection a 3-second buffer to stabilize on server boot
+  setTimeout(async () => {
+    try {
+      const result = await updateEventStatuses();
+      console.log('Initial event status check complete:', result);
+    } catch (error) {
+      console.warn('Initial event status check skipped (will retry in next cycle):', error.message || error);
+    }
+  }, 3000);
 
   // Run every hour (3600000 ms)
   setInterval(async () => {

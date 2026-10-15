@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
@@ -134,14 +135,12 @@ export default function DonationsScreen({ navigation, user }) {
           </View>
         </Pressable>
 
-        <View style={styles.donateActionWrap}>
+        <View style={styles.cardActionsRow}>
           <Pressable style={styles.donateBtn} onPress={() => navigation.navigate('DonationDetail', { donationId: item.id })}>
             <Text style={styles.donateBtnText}>Donate</Text>
           </Pressable>
-        </View>
-
-        <View style={styles.actionsRow}>
           <Pressable style={styles.shareBtn} onPress={() => onShare(item)}>
+            <Ionicons name="share-social-outline" size={16} color="#475569" style={{ marginRight: 6 }} />
             <Text style={styles.shareText}>Share</Text>
           </Pressable>
         </View>
@@ -263,37 +262,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'right'
   },
-  donateActionWrap: {
-    marginHorizontal: 14,
-    marginBottom: 12,
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 12
+    borderTopColor: '#e5e7eb'
   },
   donateBtn: {
+    flex: 1,
     height: 40,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563eb'
+    backgroundColor: '#1e3a8a'
   },
   donateBtnText: {
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700'
   },
-  actionsRow: {
-    paddingHorizontal: 14,
-    paddingBottom: 12
-  },
   shareBtn: {
+    flex: 1,
     height: 40,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row'
+    flexDirection: 'row',
+    backgroundColor: '#fff'
   },
   shareText: {
     color: '#475569',

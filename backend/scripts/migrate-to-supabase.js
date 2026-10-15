@@ -118,6 +118,23 @@ async function migrateData() {
       }
     }
 
+    console.log('Synchronizing PostgreSQL sequences with max table IDs...');
+    for (const table of tablesToMigrate) {
+      try {
+        const tableName = table.mysqlTable;
+        const maxRes = await prisma.$queryRawUnsafe(`SELECT COALESCE(MAX(id), 0) as max_id FROM "${tableName}";`);
+        const maxId = Number(maxRes[0]?.max_id || 0);
+        const seqRes = await prisma.$queryRawUnsafe(`SELECT pg_get_serial_sequence('"${tableName}"', 'id') as seq;`);
+        const seqName = seqRes[0]?.seq;
+        if (seqName) {
+          await prisma.$queryRawUnsafe(`SELECT setval('${seqName}', ${Math.max(maxId, 1)}, true);`);
+        }
+      } catch (seqErr) {
+        // ignore tables without sequences
+      }
+    }
+    console.log('Sequences successfully synchronized.');
+
     console.log('Migration complete!');
 
   } catch (error) {

@@ -74,6 +74,16 @@ const careerService = {
   deleteJob: async (id) => {
     const response = await axios.delete(`${JOB_API_URL}/${id}`, { headers: getAuthHeaders() });
     return response.data;
+  },
+
+  // Scan and parse job details from URL, file, or text
+  parseJob: async (payload, isFormData = false) => {
+    const headers = getAuthHeaders();
+    if (isFormData) {
+      headers['Content-Type'] = 'multipart/form-data';
+    }
+    const response = await axios.post(`${JOB_API_URL}/parse-job`, payload, { headers });
+    return response.data;
   }
 };
 

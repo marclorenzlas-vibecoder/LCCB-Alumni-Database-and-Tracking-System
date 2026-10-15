@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EmptyState from '../../components/EmptyState';
@@ -215,6 +227,8 @@ export default function EventsListScreen({ navigation, route }) {
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [sortBy, setSortBy] = useState('date');
   const [previousExpanded, setPreviousExpanded] = useState(true);
+  const [pastEventsVisibleCount, setPastEventsVisibleCount] = useState(10);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   const [tempLocations, setTempLocations] = useState([]);
@@ -309,6 +323,20 @@ export default function EventsListScreen({ navigation, route }) {
     const match = events.find((event) => Number(event.id) === openEventId);
     if (match) navigation.navigate('EventDetail', { eventId: match.id });
   }, [events, navigation, openEventId]);
+
+  useEffect(() => {
+    setPastEventsVisibleCount(10);
+    setIsLoadingMore(false);
+  }, [query, selectedLocations, selectedBatches, selectedStatuses, sortBy]);
+
+  const handleSeeMore = () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setPastEventsVisibleCount((prev) => prev + 10);
+      setIsLoadingMore(false);
+    }, 280);
+  };
 
   const activeFilterCount = selectedLocations.length + selectedBatches.length + selectedStatuses.length;
 
@@ -430,7 +458,20 @@ export default function EventsListScreen({ navigation, route }) {
                   <EventSection title="Upcoming Events" count={categorized.upcoming.length} events={categorized.upcoming} navigation={navigation} teacher={teacher} />
                 )}
                 {categorized.past.length > 0 && (
-                  <EventSection title="Previous Events" count={categorized.past.length} events={categorized.past} navigation={navigation} teacher={teacher} collapsible expanded={previousExpanded} onToggle={() => setPreviousExpanded((prev) => !prev)} />
+                  <EventSection
+                    title="Previous Events"
+                    count={categorized.past.length}
+                    events={categorized.past}
+                    navigation={navigation}
+                    teacher={teacher}
+                    collapsible
+                    expanded={previousExpanded}
+                    onToggle={() => setPreviousExpanded((prev) => !prev)}
+                    isPrevious
+                    visibleCount={pastEventsVisibleCount}
+                    onSeeMore={handleSeeMore}
+                    isLoadingMore={isLoadingMore}
+                  />
                 )}
               </>
             ) : (
@@ -440,6 +481,10 @@ export default function EventsListScreen({ navigation, route }) {
                 events={filteredEvents}
                 navigation={navigation}
                 teacher={teacher}
+                isPrevious={selectedStatuses.length === 1 && selectedStatuses[0] === 'past'}
+                visibleCount={pastEventsVisibleCount}
+                onSeeMore={handleSeeMore}
+                isLoadingMore={isLoadingMore}
               />
             )}
           </View>
@@ -449,8 +494,54 @@ export default function EventsListScreen({ navigation, route }) {
   );
 }
 
-function EventSection({ title, count, events, navigation, teacher, collapsible = false, expanded = true, onToggle = null }) {
+function AnimatedEventCard({ children, index }) {
+  const anim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 320,
+      delay: Math.min((index % 10) * 45, 300),
+      useNativeDriver: true
+    }).start();
+  }, [anim, index]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: anim,
+        transform: [
+          {
+            translateY: anim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [14, 0]
+            })
+          }
+        ]
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+function EventSection({
+  title,
+  count,
+  events,
+  navigation,
+  teacher,
+  collapsible = false,
+  expanded = true,
+  onToggle = null,
+  isPrevious = false,
+  visibleCount = 10,
+  onSeeMore = null,
+  isLoadingMore = false
+}) {
   if (count === 0) return null;
+  const displayedEvents = isPrevious ? events.slice(0, visibleCount) : events;
+
   return (
     <View style={styles.sectionBlock}>
       <Pressable style={styles.sectionHeader} onPress={collapsible ? onToggle : undefined}>
@@ -464,9 +555,9 @@ function EventSection({ title, count, events, navigation, teacher, collapsible =
         </View>
       </Pressable>
 
-      {expanded && events.map((event) => {
+      {expanded && displayedEvents.map((event, index) => {
         const typeColor = getTypeColor(event.type);
-        return (
+        const cardContent = (
           <View key={event.id} style={styles.eventCard}>
             <Pressable onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}>
               <View style={styles.eventImageWrap}>
@@ -507,7 +598,46 @@ function EventSection({ title, count, events, navigation, teacher, collapsible =
             ) : null}
           </View>
         );
+
+        if (isPrevious && index >= 10) {
+          return (
+            <AnimatedEventCard key={event.id} index={index}>
+              {cardContent}
+            </AnimatedEventCard>
+          );
+        }
+
+        return cardContent;
       })}
+
+      {expanded && isPrevious && events.length > visibleCount ? (
+        <View style={styles.seeMoreContainer}>
+          <View style={styles.seeMoreDividerRow}>
+            <View style={styles.seeMoreLine} />
+            <Pressable
+              style={styles.seeMoreBtn}
+              onPress={onSeeMore}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? (
+                <View style={styles.seeMoreLoadingRow}>
+                  <ActivityIndicator size="small" color="#2563eb" />
+                  <Text style={styles.seeMoreLoadingText}>Loading events...</Text>
+                </View>
+              ) : (
+                <View style={styles.seeMoreBtnContent}>
+                  <Text style={styles.seeMoreBtnText}>See More</Text>
+                  <Ionicons name="chevron-down" size={15} color="#64748b" />
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.seeMoreLine} />
+          </View>
+          <Text style={styles.seeMoreCounterText}>
+            Showing {Math.min(visibleCount, events.length)} of {events.length} previous events
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -652,5 +782,52 @@ const styles = StyleSheet.create({
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#cbd5e1', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   checkboxActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   pickerOptionText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#334155' },
-  pickerOptionTextActive: { color: '#1e3a8a', fontWeight: '700' }
+  pickerOptionTextActive: { color: '#1e3a8a', fontWeight: '700' },
+  seeMoreContainer: {
+    marginTop: 18,
+    marginBottom: 8,
+    alignItems: 'center'
+  },
+  seeMoreDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 6
+  },
+  seeMoreLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0'
+  },
+  seeMoreBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: 'transparent'
+  },
+  seeMoreBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5
+  },
+  seeMoreBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  seeMoreLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  seeMoreLoadingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563eb'
+  },
+  seeMoreCounterText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 6,
+    textAlign: 'center'
+  }
 });

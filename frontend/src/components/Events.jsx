@@ -19,7 +19,18 @@ const Events = () => {
   const [loading, setLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newEvent, setNewEvent] = useState({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
+
+  const uniqueEvents = useMemo(() => {
+    const map = new Map();
+    events.forEach((event) => {
+      if (event && event.id) {
+        map.set(event.id, event);
+      }
+    });
+    return Array.from(map.values());
+  }, [events]);
 
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -36,6 +47,8 @@ const Events = () => {
   const [isCurrentEventsExpanded, setIsCurrentEventsExpanded] = useState(true);
   const [isUpcomingEventsExpanded, setIsUpcomingEventsExpanded] = useState(true);
   const [isPastEventsExpanded, setIsPastEventsExpanded] = useState(false);
+  const [pastEventsVisibleCount, setPastEventsVisibleCount] = useState(10);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showBatchMenu, setShowBatchMenu] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -45,13 +58,13 @@ const Events = () => {
 
   const eventTargetBatches = useMemo(() => {
     const batches = new Set();
-    events.forEach((event) => {
+    uniqueEvents.forEach((event) => {
       if (event.target_batch) {
         batches.add(String(event.target_batch));
       }
     });
     return Array.from(batches).sort((a, b) => Number(a) - Number(b));
-  }, [events]);
+  }, [uniqueEvents]);
 
   const batchMenuSections = useMemo(() => ([
     {
@@ -150,21 +163,21 @@ const Events = () => {
   }, [showBatchMenu, showStatusMenu, showSortMenu]);
 
   useEffect(() => {
-    loadEvents();
+    loadEvents(true);
   }, []);
 
   useEffect(() => {
     const unsubCreated = realtimeClient.subscribe('event.created', () => {
-      loadEvents();
+      loadEvents(false);
     });
     const unsubUpdated = realtimeClient.subscribe('event.updated', () => {
-      loadEvents();
+      loadEvents(false);
     });
     const unsubDeleted = realtimeClient.subscribe('event.deleted', () => {
-      loadEvents();
+      loadEvents(false);
     });
     const unsubAttendance = realtimeClient.subscribe('event.attendance.changed', () => {
-      loadEvents();
+      loadEvents(false);
     });
     return () => {
       unsubCreated();
@@ -174,15 +187,22 @@ const Events = () => {
     };
   }, []);
 
-  const loadEvents = async () => {
+  const loadEvents = async (showSkeleton = false) => {
     try {
-      setLoading(true);
+      if (showSkeleton) {
+        setLoading(true);
+      }
       const eventsData = await eventService.getAllEvents();
-      setEvents(eventsData);
+      const deduplicated = Array.isArray(eventsData)
+        ? Array.from(new Map(eventsData.map(ev => [ev.id, ev])).values())
+        : [];
+      setEvents(deduplicated);
     } catch (err) {
       console.error('Error loading events:', err);
     } finally {
-      setLoading(false);
+      if (showSkeleton) {
+        setLoading(false);
+      }
     }
   };
 
@@ -197,6 +217,8 @@ const Events = () => {
 
   const handleAddEvent = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       let payload;
       
@@ -231,16 +253,29 @@ const Events = () => {
         toast.success('Event updated successfully!');
       } else {
         const event = await eventService.createEvent(payload);
-        setEvents(prev => [...prev, event]);
+        setEvents(prev => {
+          if (prev.some(ev => ev.id === event.id)) {
+            return prev.map(ev => ev.id === event.id ? event : ev);
+          }
+          return [...prev, event];
+        });
         toast.success('Event added successfully!');
       }
       setShowEventModal(false);
       setEditingId(null);
       setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
+      setIsUpcomingEventsExpanded(true);
+      setIsCurrentEventsExpanded(true);
+      setIsPastEventsExpanded(false);
     } catch (err) {
       console.error('Error saving event:', err);
-      const msg = err?.response?.data?.error || 'Failed to save event. Please try again.';
+      const errData = err?.response?.data;
+      const msg = errData?.error
+        ? (errData?.details ? `${errData.error}: ${errData.details}` : errData.error)
+        : 'Failed to save event. Please try again.';
       toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -386,49 +421,45 @@ const Events = () => {
   }, [events]);
 
   const filteredEvents = useMemo(() => {
-    const filtered = events.filter(event => {
+    const filtered = uniqueEvents.filter(event => {
       const matchesStatus = selectedStatus === '' || getEventStatusKey(event) === selectedStatus;
       return eventMatchesSearchAndBatch(event) && matchesStatus;
     });
 
     return sortEvents(filtered);
-  }, [eventMatchesSearchAndBatch, getEventStatusKey, selectedStatus, sortEvents, events]);
+  }, [eventMatchesSearchAndBatch, getEventStatusKey, selectedStatus, sortEvents, uniqueEvents]);
 
   const categorizedEvents = useMemo(() => (
-    categorizeEvents(sortEvents(events.filter(eventMatchesSearchAndBatch)))
-  ), [categorizeEvents, eventMatchesSearchAndBatch, sortEvents, events]);
+    categorizeEvents(sortEvents(uniqueEvents.filter(eventMatchesSearchAndBatch)))
+  ), [categorizeEvents, eventMatchesSearchAndBatch, sortEvents, uniqueEvents]);
+
+  useEffect(() => {
+    setPastEventsVisibleCount(10);
+    setIsLoadingMore(false);
+  }, [searchTerm, selectedBatchFilter, selectedStatus]);
+
+  const handleSeeMore = () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setPastEventsVisibleCount(prev => prev + 10);
+      setIsLoadingMore(false);
+    }, 280);
+  };
 
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedBatchFilter('');
     setSelectedStatus('');
     setSortBy('date');
+    setPastEventsVisibleCount(10);
+    setIsLoadingMore(false);
     setShowBatchMenu(false);
     setShowStatusMenu(false);
     setShowSortMenu(false);
   };
 
-  const pastContentRef = useRef(null);
-  const upcomingContentRef = useRef(null);
-  const currentContentRef = useRef(null);
-  useEffect(() => {
-    const handleAnim = (ref, expanded) => {
-      const el = ref?.current;
-      if (!el) return;
-      if (expanded) {
-        const height = el.scrollHeight;
-        el.style.maxHeight = height + 'px';
-        el.style.opacity = '1';
-      } else {
-        el.style.maxHeight = '0px';
-        el.style.opacity = '0';
-      }
-    };
 
-    handleAnim(pastContentRef, isPastEventsExpanded);
-    handleAnim(upcomingContentRef, isUpcomingEventsExpanded);
-    handleAnim(currentContentRef, isCurrentEventsExpanded);
-  }, [isPastEventsExpanded, isUpcomingEventsExpanded, isCurrentEventsExpanded, events.length]);
 
   return (
     <UserLayout>
@@ -614,7 +645,7 @@ const Events = () => {
 
         {/* Stats Row */}
         <div className="mb-8 flex flex-wrap items-center gap-4 text-sm text-gray-600">
-          <div>Showing {filteredEvents.length} of {events.length} events</div>
+          <div>Showing {filteredEvents.length} of {uniqueEvents.length} events</div>
           <div className="flex gap-4">
             <span className="px-3 py-1 bg-blue-100 text-blue-900 rounded-full">
               {categorizedEvents.upcoming.length} Upcoming
@@ -659,14 +690,19 @@ const Events = () => {
                   </svg>
                 </div>
                 <div
-                  ref={upcomingContentRef}
-                  style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease, opacity 250ms linear', opacity: 0 }}
+                  className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+                  style={{
+                    gridTemplateRows: isUpcomingEventsExpanded ? '1fr' : '0fr',
+                    opacity: isUpcomingEventsExpanded ? 1 : 0
+                  }}
                   aria-hidden={!isUpcomingEventsExpanded}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {categorizedEvents.upcoming.map((event) => (
-                      <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
-                    ))}
+                  <div className="overflow-hidden">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-1 pb-1">
+                      {categorizedEvents.upcoming.map((event) => (
+                        <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -695,14 +731,19 @@ const Events = () => {
                   </svg>
                 </div>
                   <div
-                    ref={currentContentRef}
-                    style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease, opacity 250ms linear', opacity: 0 }}
+                    className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+                    style={{
+                      gridTemplateRows: isCurrentEventsExpanded ? '1fr' : '0fr',
+                      opacity: isCurrentEventsExpanded ? 1 : 0
+                    }}
                     aria-hidden={!isCurrentEventsExpanded}
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {categorizedEvents.current.map((event) => (
-                        <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
-                      ))}
+                    <div className="overflow-hidden">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-1 pb-1">
+                        {categorizedEvents.current.map((event) => (
+                          <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                        ))}
+                      </div>
                     </div>
                   </div>
               </div>
@@ -731,14 +772,60 @@ const Events = () => {
                   </svg>
                 </div>
                 <div
-                  ref={pastContentRef}
-                  style={{ maxHeight: '0px', overflow: 'hidden', transition: 'max-height 350ms ease, opacity 250ms linear', opacity: 0 }}
+                  className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+                  style={{
+                    gridTemplateRows: isPastEventsExpanded ? '1fr' : '0fr',
+                    opacity: isPastEventsExpanded ? 1 : 0
+                  }}
                   aria-hidden={!isPastEventsExpanded}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {categorizedEvents.past.map((event) => (
-                      <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
-                    ))}
+                  <div className="overflow-hidden">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-1 pb-1">
+                      {categorizedEvents.past.slice(0, pastEventsVisibleCount).map((event, index) => (
+                        <div
+                          key={event.id}
+                          className={index >= 10 ? 'animate-event-reveal' : ''}
+                          style={index >= 10 ? { animationDelay: `${(index % 10) * 45}ms` } : undefined}
+                        >
+                          <EventCard event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                        </div>
+                      ))}
+                    </div>
+
+                    {categorizedEvents.past.length > pastEventsVisibleCount && (
+                      <div className="mt-10 mb-4">
+                        <div className="relative flex items-center justify-center">
+                          <div className="flex-grow border-t border-gray-200"></div>
+                          <button
+                            type="button"
+                            disabled={isLoadingMore}
+                            onClick={handleSeeMore}
+                            className="mx-4 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-blue-600 transition-colors py-1 px-3 group disabled:opacity-75"
+                          >
+                            {isLoadingMore ? (
+                              <>
+                                <svg className="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                </svg>
+                                <span className="text-blue-600">Loading events...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>See More</span>
+                                <svg className="h-4 w-4 text-gray-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </>
+                            )}
+                          </button>
+                          <div className="flex-grow border-t border-gray-200"></div>
+                        </div>
+                        <p className="text-center text-xs text-gray-400 mt-2">
+                          Showing {Math.min(pastEventsVisibleCount, categorizedEvents.past.length)} of {categorizedEvents.past.length} previous events
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -747,10 +834,56 @@ const Events = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEvents.map((event) => (
-              <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
-            ))}
+          <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(selectedStatus === 'past'
+                ? filteredEvents.slice(0, pastEventsVisibleCount)
+                : filteredEvents
+              ).map((event, index) => (
+                <div
+                  key={event.id}
+                  className={selectedStatus === 'past' && index >= 10 ? 'animate-event-reveal' : ''}
+                  style={selectedStatus === 'past' && index >= 10 ? { animationDelay: `${(index % 10) * 45}ms` } : undefined}
+                >
+                  <EventCard event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                </div>
+              ))}
+            </div>
+
+            {selectedStatus === 'past' && filteredEvents.length > pastEventsVisibleCount && (
+              <div className="mt-10 mb-4">
+                <div className="relative flex items-center justify-center">
+                  <div className="flex-grow border-t border-gray-200"></div>
+                  <button
+                    type="button"
+                    disabled={isLoadingMore}
+                    onClick={handleSeeMore}
+                    className="mx-4 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-blue-600 transition-colors py-1 px-3 group disabled:opacity-75"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                        <span className="text-blue-600">Loading events...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>See More</span>
+                        <svg className="h-4 w-4 text-gray-400 group-hover:text-blue-600 transition-transform duration-200 group-hover:translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                  <div className="flex-grow border-t border-gray-200"></div>
+                </div>
+                <p className="text-center text-xs text-gray-400 mt-2">
+                  Showing {Math.min(pastEventsVisibleCount, filteredEvents.length)} of {filteredEvents.length} previous events
+                </p>
+              </div>
+            )}
           </div>
         )}
         
@@ -935,20 +1068,48 @@ const Events = () => {
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={() => {
                       setShowEventModal(false);
                       setEditingId(null);
                       setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
                     }}
-                    className="app-secondary-button"
+                    className="app-secondary-button disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="app-primary-button"
+                    disabled={isSubmitting}
+                    className="app-primary-button inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingId ? 'Update Event' : 'Add Event'}
+                    {isSubmitting ? (
+                      <>
+                        <svg
+                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                          />
+                        </svg>
+                        {editingId ? 'Updating...' : 'Adding...'}
+                      </>
+                    ) : (
+                      editingId ? 'Update Event' : 'Add Event'
+                    )}
                   </button>
                 </div>
               </form>

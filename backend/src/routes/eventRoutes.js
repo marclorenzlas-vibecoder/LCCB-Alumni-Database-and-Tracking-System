@@ -9,6 +9,7 @@ const { authenticateToken, teacherAuthMiddleware } = require('../middleware/auth
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { uploadToSupabase } = require('../services/storageService');
+const { syncTableSequence } = require('../services/dbSequenceService');
 
 // ensure uploads/events exists
 const eventsDir = path.join(__dirname, '../../uploads/events');
@@ -135,19 +136,43 @@ router.post('/', teacherAuthMiddleware, runUpload, async (req, res) => {
 
     const imagePath = req.file ? await uploadToSupabase(req.file, 'events') : null;
     const shouldNotify = sendNotification === 'true' || sendNotification === true;
-    const batchValue = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch) : null;
+    
+    // Safely parse target batch
+    const rawBatch = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch, 10) : null;
+    const batchValue = Number.isInteger(rawBatch) ? rawBatch : null;
 
-    const event = await prisma.event.create({
-      data: {
-        name: name.trim(),
-        description: description ? description.trim() : null,
-        date: date ? new Date(date) : null,
-        location: location ? location.trim() : null,
-        image: imagePath,
-        send_notification: shouldNotify,
-        target_batch: batchValue
+    // Safely parse date
+    let parsedDate = null;
+    if (date) {
+      const d = new Date(date);
+      if (!isNaN(d.getTime())) {
+        parsedDate = d;
       }
-    });
+    }
+
+    const eventData = {
+      name: name.trim(),
+      description: description ? description.trim() : null,
+      date: parsedDate,
+      location: location ? location.trim() : null,
+      image: imagePath,
+      send_notification: shouldNotify,
+      target_batch: batchValue
+    };
+
+    let event;
+    try {
+      event = await prisma.event.create({ data: eventData });
+    } catch (createErr) {
+      // If sequence out of sync causes P2002 primary key collision, resync and retry
+      if (createErr.code === 'P2002' && String(createErr.message || '').includes('(`id`)')) {
+        console.warn('⚠️ Event ID sequence out of sync. Resyncing sequence and retrying...');
+        await syncTableSequence('event');
+        event = await prisma.event.create({ data: eventData });
+      } else {
+        throw createErr;
+      }
+    }
 
     // Send notifications if checkbox was checked
     if (shouldNotify) {

@@ -213,6 +213,8 @@ export const authService = {
     if (!userStr) return false;
     try {
       const user = JSON.parse(userStr);
+      const role = String(user.role || '').toUpperCase();
+      if (role === 'TEACHER' || role === 'ADMIN') return true;
       return typeof user.email === 'string' && user.email.endsWith('@lccbonline.com');
     } catch {
       return false;

@@ -5,6 +5,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "build": "prisma generate",
+    "postinstall": "prisma generate",
     "dev": "nodemon src/index.js",
     "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-mysql.ps1 -RootPassword root -DbName alumni",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -12,10 +14,12 @@
     "test:live-donations": "node scripts/test-live-donation-feed.js"
   },
   "dependencies": {
+    "@google/genai": "^2.27.0",
     "@prisma/client": "^6.17.1",
     "@supabase/supabase-js": "^2.112.3",
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "dotenv": "^16.6.1",
@@ -28,6 +32,7 @@
     "passport": "^0.7.0",
     "passport-github2": "^0.1.12",
     "passport-google-oauth20": "^2.0.0",
+    "pdf-parse": "^2.4.5",
     "sharp": "^0.35.3",
     "ws": "^8.20.0"
   },

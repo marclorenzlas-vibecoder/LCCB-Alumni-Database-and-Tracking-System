@@ -39,8 +39,14 @@ import {
 import { imageUrl } from '../../utils/formatters';
 import { isTeacher } from '../../utils/auth';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+if (
+  Platform.OS === 'android' &&
+  !global?.nativeFabricUIManager &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  try {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  } catch {}
 }
 
 const getConversationStatus = (summary) => summary?.status || 'accepted';
@@ -255,7 +261,7 @@ function ContactRow({ contact, status, subtitle, unreadCount = 0, badge, selecte
   );
 }
 
-export default function AlumniChatScreen({ navigation, user }) {
+export default function AlumniChatScreen({ route, navigation, user }) {
   const [alumniContacts, setAlumniContacts] = useState([]);
   const [staffContacts, setStaffContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -276,6 +282,12 @@ export default function AlumniChatScreen({ navigation, user }) {
   const isFocused = useIsFocused();
 
   const currentUserId = getSystemUserId(user);
+
+  useEffect(() => {
+    if (route?.params?.initialContactId) {
+      setSelectedContactId(String(route.params.initialContactId));
+    }
+  }, [route?.params?.initialContactId]);
 
   useEffect(() => {
     let mounted = true;
@@ -489,10 +501,18 @@ export default function AlumniChatScreen({ navigation, user }) {
   }, [alumniSearchContacts, conversationSummaries, search]);
 
   const statusUserIdKey = useMemo(() => statusUserIds.join('|'), [statusUserIds]);
-  const selectedContact = useMemo(
-    () => selectableContacts.find((contact) => contact.userId === selectedContactId) || null,
-    [selectableContacts, selectedContactId]
-  );
+  const selectedContact = useMemo(() => {
+    if (!selectedContactId) return null;
+    const fromSelectable = selectableContacts.find((contact) => String(contact.userId) === String(selectedContactId));
+    if (fromSelectable) return fromSelectable;
+    const fromAlumniSearch = alumniSearchContacts.find((contact) => String(contact.userId) === String(selectedContactId));
+    if (fromAlumniSearch) return fromAlumniSearch;
+    const fromKnown = knownProfilesByUserId.get(String(selectedContactId));
+    if (fromKnown) return fromKnown;
+    const fromStaff = staffContacts.find((contact) => String(contact.userId) === String(selectedContactId));
+    if (fromStaff) return fromStaff;
+    return null;
+  }, [selectableContacts, selectedContactId, alumniSearchContacts, knownProfilesByUserId, staffContacts]);
   const selectedChatId = selectedContact
     ? resolveContactChatId(currentUserId, selectedContact, conversationSummaries)
     : '';
