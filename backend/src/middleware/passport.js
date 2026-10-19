@@ -1,32 +1,20 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-require('dotenv').config();
 
 // OAuth credentials from environment variables
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5001/api/auth/google/callback';
 
-// Debug OAuth configuration
-console.log('Initializing OAuth with:', {
-  clientIdPrefix: GOOGLE_CLIENT_ID ? `${GOOGLE_CLIENT_ID.substring(0, 15)}...` : 'missing',
-  hasSecret: !!GOOGLE_CLIENT_SECRET,
-  callbackUrl: GOOGLE_CALLBACK_URL
-});
+const googleOAuthEnabled = Boolean(
+  GOOGLE_CLIENT_ID?.trim().endsWith('.apps.googleusercontent.com') &&
+  GOOGLE_CLIENT_SECRET?.trim() &&
+  GOOGLE_CALLBACK_URL.trim()
+);
+passport.googleOAuthEnabled = googleOAuthEnabled;
 
-// Validate required OAuth configuration
-if (!GOOGLE_CLIENT_ID?.trim() || !GOOGLE_CLIENT_SECRET?.trim() || !GOOGLE_CALLBACK_URL?.trim()) {
-  console.error('Missing or invalid OAuth configuration:');
-  if (!GOOGLE_CLIENT_ID?.trim()) console.error('- GOOGLE_CLIENT_ID is missing or empty');
-  if (!GOOGLE_CLIENT_SECRET?.trim()) console.error('- GOOGLE_CLIENT_SECRET is missing or empty');
-  if (!GOOGLE_CALLBACK_URL?.trim()) console.error('- GOOGLE_CALLBACK_URL is missing or empty');
-  throw new Error('Invalid OAuth configuration. Check your .env file and Google Cloud Console settings.');
-}
-
-// Verify that client ID is in the correct format
-if (!GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com')) {
-  console.error('Invalid GOOGLE_CLIENT_ID format. It should end with .apps.googleusercontent.com');
-  throw new Error('Invalid OAuth client ID format');
+if (!googleOAuthEnabled) {
+  console.warn('Google OAuth is disabled: configure valid GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.');
 }
 
 const pool = require('../config/database');
@@ -78,13 +66,8 @@ async function findOrCreateUser(profile) {
   }
 }
 
-console.log('Initializing Google OAuth strategy with config:', {
-  clientIdPrefix: GOOGLE_CLIENT_ID ? GOOGLE_CLIENT_ID.substring(0,10) + '...' : 'missing',
-  callbackURL: GOOGLE_CALLBACK_URL,
-  scopes: process.env.GOOGLE_SCOPES
-});
-
-passport.use(new GoogleStrategy({
+if (googleOAuthEnabled) {
+  passport.use(new GoogleStrategy({
     clientID: GOOGLE_CLIENT_ID,
     clientSecret: GOOGLE_CLIENT_SECRET,
     callbackURL: GOOGLE_CALLBACK_URL,
@@ -115,8 +98,8 @@ passport.use(new GoogleStrategy({
       }
       return done(error, null);
     }
-  }
-));
+  }));
+}
 
 // Session serialization: store only google_accounts.id in session
 passport.serializeUser(function(user, done) {
@@ -168,5 +151,4 @@ async function findOrCreateOAuthUser(profile, provider) {
 }
 
 module.exports = passport;
-
 

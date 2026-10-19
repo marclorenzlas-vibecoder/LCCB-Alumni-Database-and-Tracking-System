@@ -1,7 +1,7 @@
 const express = require('express');
 const { registerUser, loginUser, registerTeacher, loginTeacher } = require('../services/authService');
 const jwt = require('jsonwebtoken');
-const passport = require('passport');
+const passport = require('../middleware/passport');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
@@ -560,6 +560,10 @@ router.post('/delete-rejected-account', async (req, res) => {
 
 // Google OAuth routes
 router.get('/google', (req, res, next) => {
+  if (!passport.googleOAuthEnabled) {
+    return res.status(503).json({ message: 'Google OAuth is not configured on this server.' });
+  }
+
   console.log('Starting Google OAuth flow...');
   passport.authenticate('google', {
     scope: ['profile', 'email'],
@@ -570,6 +574,10 @@ router.get('/google', (req, res, next) => {
 });
 
 router.get('/google/callback', (req, res, next) => {
+  if (!passport.googleOAuthEnabled) {
+    return res.status(503).json({ message: 'Google OAuth is not configured on this server.' });
+  }
+
   console.log('Google callback received:', {
     hasCode: !!req.query.code,
     hasState: !!req.query.state,

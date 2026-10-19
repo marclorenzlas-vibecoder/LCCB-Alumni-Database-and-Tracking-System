@@ -1,9 +1,19 @@
+const dotenv = require('dotenv');
+const path = require('path');
+
+if (!process.env.VERCEL) {
+  const backendDirectory = path.resolve(__dirname, '..');
+  const envFile = process.env.NODE_ENV === 'production'
+    ? '.env.production'
+    : (require('fs').existsSync(path.join(backendDirectory, '.env')) ? '.env' : '.env.development');
+  dotenv.config({ path: path.join(backendDirectory, envFile) });
+}
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const session = require('express-session');
 const passport = require('passport');
-const path = require('path');
+require('./middleware/passport');
 const authRoutes = require('./routes/authRoutes');
 const alumniRoutes = require('./routes/alumniRoutes');
 const testRoutes = require('./routes/testRoutes');
@@ -25,9 +35,6 @@ const birthdayNotificationService = require('./services/birthdayNotificationServ
 const { initRealtime } = require('./services/realtimeService');
 const { ensureActivityLogTable } = require('./services/activityLogService');
 const { syncAllSequences } = require('./services/dbSequenceService');
-
-// Load environment variables
-dotenv.config();
 
 // Debug environment variables loading
 console.log('Environment variables loaded:', {
@@ -116,9 +123,6 @@ app.use(session(getSessionConfig()));
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Initialize passport strategies
-require('./middleware/passport');
-
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/alumni', alumniRoutes);
@@ -135,6 +139,16 @@ app.use('/api/alumni-list', alumniListRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'connected' });
+  } catch (error) {
+    console.error('Health check database connection failed:', error);
+    res.status(503).json({ status: 'unavailable', database: 'disconnected' });
+  }
+});
 
 // Default route redirects to frontend login
 app.get(['/', '/login', '/Login'], (req, res) => {
@@ -202,4 +216,8 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = app;

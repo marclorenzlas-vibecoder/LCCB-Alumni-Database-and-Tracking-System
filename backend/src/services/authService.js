@@ -65,17 +65,6 @@ const savePendingConsent = async (pendingId, consent) => {
   );
 };
 
-const saveUserConsent = async (userId, consent) => {
-  await ensureConsentColumns();
-  await prisma.$executeRawUnsafe(
-    'UPDATE `user` SET `consent_core` = ?, `consent_timestamp` = ?, `privacy_notice_version` = ? WHERE `id` = ?',
-    consent.consentCore ? 1 : 0,
-    consent.consentTimestamp,
-    consent.privacyNoticeVersion,
-    userId
-  );
-};
-
 const getPendingConsent = async (pendingId) => {
   try {
     await ensureConsentColumns();
@@ -592,96 +581,121 @@ module.exports = {
   // Admin: Approve registration - moves to user table
   approveRegistration: async (pendingId) => {
     try {
-      const pending = await prisma.pending_registration.findUnique({
-        where: { id: pendingId }
-      });
-
-      if (!pending) {
-        throw new Error('Pending registration not found');
-      }
-
-      if (pending.status !== 'PENDING') {
-        throw new Error('Registration already processed');
-      }
-
       const consent = await getPendingConsent(pendingId);
+      const result = await prisma.$transaction(async (tx) => {
+        const pending = await tx.pending_registration.findUnique({
+          where: { id: pendingId }
+        });
 
-      // Use provided first and last name, or split username as fallback
-      let firstName = pending.first_name;
-      let lastName = pending.last_name;
-      
-      if (!firstName && !lastName) {
-        const nameParts = pending.username.trim().split(' ');
-        firstName = nameParts[0] || '';
-        lastName = nameParts.slice(1).join(' ') || '';
-      }
+        if (!pending) {
+          throw new Error('Pending registration not found');
+        }
 
-      // Create user in the user table
-      const user = await prisma.user.create({
-        data: {
-          email: pending.email,
-          username: pending.username,
-          password: pending.password,
-          profile_image: pending.profile_image,
+        if (pending.status !== 'PENDING') {
+          throw new Error('Registration already processed');
+        }
+
+        // Use provided first and last name, or split username as fallback
+        let firstName = pending.first_name;
+        let lastName = pending.last_name;
+
+        if (!firstName && !lastName) {
+          const nameParts = pending.username.trim().split(' ');
+          firstName = nameParts[0] || '';
+          lastName = nameParts.slice(1).join(' ') || '';
+        }
+
+        const existingUser = await tx.user.findUnique({
+          where: { email: pending.email },
+          include: { alumni: true }
+        });
+
+        if (existingUser && existingUser.role !== 'ALUMNI') {
+          throw new Error('An account with this email already exists and cannot be used for an alumni registration.');
+        }
+
+        if (existingUser?.alumni) {
+          if (pending.student_id && existingUser.alumni.student_id === pending.student_id) {
+            await tx.pending_registration.delete({ where: { id: pendingId } });
+            return { user: existingUser, alumni: existingUser.alumni, alreadyApproved: true };
+          }
+
+          throw new Error('An alumni profile already exists for this email. Verify the existing profile before approving this registration.');
+        }
+
+        const userData = {
+          username: existingUser?.username || pending.username,
+          profile_image: existingUser?.profile_image || pending.profile_image,
           role: 'ALUMNI',
           approval_status: 'APPROVED',
-          is_active: true
-        }
-      });
-      await saveUserConsent(user.id, consent);
+          is_active: true,
+          consent_core: consent.consentCore,
+          consent_timestamp: consent.consentTimestamp,
+          privacy_notice_version: consent.privacyNoticeVersion
+        };
+        const user = existingUser
+          ? await tx.user.update({
+            where: { id: existingUser.id },
+            data: userData
+          })
+          : await tx.user.create({
+            data: {
+              ...userData,
+              email: pending.email,
+              password: pending.password
+            }
+          });
 
-      // Create alumni record with verification data
-      const alumni = await prisma.alumni.create({
-        data: {
-          user_id: user.id,
-          student_id: pending.student_id, // Transfer School ID from registration
-          first_name: firstName,
-          last_name: lastName,
-          email: pending.email,
-          contact_number: pending.contact_number,
-          level: pending.level,
-          course: pending.course,
-          batch: pending.batch,
-          graduation_year: pending.graduation_year || pending.batch,
-          is_public: true,
-          ...DIRECTORY_SAFE_PRIVACY_FLAGS,
-          is_verified: true // Mark as verified since admin approved it
-        }
-      });
-
-      // Also create alumni_list entry so the alumni directory shows this user
-      try {
-        await prisma.alumni_list.create({
+        const alumni = await tx.alumni.create({
           data: {
+            user_id: user.id,
             student_id: pending.student_id,
             first_name: firstName,
             last_name: lastName,
+            email: pending.email,
+            contact_number: pending.contact_number,
             level: pending.level,
             course: pending.course,
             batch: pending.batch,
-            graduation_year: pending.graduation_year || pending.batch
+            graduation_year: pending.graduation_year || pending.batch,
+            is_public: true,
+            ...DIRECTORY_SAFE_PRIVACY_FLAGS,
+            is_verified: true
           }
         });
-      } catch (listErr) {
-        console.error('Warning: Failed to create alumni_list entry:', listErr.message);
+
+        await tx.pending_registration.delete({ where: { id: pendingId } });
+        await tx.notification.create({
+          data: {
+            user_id: user.id,
+            type: 'GENERAL',
+            title: 'Registration Approved',
+            message: 'Your registration has been approved! You can now login to your account.'
+          }
+        });
+
+        return { user, alumni, firstName, lastName, pending };
+      });
+
+      if (!result.alreadyApproved) {
+        try {
+          await prisma.alumni_list.create({
+            data: {
+              student_id: result.pending.student_id,
+              first_name: result.firstName,
+              last_name: result.lastName,
+              level: result.pending.level,
+              course: result.pending.course,
+              batch: result.pending.batch,
+              graduation_year: result.pending.graduation_year || result.pending.batch
+            }
+          });
+        } catch (listErr) {
+          console.error('Warning: Failed to create alumni_list entry:', listErr.message);
+        }
       }
 
-      // DELETE from pending_registration after successful move to user table
-      await prisma.pending_registration.delete({
-        where: { id: pendingId }
-      });
-
-      // Create notification for the user
-      await prisma.notification.create({
-        data: {
-          user_id: user.id,
-          type: 'GENERAL',
-          title: 'Registration Approved',
-          message: 'Your registration has been approved! You can now login to your account.'
-        }
-      });
-
-      return { success: true, user, alumni };
+      return { success: true, user: result.user, alumni: result.alumni };
     } catch (error) {
       console.error('Error approving registration:', error);
       throw error;
