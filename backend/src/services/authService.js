@@ -44,35 +44,53 @@ let consentColumnsReady = false;
 const ensureConsentColumns = async () => {
   if (consentColumnsReady) return;
 
-  await prisma.$executeRawUnsafe('ALTER TABLE `pending_registration` ADD COLUMN IF NOT EXISTS `consent_core` BOOLEAN NOT NULL DEFAULT FALSE');
-  await prisma.$executeRawUnsafe('ALTER TABLE `pending_registration` ADD COLUMN IF NOT EXISTS `consent_timestamp` DATETIME NULL');
-  await prisma.$executeRawUnsafe('ALTER TABLE `pending_registration` ADD COLUMN IF NOT EXISTS `privacy_notice_version` VARCHAR(50) NULL');
-  await prisma.$executeRawUnsafe('ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `consent_core` BOOLEAN DEFAULT FALSE');
-  await prisma.$executeRawUnsafe('ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `consent_timestamp` DATETIME NULL');
-  await prisma.$executeRawUnsafe('ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `privacy_notice_version` VARCHAR(50) NULL');
-
-  consentColumnsReady = true;
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE pending_registration ADD COLUMN IF NOT EXISTS consent_core BOOLEAN NOT NULL DEFAULT FALSE');
+    await prisma.$executeRawUnsafe('ALTER TABLE pending_registration ADD COLUMN IF NOT EXISTS consent_timestamp TIMESTAMP NULL');
+    await prisma.$executeRawUnsafe('ALTER TABLE pending_registration ADD COLUMN IF NOT EXISTS privacy_notice_version VARCHAR(50) NULL');
+    await prisma.$executeRawUnsafe('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS consent_core BOOLEAN DEFAULT FALSE');
+    await prisma.$executeRawUnsafe('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS consent_timestamp TIMESTAMP NULL');
+    await prisma.$executeRawUnsafe('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_version VARCHAR(50) NULL');
+    consentColumnsReady = true;
+  } catch (error) {
+    console.error('Warning ensuring consent columns:', error.message);
+  }
 };
 
 const savePendingConsent = async (pendingId, consent) => {
   await ensureConsentColumns();
-  await prisma.$executeRawUnsafe(
-    'UPDATE `pending_registration` SET `consent_core` = ?, `consent_timestamp` = ?, `privacy_notice_version` = ? WHERE `id` = ?',
-    consent.consentCore ? 1 : 0,
-    consent.consentTimestamp,
-    consent.privacyNoticeVersion,
-    pendingId
-  );
+  try {
+    await prisma.pending_registration.update({
+      where: { id: pendingId },
+      data: {
+        consent_core: !!consent.consentCore,
+        consent_timestamp: consent.consentTimestamp,
+        privacy_notice_version: consent.privacyNoticeVersion
+      }
+    });
+  } catch (error) {
+    console.error('Failed to update consent via Prisma, using raw query:', error.message);
+    await prisma.$executeRaw`
+      UPDATE pending_registration
+      SET consent_core = ${!!consent.consentCore},
+          consent_timestamp = ${consent.consentTimestamp},
+          privacy_notice_version = ${consent.privacyNoticeVersion}
+      WHERE id = ${pendingId}
+    `;
+  }
 };
 
 const getPendingConsent = async (pendingId) => {
   try {
     await ensureConsentColumns();
-    const rows = await prisma.$queryRawUnsafe(
-      'SELECT consent_core, consent_timestamp, privacy_notice_version FROM pending_registration WHERE id = $1 LIMIT 1',
-      pendingId
-    );
-    const row = Array.isArray(rows) ? rows[0] : null;
+    const row = await prisma.pending_registration.findUnique({
+      where: { id: pendingId },
+      select: {
+        consent_core: true,
+        consent_timestamp: true,
+        privacy_notice_version: true
+      }
+    });
     return {
       consentCore: parseConsentCore(row?.consent_core),
       consentTimestamp: row?.consent_timestamp ? new Date(row.consent_timestamp) : new Date(),
@@ -137,6 +155,8 @@ async function registerUser(userData) {
       graduationYear
     });
     
+    await ensureConsentColumns();
+
     const pendingRegistration = await prisma.pending_registration.create({
       data: {
         email: normalizedEmail,
@@ -150,6 +170,9 @@ async function registerUser(userData) {
         course: course || null,
         batch: batch ? parseInt(batch) : null,
         graduation_year: graduationYear ? parseInt(graduationYear) : null,
+        consent_core: !!consent.consentCore,
+        consent_timestamp: consent.consentTimestamp,
+        privacy_notice_version: consent.privacyNoticeVersion,
         status: 'PENDING'
       }
     });

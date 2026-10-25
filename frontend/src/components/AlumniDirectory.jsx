@@ -1197,14 +1197,16 @@ const AlumniDirectory = () => {
                 {isTeacher && (
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => startEditAlumni(viewingAlumni)}
-                      className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-full hover:bg-sky-700 transition-colors shadow-sm"
+                      className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-700 transition-colors shadow-sm"
                     >
                       Edit
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDeleteAlumni(viewingAlumni)}
-                      className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-full hover:bg-red-700 transition-colors shadow-sm"
+                      className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors shadow-sm"
                     >
                       Delete
                     </button>

@@ -10,40 +10,47 @@ const ConfirmModal = ({
   confirmText = "Confirm",
   confirmLoadingText,
   cancelText = "Cancel",
-  type = "danger" // danger, warning, info
+  type = "danger", // danger, warning, info, success
+  isLoading = false
 }) => {
-  const [isConfirming, setIsConfirming] = React.useState(false);
+  const [internalLoading, setInternalLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!isOpen) {
-      setIsConfirming(false);
+      setInternalLoading(false);
     }
   }, [isOpen]);
+
+  const isConfirming = Boolean(isLoading || internalLoading);
 
   if (!isOpen) return null;
 
   const iconColors = {
     danger: "bg-red-100 text-red-600",
     warning: "bg-yellow-100 text-yellow-600",
-    info: "bg-blue-100 text-blue-600"
+    info: "bg-blue-100 text-blue-600",
+    success: "bg-emerald-100 text-emerald-600"
   };
 
   const buttonColors = {
     danger: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
     warning: "bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500",
-    info: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+    info: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
+    success: "bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500"
   };
 
   const titleColors = {
     danger: 'text-red-700',
     warning: 'text-yellow-700',
-    info: 'text-blue-700'
+    info: 'text-blue-700',
+    success: 'text-emerald-700'
   };
 
   const accents = {
     danger: 'from-red-50 to-white',
     warning: 'from-yellow-50 to-white',
-    info: 'from-blue-50 to-white'
+    info: 'from-blue-50 to-white',
+    success: 'from-emerald-50 to-white'
   };
 
   return createPortal(
@@ -54,10 +61,15 @@ const ConfirmModal = ({
         onClick={onClose}
       />
 
-      <div className={`relative w-full max-w-md rounded-2xl bg-gradient-to-b ${accents[type]} text-left overflow-hidden shadow-2xl border border-gray-100 transform transition-all`}>
+      <div className={`relative w-full max-w-md rounded-2xl bg-gradient-to-b ${accents[type] || accents.danger} text-left overflow-hidden shadow-2xl border border-gray-100 transform transition-all`}>
         <div className="px-5 pt-5 pb-4">
           <div className="flex items-start gap-4">
-            <div className={`flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${iconColors[type]} ring-4 ring-white shadow-sm`}>
+            <div className={`flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${iconColors[type] || iconColors.danger} ring-4 ring-white shadow-sm`}>
+              {type === 'success' && (
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
               {type === 'danger' && (
                 <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -76,7 +88,7 @@ const ConfirmModal = ({
             </div>
 
             <div className="min-w-0 flex-1 pt-1">
-              <h3 className={`text-lg font-semibold leading-6 ${titleColors[type]}`} id="modal-title">
+              <h3 className={`text-lg font-semibold leading-6 ${titleColors[type] || titleColors.danger}`} id="modal-title">
                 {title}
               </h3>
               <p className="mt-1.5 text-sm leading-6 text-gray-600">
@@ -92,17 +104,17 @@ const ConfirmModal = ({
             disabled={isConfirming}
             onClick={async () => {
               if (isConfirming) return;
-              setIsConfirming(true);
+              setInternalLoading(true);
               try {
                 if (onConfirm) await onConfirm();
                 if (onClose) onClose();
               } catch (e) {
                 console.error('Confirm action failed', e);
               } finally {
-                setIsConfirming(false);
+                setInternalLoading(false);
               }
             }}
-            className={`inline-flex items-center justify-center rounded-lg border border-transparent shadow-sm px-4 py-2.5 ${buttonColors[type]} text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+            className={`inline-flex items-center justify-center rounded-lg border border-transparent shadow-sm px-4 py-2.5 ${buttonColors[type] || buttonColors.danger} text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {isConfirming && (
               <svg

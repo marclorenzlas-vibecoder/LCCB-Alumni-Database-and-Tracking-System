@@ -6,6 +6,7 @@ import UserLayout from './UserLayout';
 import statsService from '../services/statsService';
 import { realtimeClient } from '../services/realtimeClient';
 import { groupSectionDefinitions } from '../config/groupSections';
+import ConfirmModal from './ConfirmModal';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -72,6 +73,16 @@ const AdminDashboard = ({ pendingOnly = false }) => {
   const [verificationStatus, setVerificationStatus] = useState({});
   const [expandedProgramUsageKey, setExpandedProgramUsageKey] = useState('');
   const [selectedLevelKey, setSelectedLevelKey] = useState('COLLEGE');
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    confirmLoadingText: '',
+    type: 'danger',
+    isLoading: false,
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     fetchPendingUsers();
@@ -244,12 +255,13 @@ const AdminDashboard = ({ pendingOnly = false }) => {
 
       if (response.ok) {
         toast.success('User approved successfully! They can now login to the system.');
-        fetchPendingUsers();
-        fetchAdminStats();
+        await fetchPendingUsers();
+        await fetchAdminStats();
       } else {
         toast.error(data.error || 'Failed to approve registration');
       }
     } catch (error) {
+      console.error('Approval error:', error);
       toast.error('Failed to approve registration');
     }
   };
@@ -270,9 +282,8 @@ const AdminDashboard = ({ pendingOnly = false }) => {
 
       if (response.ok) {
         toast.success('Registration rejected successfully!');
-        fetchPendingUsers();
-        fetchAdminStats();
-
+        await fetchPendingUsers();
+        await fetchAdminStats();
       } else {
         toast.error(data.error || 'Failed to reject registration');
       }
@@ -280,6 +291,48 @@ const AdminDashboard = ({ pendingOnly = false }) => {
       console.error('Rejection error:', error);
       toast.error('Network error: Failed to reject registration');
     }
+  };
+
+  const promptApproval = (user) => {
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'this user';
+    setConfirmModal({
+      isOpen: true,
+      title: 'Approve Registration',
+      message: `Are you sure you want to approve the registration for ${fullName}${user.email ? ` (${user.email})` : ''}? This will activate their alumni account.`,
+      confirmText: 'Approve',
+      confirmLoadingText: 'Approving...',
+      type: 'success',
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isLoading: true }));
+        try {
+          await handleApproval(user.id);
+        } finally {
+          setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
+        }
+      }
+    });
+  };
+
+  const promptRejection = (user) => {
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'this user';
+    setConfirmModal({
+      isOpen: true,
+      title: 'Reject Registration',
+      message: `Are you sure you want to reject the registration for ${fullName}${user.email ? ` (${user.email})` : ''}? This request will be permanently removed.`,
+      confirmText: 'Reject',
+      confirmLoadingText: 'Rejecting...',
+      type: 'danger',
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isLoading: true }));
+        try {
+          await handleRejection(user.id);
+        } finally {
+          setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
+        }
+      }
+    });
   };
 
 
@@ -887,10 +940,24 @@ const AdminDashboard = ({ pendingOnly = false }) => {
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(user.created_at).toLocaleDateString()}</td>
                         <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex flex-col gap-2">
-                            <button onClick={(e) => { e.stopPropagation(); handleApproval(user.id); }} className="w-full inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                promptApproval(user);
+                              }}
+                              className="w-full inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                            >
                               Approve
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleRejection(user.id); }} className="w-full inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                promptRejection(user);
+                              }}
+                              className="w-full inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                            >
                               Reject
                             </button>
                           </div>
@@ -905,6 +972,18 @@ const AdminDashboard = ({ pendingOnly = false }) => {
         </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        confirmLoadingText={confirmModal.confirmLoadingText}
+        type={confirmModal.type}
+        isLoading={confirmModal.isLoading}
+      />
     </Layout>
   );
 };
