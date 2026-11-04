@@ -49,6 +49,7 @@ const normalizeJobRow = (row) => {
   return {
     id: row.id,
     posted_by_alumni_id: row.posted_by_alumni_id,
+    posted_by_user_id: row.posted_by_user_id,
     job_title: row.job_title,
     company: row.company,
     location: row.location,
@@ -62,7 +63,17 @@ const normalizeJobRow = (row) => {
     application_deadline: row.application_deadline,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    alumni: row.alumni_id
+    staff: row.staff_user_id
+      ? {
+          id: row.staff_user_id,
+          userId: row.staff_user_id,
+          username: row.staff_username || row.staff_email,
+          email: row.staff_email,
+          profileImage: row.staff_profile_image,
+          role: row.staff_role || 'ADMIN'
+        }
+      : null,
+    alumni: row.staff_user_id ? null : row.alumni_id
       ? {
           id: row.alumni_id,
           user_id: row.alumni_user_id,
@@ -71,7 +82,7 @@ const normalizeJobRow = (row) => {
           email: row.email,
           profile_image: row.profile_image
         }
-      : null
+      : null,
   };
 };
 
@@ -109,6 +120,7 @@ const selectJobSql = `
   SELECT
     jp.id,
     jp.posted_by_alumni_id,
+    jp.posted_by_user_id,
     jp.job_title,
     jp.company,
     jp.location,
@@ -127,9 +139,21 @@ const selectJobSql = `
     a.first_name,
     a.last_name,
     a.email,
-    a.profile_image
+    a.profile_image,
+    COALESCE(t.id, u.id, CASE WHEN a.email ILIKE '%@lccbonline.com' THEN a.user_id END) AS staff_user_id,
+    COALESCE(t.username, u.username, NULLIF(CONCAT_WS(' ', a.first_name, a.last_name), ''), t.email, u.email, a.email) AS staff_username,
+    COALESCE(t.email, u.email, a.email) AS staff_email,
+    COALESCE(t.profile_image, u.profile_image) AS staff_profile_image,
+    CASE
+      WHEN t.id IS NOT NULL OR a.email ILIKE '%@lccbonline.com' THEN 'ADMIN'
+      ELSE u.role::text
+    END AS staff_role
   FROM job_posting jp
   LEFT JOIN alumni a ON a.id = jp.posted_by_alumni_id
+  LEFT JOIN teacher t ON t.id = jp.posted_by_user_id
+    OR (jp.posted_by_user_id IS NULL AND a.email ILIKE '%@lccbonline.com' AND t.email = a.email)
+  LEFT JOIN "user" u ON u.id = jp.posted_by_user_id
+    OR (jp.posted_by_user_id IS NULL AND a.email ILIKE '%@lccbonline.com' AND u.email = a.email)
 `;
 
 const getJobById = async (client, id) => {
@@ -250,8 +274,10 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
     let posterId = null;
+    let posterUserId = null;
     if (isStaffRequest(req)) {
       posterId = posted_by_alumni_id ? Number(posted_by_alumni_id) : authenticatedAlumniId;
+      posterUserId = posterId ? null : Number(req.user?.id) || null;
     } else {
       if (!authenticatedAlumniId) {
         return res.status(403).json({ error: 'You must have an alumni profile to post jobs' });
@@ -265,6 +291,7 @@ router.post('/', authenticateToken, async (req, res) => {
       const inserted = await tx.$queryRaw`
         INSERT INTO job_posting (
           posted_by_alumni_id,
+          posted_by_user_id,
           job_title,
           company,
           location,
@@ -278,6 +305,7 @@ router.post('/', authenticateToken, async (req, res) => {
           application_deadline
         ) VALUES (
           ${posterId},
+          ${posterUserId},
           ${job_title},
           ${company},
           ${location || null},
@@ -373,6 +401,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (posted_by_alumni_id !== undefined && isStaffRequest(req)) {
       const parsedAlumniId = Number.parseInt(posted_by_alumni_id, 10);
       updateData.posted_by_alumni_id = Number.isInteger(parsedAlumniId) && parsedAlumniId > 0 ? parsedAlumniId : null;
+      updateData.posted_by_user_id = updateData.posted_by_alumni_id ? null : Number(req.user?.id) || null;
     }
 
     if (Object.keys(updateData).length > 0) {
