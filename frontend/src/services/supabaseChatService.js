@@ -14,6 +14,7 @@ const ACCEPTED_STATUS = 'accepted';
 const PENDING_STATUS = 'pending';
 const REJECTED_STATUS = 'rejected';
 const BLOCKED_STATUS = 'blocked';
+const DEFAULT_CHAT_CONTEXT = 'alumni';
 
 const toId = (value) => {
   if (value === null || value === undefined || value === '') return '';
@@ -55,14 +56,29 @@ export const getAlumniChatUserId = (alumnus) =>
   );
 
 export const normalizeChatUser = (entry = {}) => {
-  const userId = getAlumniChatUserId(entry) || getSystemUserId(entry);
-  const firstName = entry.firstName || entry.first_name || '';
-  const lastName = entry.lastName || entry.last_name || '';
+  const nestedUser = entry.user || {};
+  const userId = getAlumniChatUserId(entry) || getSystemUserId(entry) || getSystemUserId(nestedUser);
+  const firstName = entry.firstName || entry.first_name || nestedUser.firstName || nestedUser.first_name || '';
+  const lastName = entry.lastName || entry.last_name || nestedUser.lastName || nestedUser.last_name || '';
+  const email = entry.email || nestedUser.email || '';
+  const emailName = typeof email === 'string'
+    ? email.split('@')[0].replace(/[._-]+/g, ' ').trim()
+    : '';
+  const friendlyEmailName = emailName
+    ? emailName.replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : '';
+  const providedDisplayName = typeof (entry.displayName || nestedUser.displayName) === 'string'
+    ? (entry.displayName || nestedUser.displayName).trim()
+    : '';
+  const usableDisplayName = providedDisplayName && !providedDisplayName.includes('@')
+    ? providedDisplayName
+    : '';
   const displayName =
-    entry.displayName ||
+    usableDisplayName ||
     entry.username ||
+    nestedUser.username ||
     `${firstName} ${lastName}`.trim() ||
-    entry.email ||
+    friendlyEmailName ||
     'Alumni';
 
   return {
@@ -70,7 +86,7 @@ export const normalizeChatUser = (entry = {}) => {
     alumniId: entry.id ? String(entry.id) : '',
     chatId: entry.chatId || '',
     displayName,
-    email: entry.email || '',
+    email,
     profileImage: entry.profileImage || entry.profile_image || '',
     course: entry.course || '',
     batch: entry.batch || '',
@@ -190,7 +206,8 @@ export const listenToMessages = (chatId, callback, onError) => {
           senderId: msg.sender_id,
           receiverId: msg.receiver_id,
           chatId: msg.chat_id,
-          timestamp: new Date(msg.created_at).getTime()
+          timestamp: new Date(msg.created_at).getTime(),
+          context: msg.context || DEFAULT_CHAT_CONTEXT
       }));
       callback(messages);
     });
@@ -212,7 +229,8 @@ export const listenToMessages = (chatId, callback, onError) => {
                 senderId: msg.sender_id,
                 receiverId: msg.receiver_id,
                 chatId: msg.chat_id,
-                timestamp: new Date(msg.created_at).getTime()
+                timestamp: new Date(msg.created_at).getTime(),
+                context: msg.context || DEFAULT_CHAT_CONTEXT
             }));
             callback(messages);
         });
@@ -242,6 +260,28 @@ export const listenToConversationSummaries = (userId, callback, onError) => {
         return;
     }
 
+    const chatIds = (participants || [])
+      .map((participant) => participant.chat_conversations?.chat_id)
+      .filter(Boolean);
+    const { data: messageContexts, error: contextError } = chatIds.length
+      ? await supabase
+          .from('chat_messages')
+          .select('chat_id, context')
+          .in('chat_id', chatIds)
+      : { data: [], error: null };
+
+    if (contextError) {
+      if (onError) onError(contextError);
+      return;
+    }
+
+    const contextsByChatId = {};
+    (messageContexts || []).forEach((message) => {
+      const chatId = message.chat_id;
+      if (!contextsByChatId[chatId]) contextsByChatId[chatId] = new Set();
+      contextsByChatId[chatId].add(message.context || DEFAULT_CHAT_CONTEXT);
+    });
+
     const summaries = {};
     for (const p of (participants || [])) {
         const conv = p.chat_conversations;
@@ -265,7 +305,8 @@ export const listenToConversationSummaries = (userId, callback, onError) => {
             latestMessageSenderId: conv.last_sender_id,
             latestMessageAt: new Date(conv.last_message_time || conv.updated_at).getTime(),
             unreadCount: p.unread_count,
-            updatedAt: new Date(p.updated_at).getTime()
+            updatedAt: new Date(p.updated_at).getTime(),
+            contexts: Array.from(contextsByChatId[conv.chat_id] || [DEFAULT_CHAT_CONTEXT])
         };
     }
     callback(summaries);
@@ -288,9 +329,17 @@ export const listenToConversationSummaries = (userId, callback, onError) => {
     })
     .subscribe();
 
+  const channelMessages = supabase
+    .channel(`public:chat_messages:owner=${ownerId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => {
+      fetchSummaries();
+    })
+    .subscribe();
+
   return () => {
     supabase.removeChannel(channelParts);
     supabase.removeChannel(channelConvs);
+    supabase.removeChannel(channelMessages);
   };
 };
 
@@ -386,7 +435,7 @@ export const unblockChatUser = async ({ chatId, currentUserId }) => {
     .eq('chat_id', chatId);
 };
 
-export const sendChatMessage = async ({ sender, receiver, text }) => {
+export const sendChatMessage = async ({ sender, receiver, text, context = DEFAULT_CHAT_CONTEXT }) => {
   if (!supabase) throw new Error('Supabase is not configured.');
   const senderUser = normalizeChatUser(sender);
   const receiverUser = normalizeChatUser(receiver);
@@ -399,6 +448,7 @@ export const sendChatMessage = async ({ sender, receiver, text }) => {
   if (cleanText.length > MAX_MESSAGE_LENGTH) {
     throw new Error(`Messages must be ${MAX_MESSAGE_LENGTH} characters or less.`);
   }
+  const messageContext = context === 'employment' ? 'employment' : DEFAULT_CHAT_CONTEXT;
 
   const preferredChatId = getChatId(senderUser.userId, receiverUser.userId);
   const legacyChatId = getLegacyNumericChatId(senderUser.userId, receiverUser.userId);
@@ -495,7 +545,8 @@ export const sendChatMessage = async ({ sender, receiver, text }) => {
             sender_id: senderUser.userId,
             receiver_id: receiverUser.userId,
             message: cleanText,
-            type: messageType
+            type: messageType,
+            context: messageContext
         })
         .select()
         .single();

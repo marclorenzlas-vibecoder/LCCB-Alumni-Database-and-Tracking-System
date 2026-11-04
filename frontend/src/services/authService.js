@@ -138,7 +138,6 @@ export const authService = {
 
   logout: async ({ clearLocalSession = true } = {}) => {
     const token = localStorage.getItem('token');
-    const user = authService.getCurrentUser();
 
     try {
       await axiosInstance.post('/logout', {}, {
@@ -146,14 +145,6 @@ export const authService = {
       });
     } catch {
       // Logging out locally should still work if the backend is unavailable.
-    }
-
-    if (user && user.approval_status === 'REJECTED') {
-      try {
-        await axiosInstance.post('/delete-rejected-account', { email: user.email });
-      } catch (err) {
-        console.error('Error deleting rejected account:', err);
-      }
     }
 
     if (clearLocalSession) {

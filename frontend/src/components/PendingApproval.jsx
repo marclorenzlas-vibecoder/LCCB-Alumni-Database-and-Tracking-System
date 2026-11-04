@@ -30,7 +30,34 @@ const PendingApproval = () => {
         return;
       }
 
-      if (currentUser.approval_status === 'REJECTED') {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/auth/pending-status`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          cache: 'no-store'
+        });
+
+        if (!response.ok) {
+          throw new Error(`Pending status request failed with status ${response.status}`);
+        }
+
+        const status = await response.json();
+        const updatedUser = {
+          ...currentUser,
+          approval_status: status.status,
+          rejected_reason: status.rejected_reason || currentUser.rejected_reason
+        };
+
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+
+        if (status.status === 'APPROVED') {
+          navigate('/home');
+        }
+      } catch (error) {
+        console.error('Error checking registration status:', error);
         setUser(currentUser);
       }
     };
@@ -51,7 +78,6 @@ const PendingApproval = () => {
     if (isLoggingOut) return;
 
     setIsLoggingOut(true);
-    const currentUser = authService.getCurrentUser();
     const token = localStorage.getItem('token');
 
     authService.clearLocalSession();
@@ -69,9 +95,6 @@ const PendingApproval = () => {
       }).catch(() => {});
     }
 
-    if (currentUser?.approval_status === 'REJECTED' && currentUser?.email) {
-      authService.deleteRejectedAccount(currentUser.email);
-    }
   };
 
   const isRejected = user?.approval_status === 'REJECTED';
@@ -95,51 +118,46 @@ const PendingApproval = () => {
       <div className="min-h-[80vh] flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
           {user?.approval_status === 'PENDING' && (
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
-              {/* Header with gradient */}
-              <div className="relative bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-400 px-8 pt-10 pb-16 text-center">
-                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-white/90 shadow-lg">
-                  <svg className="h-10 w-10 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+              <div className="relative bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-700 px-8 pb-16 pt-10 text-center">
+                <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, white 1px, transparent 1px)', backgroundSize: '22px 22px' }} />
+                <div className="relative mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-white/95 shadow-xl">
+                  <svg className="h-10 w-10 animate-pulse text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h1 className="text-2xl font-bold text-white">Account Under Review</h1>
-                <p className="mt-1 text-amber-100 text-sm font-medium">We're verifying your alumni status</p>
+                <h1 className="relative text-2xl font-bold text-white">Account Under Review</h1>
+                <p className="relative mt-2 text-sm font-medium text-blue-100">Your registration is being verified</p>
               </div>
 
-              {/* Content */}
-              <div className="-mt-8 relative px-8 pb-8">
-                {/* Status card */}
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 mb-5">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+              <div className="relative -mt-8 px-6 pb-6 sm:px-8 sm:pb-8">
+                <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold tracking-wide text-amber-700 shadow-sm">
                       <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                       PENDING
                     </span>
-                    <span className="text-xs text-amber-600 font-medium">
+                    <span className="text-xs font-medium text-amber-700">
                       Checking every 10s{dots}
                     </span>
                   </div>
                 </div>
 
-                {/* User info */}
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 mb-5">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Registration Details</p>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Username</span>
-                      <span className="text-sm font-semibold text-gray-900">{user?.username}</span>
+                <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Registration details</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl bg-white p-3 shadow-sm">
+                      <p className="text-xs text-slate-400">Username</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-slate-900">{user?.username}</p>
                     </div>
-                    <div className="border-t border-gray-200" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Email</span>
-                      <span className="text-sm font-semibold text-gray-900">{user?.email}</span>
+                    <div className="rounded-xl bg-white p-3 shadow-sm">
+                      <p className="text-xs text-slate-400">Email</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-slate-900">{user?.email}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* What happens next */}
-                <div className="rounded-xl border border-blue-100 bg-blue-50 p-5 mb-6">
+                <div className="mb-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-cyan-50 p-5">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +165,7 @@ const PendingApproval = () => {
                       </svg>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">What happens next?</p>
+                      <p className="text-sm font-semibold text-slate-900">What happens next?</p>
                       <ul className="mt-2 space-y-1.5">
                         <li className="flex items-start gap-2 text-sm text-gray-600">
                           <svg className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,24 +213,26 @@ const PendingApproval = () => {
                   </svg>
                 </div>
                 <h1 className="text-2xl font-bold text-white">Registration Rejected</h1>
-                <p className="mt-1 text-red-100 text-sm font-medium">Your application was not approved</p>
+                <p className="mt-1 text-red-100 text-sm font-medium">Your account has been rejected</p>
               </div>
 
               <div className="-mt-8 relative px-8 pb-8">
-                {/* Rejection reason */}
-                <div className="rounded-xl border border-red-200 bg-red-50 p-5 mb-5">
-                  <p className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-2">Reason</p>
-                  <p className="text-sm text-red-700 leading-relaxed">
-                    {user?.rejected_reason || 'Your registration has been rejected by the administrator.'}
+                <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-red-500">Decision details</p>
+                    <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-red-700">
+                      Rejected
+                    </span>
+                  </div>
+                  <p className="text-sm leading-6 text-red-800">
+                    {user?.rejected_reason || 'The information submitted could not be verified.'}
                   </p>
                 </div>
 
-                {/* Info */}
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 mb-6">
-                  <p className="text-sm text-gray-600">
-                    Please contact the administrator if you have questions or wish to reapply.
+                <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <p className="text-sm leading-6 text-blue-800">
+                    You may submit a new registration using updated and accurate information.
                   </p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">admin@lccbonline.com</p>
                 </div>
 
                 {/* Back to login */}

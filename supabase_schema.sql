@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
     receiver_id TEXT NOT NULL,
     message TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'message', -- request, message
+    context TEXT NOT NULL DEFAULT 'alumni', -- alumni, employment
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

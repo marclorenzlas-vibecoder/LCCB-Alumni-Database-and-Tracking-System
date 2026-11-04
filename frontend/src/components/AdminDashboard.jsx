@@ -275,7 +275,9 @@ const AdminDashboard = ({ pendingOnly = false }) => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ reason: 'Registration rejected by admin' })
+        body: JSON.stringify({
+          reason: 'Your registration was rejected because the information provided could not be verified. Some details may be incomplete, inaccurate, or inconsistent with the available alumni records. Please review your information and submit a new registration with accurate details.'
+        })
       });
 
       const data = await response.json();
@@ -319,7 +321,7 @@ const AdminDashboard = ({ pendingOnly = false }) => {
     setConfirmModal({
       isOpen: true,
       title: 'Reject Registration',
-      message: `Are you sure you want to reject the registration for ${fullName}${user.email ? ` (${user.email})` : ''}? This request will be permanently removed.`,
+      message: `Are you sure you want to reject the registration for ${fullName}${user.email ? ` (${user.email})` : ''}?`,
       confirmText: 'Reject',
       confirmLoadingText: 'Rejecting...',
       type: 'danger',

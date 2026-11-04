@@ -466,6 +466,56 @@ router.get('/pending-registrations', teacherAuthMiddleware, async (req, res) => 
   }
 });
 
+// Get the current approval status for a pending applicant.
+router.get('/pending-status', authMiddleware, async (req, res) => {
+  try {
+    const email = typeof req.user?.email === 'string' ? req.user.email.trim().toLowerCase() : '';
+    const pendingId = Number(req.user?.id);
+
+    if (!email || !Number.isInteger(pendingId)) {
+      return res.status(400).json({ error: 'Invalid pending registration session' });
+    }
+
+    const pending = await prisma.pending_registration.findFirst({
+      where: {
+        id: pendingId,
+        email
+      },
+      select: {
+        status: true,
+        rejected_reason: true
+      }
+    });
+
+    if (pending) {
+      return res.json({
+        status: pending.status,
+        rejected_reason: pending.rejected_reason || null
+      });
+    }
+
+    const approvedUser = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        approval_status: true,
+        is_active: true
+      }
+    });
+
+    if (approvedUser) {
+      return res.json({
+        status: approvedUser.approval_status || (approvedUser.is_active ? 'APPROVED' : 'PENDING'),
+        rejected_reason: null
+      });
+    }
+
+    return res.status(404).json({ error: 'Registration status not found' });
+  } catch (error) {
+    console.error('Error fetching pending registration status:', error);
+    return res.status(500).json({ error: 'Failed to fetch registration status' });
+  }
+});
+
 // Approve registration - Admin only
 router.post('/approve-registration/:id', teacherAuthMiddleware, async (req, res) => {
   try {
@@ -1684,7 +1734,8 @@ router.put('/approve-user/:id', teacherAuthMiddleware, async (req, res) => {
         }
       });
     } else {
-      const result = await rejectRegistration(pendingId, 'Registration rejected by admin');
+      const rejectionReason = 'Your registration was rejected because the information provided could not be verified. Some details may be incomplete, inaccurate, or inconsistent with the available alumni records. Please review your information and submit a new registration with accurate details.';
+      const result = await rejectRegistration(pendingId, rejectionReason);
       await recordActivity({
         req,
         action: 'REJECT',
@@ -1693,7 +1744,7 @@ router.put('/approve-user/:id', teacherAuthMiddleware, async (req, res) => {
         entityLabel: pendingRegistration?.email || pendingRegistration?.username || `Registration #${pendingId}`,
         summary: `Rejected registration for ${pendingRegistration?.email || pendingRegistration?.username || `request #${pendingId}`}`,
         details: {
-          reason: 'Registration rejected by admin',
+          reason: rejectionReason,
           pendingRegistrationId: pendingId
         }
       });

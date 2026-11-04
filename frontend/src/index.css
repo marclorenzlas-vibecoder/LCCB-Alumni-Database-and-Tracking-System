@@ -16,10 +16,13 @@ body,
 
 html {
     overflow-y: auto;
+    background: #2855d9;
+    overscroll-behavior-y: none;
 }
 
 body {
     @apply bg-gray-50 text-gray-900;
+    overscroll-behavior-y: none;
     font-family:
         ui-sans-serif,
         system-ui,
@@ -813,6 +816,21 @@ body::-webkit-scrollbar,
     animation: dropdownEnter 180ms ease-out both;
     transform-origin: top right;
     will-change: transform, opacity;
+}
+
+@keyframes notificationDropdownExit {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+}
+
+.notification-dropdown-panel.is-closing {
+    animation: notificationDropdownExit 180ms ease-in forwards;
 }
 
 .dropdown-menu-item {

@@ -135,7 +135,10 @@ async function registerUser(userData) {
         throw new Error('Registration already submitted and pending approval');
       }
       if (existingPending.status === 'REJECTED') {
-        throw new Error('Your registration was rejected. Please contact admin.');
+        // A rejected applicant may submit a corrected registration using the same email.
+        await prisma.pending_registration.delete({
+          where: { id: existingPending.id }
+        });
       }
     }
 
@@ -725,7 +728,7 @@ module.exports = {
     }
   },
 
-  // Admin: Reject registration - DELETE from pending_registration
+  // Admin: Reject registration and retain the status so the applicant can be notified.
   rejectRegistration: async (pendingId, reason) => {
     try {
       const pending = await prisma.pending_registration.findUnique({
@@ -740,14 +743,17 @@ module.exports = {
         throw new Error('Registration already processed');
       }
 
-      // DELETE from pending_registration (no need to keep rejected records)
-      await prisma.pending_registration.delete({
-        where: { id: pendingId }
+      await prisma.pending_registration.update({
+        where: { id: pendingId },
+        data: {
+          status: 'REJECTED',
+          rejected_reason: reason.trim()
+        }
       });
-      
-      console.log(`❌ Registration rejected and deleted: ${pending.email}`);
 
-      return { success: true, message: 'Registration rejected and deleted' };
+      console.log(`❌ Registration rejected: ${pending.email}`);
+
+      return { success: true, message: 'Registration rejected' };
     } catch (error) {
       console.error('Error rejecting registration:', error);
       throw error;

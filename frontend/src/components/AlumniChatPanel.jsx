@@ -116,6 +116,11 @@ const getRoleLabel = (role) => {
   return 'Alumni';
 };
 
+const isGenericChatContact = (contact) => {
+  const name = String(contact?.displayName || '').trim().toLowerCase();
+  return ['alumni', 'user'].includes(name) && !contact?.email && !contact?.username;
+};
+
 const isSearchableAlumniAccount = (entry = {}) => {
   const user = entry.user || {};
   const accountStatus = String(entry.status || entry.account_status || user.status || user.account_status || '').toUpperCase();
@@ -218,7 +223,10 @@ const ContactAvatar = ({ contact, status }) => (
 const AlumniChatPanel = ({
   currentUser,
   alumniContacts,
+  initialChatContext = 'alumni',
   externalSelectedContactId = null,
+  externalSelectedContact = null,
+  externalSelectFirstStaff = false,
   externalOpen = false,
   onExternalOpenHandled = null
 }) => {
@@ -232,6 +240,8 @@ const AlumniChatPanel = ({
   const [statuses, setStatuses] = useState({});
   const [conversationSummaries, setConversationSummaries] = useState({});
   const [messages, setMessages] = useState([]);
+  const [chatContext, setChatContext] = useState(initialChatContext === 'employment' ? 'employment' : 'alumni');
+  const [externalContact, setExternalContact] = useState(null);
   const [messageText, setMessageText] = useState('');
   const [error, setError] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -242,8 +252,17 @@ const AlumniChatPanel = ({
   const scrolledChatIdRef = useRef(null);
   const previousMessageCountRef = useRef(0);
   const closeTimerRef = useRef(null);
+  const pendingStaffSelectionRef = useRef(false);
 
   const currentUserId = getSystemUserId(currentUser);
+  const visibleMessages = useMemo(
+    () => messages.filter((message) => (message.context || 'alumni') === chatContext),
+    [chatContext, messages]
+  );
+
+  useEffect(() => {
+    setChatContext(initialChatContext === 'employment' ? 'employment' : 'alumni');
+  }, [initialChatContext]);
 
   useEffect(() => {
     if (externalOpen) {
@@ -253,6 +272,11 @@ const AlumniChatPanel = ({
       }
       setIsClosing(false);
       setIsOpen(true);
+      setChatContext(initialChatContext === 'employment' ? 'employment' : 'alumni');
+      pendingStaffSelectionRef.current = externalSelectFirstStaff;
+      if (externalSelectedContact) {
+        setExternalContact(externalSelectedContact);
+      }
       if (externalSelectedContactId) {
         setSelectedContactId(String(externalSelectedContactId));
       }
@@ -261,6 +285,19 @@ const AlumniChatPanel = ({
       }
     }
   }, [externalOpen, externalSelectedContactId, onExternalOpenHandled]);
+
+  useEffect(() => {
+    if (!pendingStaffSelectionRef.current || !staffContacts.length) return;
+
+    const staffContact = staffContacts.find(
+      (contact) => String(contact.userId) !== String(currentUserId)
+    );
+    if (!staffContact) return;
+
+    pendingStaffSelectionRef.current = false;
+    setExternalContact(staffContact);
+    setSelectedContactId(String(staffContact.userId));
+  }, [currentUserId, externalOpen, staffContacts]);
 
   const safeAlumniContacts = useMemo(() => {
     if (Array.isArray(alumniContacts)) return alumniContacts;
@@ -301,6 +338,7 @@ const AlumniChatPanel = ({
   const conversationContacts = useMemo(
     () =>
       Object.entries(conversationSummaries)
+        .filter(([, summary]) => (summary?.contexts || ['alumni']).includes(chatContext))
         .map(([summaryChatId, summary]) => {
           const otherUserId = String(summary?.otherUserId || summary?.otherUser?.userId || '');
           if (!otherUserId || otherUserId === currentUserId) return null;
@@ -327,8 +365,9 @@ const AlumniChatPanel = ({
             status: statuses[contact.userId] || null
           };
         })
-        .filter(Boolean),
-    [conversationSummaries, currentUserId, knownProfilesByUserId, statuses]
+        .filter(Boolean)
+        .filter((contact) => !isGenericChatContact(contact)),
+    [chatContext, conversationSummaries, currentUserId, knownProfilesByUserId, statuses]
   );
 
   const currentChatUser = useMemo(() => {
@@ -467,8 +506,18 @@ const AlumniChatPanel = ({
     if (fromKnown) return fromKnown;
     const fromStaff = staffContacts.find((contact) => String(contact.userId) === String(selectedContactId));
     if (fromStaff) return fromStaff;
+    if (externalContact && String(externalContact.userId) === String(selectedContactId)) {
+      return normalizeChatUser(externalContact);
+    }
     return null;
-  }, [selectableContacts, selectedContactId, alumniSearchContacts, knownProfilesByUserId, staffContacts]);
+  }, [
+    selectableContacts,
+    selectedContactId,
+    alumniSearchContacts,
+    knownProfilesByUserId,
+    staffContacts,
+    externalContact
+  ]);
 
   const selectedChatId = selectedContact
     ? resolveContactChatId(currentUserId, selectedContact, conversationSummaries)
@@ -488,7 +537,8 @@ const AlumniChatPanel = ({
     selectedContact &&
     !isSelectedIncomingRequest &&
     !isSelectedBlocked;
-  const totalUnread = useMemo(
+
+  const totalUnread = useMemo(
     () =>
       Object.values(conversationSummaries).reduce(
         (sum, summary) => sum + (Number(summary?.unreadCount) || 0),
@@ -599,12 +649,17 @@ const AlumniChatPanel = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    scrolledChatIdRef.current = null;
+    previousMessageCountRef.current = 0;
+  }, [chatContext]);
+
   useLayoutEffect(() => {
-    if (!messages.length) return;
+    if (!visibleMessages.length) return;
 
     if (scrolledChatIdRef.current !== selectedChatId) {
       scrolledChatIdRef.current = selectedChatId;
-      previousMessageCountRef.current = messages.length;
+      previousMessageCountRef.current = visibleMessages.length;
       if (messagesContainerRef.current) {
         messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
       }
@@ -614,11 +669,11 @@ const AlumniChatPanel = ({
           messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
         }
       });
-    } else if (messages.length > previousMessageCountRef.current) {
-      previousMessageCountRef.current = messages.length;
+    } else if (visibleMessages.length > previousMessageCountRef.current) {
+      previousMessageCountRef.current = visibleMessages.length;
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }, [messages, selectedChatId]);
+  }, [selectedChatId, visibleMessages]);
 
   useEffect(() => {
     if (messageRequests.length > 0) {
@@ -668,6 +723,7 @@ const AlumniChatPanel = ({
       senderId: currentChatUser.userId,
       receiverId: selectedContact.userId,
       text: textToSend,
+      context: chatContext,
       timestamp: new Date().toISOString(),
       status: 'sending'
     };
@@ -679,7 +735,8 @@ const AlumniChatPanel = ({
       await sendChatMessage({
         sender: currentChatUser,
         receiver: selectedContact,
-        text: textToSend
+        text: textToSend,
+        context: chatContext
       });
       setMessages((prev) => 
         prev.map((msg) => msg.id === tempId ? { ...msg, status: 'sent' } : msg)
@@ -748,6 +805,9 @@ const AlumniChatPanel = ({
       closeTimerRef.current = null;
     }
     setIsClosing(false);
+    setChatContext(initialChatContext === 'employment' ? 'employment' : 'alumni');
+    setSelectedContactId('');
+    setError('');
     setIsOpen(true);
   };
 
@@ -768,7 +828,7 @@ const AlumniChatPanel = ({
     <div className="lccb-chat-widget fixed bottom-5 right-5 z-[90]">
       <section
         role="dialog"
-        aria-label="Alumni chat"
+        aria-label="Messages"
         aria-hidden={!isOpen && !isClosing}
         className={`lccb-chat-panel ${isOpen ? 'lccb-chat-panel--open' : ''} ${
           isClosing ? 'lccb-chat-panel--closing' : ''
@@ -779,9 +839,9 @@ const AlumniChatPanel = ({
             <div className="border-b border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-bold tracking-tight text-slate-900">
-                    Alumni Chat
-                  </h3>
+                  <div>
+                    <h3 className="text-lg font-bold tracking-tight text-slate-900">Messages</h3>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -794,12 +854,35 @@ const AlumniChatPanel = ({
                   </svg>
                 </button>
               </div>
+              <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+                {[
+                  { value: 'alumni', label: 'Alumni' },
+                  { value: 'employment', label: 'Employment' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setChatContext(option.value);
+                      setSelectedContactId('');
+                      setError('');
+                    }}
+                    className={`rounded-lg px-2 py-2 text-[11px] font-semibold transition ${
+                      chatContext === option.value
+                        ? 'bg-blue-700 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
               <div className="mt-4">
                 <input
                   type="search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search Alumni"
+                  placeholder="Search people"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
                 />
               </div>
@@ -1172,18 +1255,18 @@ const AlumniChatPanel = ({
                 )}
 
                 <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
-                  {messages.length === 0 ? (
+                  {visibleMessages.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
                       Start a conversation with {selectedContact.displayName}.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {messages.map((message, index) => {
+                      {visibleMessages.map((message, index) => {
                         const isOwn = String(message.senderId) === String(currentUserId);
-                        const isLatestMessage = index === messages.length - 1;
+                        const isLatestMessage = index === visibleMessages.length - 1;
                         const showStatus = isOwn && (message.status === 'error' || message.status === 'sending' || isLatestMessage);
 
-                        const prevMessage = messages[index - 1];
+                        const prevMessage = visibleMessages[index - 1];
                         const showDateSeparator = !prevMessage || isDifferentDay(prevMessage.timestamp, message.timestamp);
 
                         return (

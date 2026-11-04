@@ -183,6 +183,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isNotificationsClosing, setIsNotificationsClosing] = useState(false);
   const [bellFilter, setBellFilter] = useState('all');
   const [bellMenuOpen, setBellMenuOpen] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
@@ -221,8 +222,27 @@ const Navbar = () => {
     ? notifications.filter((n) => !n.is_read).length
     : 0;
   const notificationRef = useRef(null);
+  const notificationCloseTimerRef = useRef(null);
   const bellMenuRef = useRef(null);
   const userMenuRef = useRef(null);
+
+  const closeNotifications = useCallback(() => {
+    setIsNotificationsClosing(true);
+    if (notificationCloseTimerRef.current) {
+      window.clearTimeout(notificationCloseTimerRef.current);
+    }
+    notificationCloseTimerRef.current = window.setTimeout(() => {
+      setShowNotifications(false);
+      setIsNotificationsClosing(false);
+      notificationCloseTimerRef.current = null;
+    }, 180);
+  }, []);
+
+  useEffect(() => () => {
+    if (notificationCloseTimerRef.current) {
+      window.clearTimeout(notificationCloseTimerRef.current);
+    }
+  }, []);
 
   const syncUserFromStorage = useCallback(() => {
     setUser(authService.getCurrentUser());
@@ -438,7 +458,7 @@ const Navbar = () => {
           senderName,
           message: message || `${senderName} wished you a happy birthday!`,
         });
-        setShowNotifications(false);
+        closeNotifications();
         return;
       }
 
@@ -449,7 +469,7 @@ const Navbar = () => {
           getBirthdayAlumniNameFromNotification(notification) ||
           "Alumni";
         setBirthdayCelebrationPopup({ isOpen: true, celebrantName });
-        setShowNotifications(false);
+        closeNotifications();
         return;
       }
 
@@ -492,7 +512,7 @@ const Navbar = () => {
           toast.error(
             "Unable to open greeting composer for this birthday notification.",
           );
-          setShowNotifications(false);
+          closeNotifications();
           return;
         }
 
@@ -502,25 +522,25 @@ const Navbar = () => {
           birthdayAlumniName,
           message: `Happy Birthday, ${birthdayAlumniName}! Wishing you a wonderful day.`,
         });
-        setShowNotifications(false);
+        closeNotifications();
         return;
       }
 
       if (!notification.link && getEffectiveNotificationType(notification) === "JOB_APPLICATION") {
-        setShowNotifications(false);
+        closeNotifications();
         navigate("/employment");
         return;
       }
 
       if (!notification.link && getEffectiveNotificationType(notification) === "REGISTRATION") {
-        setShowNotifications(false);
+        closeNotifications();
         navigate("/pending-approval");
         return;
       }
 
       // Default: navigate to link if present
       if (notification.link) {
-        setShowNotifications(false);
+        closeNotifications();
         navigate(notification.link);
       }
     } catch (error) {
@@ -578,7 +598,7 @@ const Navbar = () => {
         notificationRef.current &&
         !notificationRef.current.contains(event.target)
       ) {
-        setShowNotifications(false);
+        closeNotifications();
         setBellMenuOpen(false);
       }
       if (
@@ -1004,7 +1024,14 @@ const Navbar = () => {
                   ref={notificationRef}
                 >
                   <button
-                    onClick={() => setShowNotifications(!showNotifications)}
+                    onClick={() => {
+                      if (showNotifications) {
+                        closeNotifications();
+                      } else {
+                        setIsNotificationsClosing(false);
+                        setShowNotifications(true);
+                      }
+                    }}
                     className="relative p-2.5 text-white hover:bg-white hover:bg-opacity-20 rounded-none transition-all duration-300 transform hover:scale-110"
                   >
                     <svg
@@ -1029,8 +1056,8 @@ const Navbar = () => {
                     )}
                   </button>
 
-                  {showNotifications && (
-                    <div className="dropdown-menu-panel absolute right-0 mt-3 bg-white rounded-2xl shadow-[0_2px_20px_rgba(0,0,0,0.15)] z-50 flex flex-col border border-gray-100/80 overflow-hidden" style={{ width: 380, maxHeight: '85vh' }}>
+                  {(showNotifications || isNotificationsClosing) && (
+                    <div className={`dropdown-menu-panel notification-dropdown-panel absolute right-0 mt-3 bg-white rounded-2xl shadow-[0_2px_20px_rgba(0,0,0,0.15)] z-50 flex flex-col border border-gray-100/80 overflow-hidden ${isNotificationsClosing ? 'is-closing' : ''}`} style={{ width: 380, maxHeight: '85vh' }}>
                       {/* Sticky header */}
                       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                         <div className="flex min-w-0 items-center gap-2.5">

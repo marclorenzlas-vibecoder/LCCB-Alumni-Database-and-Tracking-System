@@ -14,8 +14,7 @@ const TeacherManagement = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    password: '',
-    department: ''
+    password: ''
   });
 
   const [confirmModal, setConfirmModal] = useState({
@@ -78,7 +77,7 @@ const TeacherManagement = () => {
 
   const openCreateModal = () => {
     setEditingTeacherId(null);
-    setFormData({ username: '', email: '', password: '', department: '' });
+    setFormData({ username: '', email: '', password: '' });
     setError('');
     setSuccess('');
     setShowAddModal(true);
@@ -89,8 +88,7 @@ const TeacherManagement = () => {
     setFormData({
       username: teacher.username || '',
       email: teacher.email || '',
-      password: '',
-      department: teacher.department || ''
+      password: ''
     });
     setError('');
     setSuccess('');
@@ -125,8 +123,7 @@ const TeacherManagement = () => {
       const payload = editingTeacherId
         ? {
             username: formData.username,
-            email: formData.email,
-            department: formData.department
+            email: formData.email
           }
         : formData;
 
@@ -146,7 +143,7 @@ const TeacherManagement = () => {
       setSuccess(editingTeacherId ? 'Teacher account updated successfully!' : 'Teacher account created successfully!');
       setShowAddModal(false);
       setEditingTeacherId(null);
-      setFormData({ username: '', email: '', password: '', department: '' });
+      setFormData({ username: '', email: '', password: '' });
       fetchTeachers();
     } catch (err) {
       setError(err.message);
@@ -218,7 +215,6 @@ const TeacherManagement = () => {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Department</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -234,9 +230,6 @@ const TeacherManagement = () => {
                         <div className="h-4 w-40 bg-slate-200 rounded"></div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="h-4 w-24 bg-slate-200 rounded"></div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
                         <div className="h-5 w-16 bg-slate-200 rounded-full"></div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right">
@@ -249,7 +242,7 @@ const TeacherManagement = () => {
                   ))
                 ) : teachers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">
+                    <td colSpan={4} className="px-4 py-12 text-center text-sm text-gray-500">
                       No teacher accounts found.
                     </td>
                   </tr>
@@ -258,7 +251,6 @@ const TeacherManagement = () => {
                     <tr key={teacher.id} className="hover:bg-gray-50 transition-all duration-150">
                       <td className="px-4 py-4 text-sm font-medium text-gray-900">{teacher.username}</td>
                       <td className="px-4 py-4 text-sm text-gray-600">{teacher.email}</td>
-                      <td className="px-4 py-4 text-sm text-gray-600">{teacher.department || 'N/A'}</td>
                       <td className="px-4 py-4 text-sm">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                           {teacher.role || 'ADMIN'}
@@ -357,18 +349,6 @@ const TeacherManagement = () => {
                   />
                 </div>
               )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                <input
-                  type="text"
-                  name="department"
-                  value={formData.department}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
-                  placeholder="e.g., Computer Science"
-                />
-              </div>
 
               <div className="flex justify-end gap-3 mt-6">
                 <button
