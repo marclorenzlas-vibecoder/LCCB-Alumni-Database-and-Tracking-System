@@ -152,6 +152,8 @@ const Achievements = () => {
   const isTeacher = authService.isTeacher();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [alumniSearch, setAlumniSearch] = useState('');
+  const [showAlumniSuggestions, setShowAlumniSuggestions] = useState(false);
   const [formData, setFormData] = useState({
     alumni_id: '',
     title: '',
@@ -184,6 +186,22 @@ const Achievements = () => {
   const [customModalCategory, setCustomModalCategory] = useState('');
 
   const categoryFilterLabel = selectedCategory === 'All' ? 'All Categories' : selectedCategory;
+
+  const getAlumniName = (alumni) => (
+    `${alumni.first_name || alumni.firstName || ''} ${alumni.last_name || alumni.lastName || ''}`.trim()
+  );
+
+  const alumniSuggestions = useMemo(() => {
+    const query = alumniSearch.trim().toLowerCase();
+    if (!query) return [];
+
+    return alumniList
+      .filter((alumni) => {
+        const firstName = String(alumni.first_name || alumni.firstName || '').toLowerCase();
+        return firstName.startsWith(query);
+      })
+      .slice(0, 8);
+  }, [alumniList, alumniSearch]);
 
   const handleCategorySelect = (value) => {
     setSelectedCategory(value);
@@ -353,8 +371,25 @@ const Achievements = () => {
     }
   };
 
+  const handleAlumniSearchChange = (e) => {
+    const value = e.target.value;
+    setAlumniSearch(value);
+    setShowAlumniSuggestions(true);
+    setFormData(prev => ({ ...prev, alumni_id: '' }));
+  };
+
+  const handleAlumniSelect = (alumni) => {
+    setFormData(prev => ({ ...prev, alumni_id: alumni.id }));
+    setAlumniSearch(getAlumniName(alumni));
+    setShowAlumniSuggestions(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.alumni_id) {
+      setError('Select an alumni from the suggestions before saving.');
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -398,6 +433,8 @@ const Achievements = () => {
       
       setShowModal(false);
       setEditingId(null);
+      setAlumniSearch('');
+      setShowAlumniSuggestions(false);
       setModalCategorySelect('');
       setCustomModalCategory('');
       setFormData({
@@ -439,6 +476,9 @@ const Achievements = () => {
       image: null,
       video: null
     });
+    const selectedAlumni = alumniList.find((alumni) => String(alumni.id) === String(achievement.alumni_id));
+    setAlumniSearch(selectedAlumni ? getAlumniName(selectedAlumni) : '');
+    setShowAlumniSuggestions(false);
     setShowModal(true);
   };
 
@@ -523,6 +563,8 @@ const Achievements = () => {
             <button 
               onClick={() => {
                 setEditingId(null);
+                setAlumniSearch('');
+                setShowAlumniSuggestions(false);
                 setModalCategorySelect('');
                 setCustomModalCategory('');
                 setFormData({
@@ -690,20 +732,38 @@ const Achievements = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Alumni Name *
                       </label>
-                      <select
-                        name="alumni_id"
-                        value={formData.alumni_id}
-                        onChange={handleInputChange}
-                        required
-                        className="app-input"
-                      >
-                        <option value="">Select an alumni</option>
-                        {Array.isArray(alumniList) && alumniList.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.first_name || a.firstName} {a.last_name || a.lastName}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={alumniSearch}
+                          onChange={handleAlumniSearchChange}
+                          onFocus={() => setShowAlumniSuggestions(true)}
+                          required
+                          className="app-input"
+                          placeholder="Type an alumni name"
+                          autoComplete="off"
+                          spellCheck={false}
+                          aria-autocomplete="list"
+                          aria-expanded={showAlumniSuggestions && alumniSearch.trim().length > 0}
+                        />
+                        {showAlumniSuggestions && alumniSearch.trim() && (
+                          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                            {alumniSuggestions.length > 0 ? alumniSuggestions.map((alumni) => (
+                              <button
+                                type="button"
+                                key={alumni.id}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => handleAlumniSelect(alumni)}
+                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50"
+                              >
+                                {getAlumniName(alumni)}
+                              </button>
+                            )) : (
+                              <p className="px-3 py-2 text-sm text-gray-500">No alumni found</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -828,6 +888,8 @@ const Achievements = () => {
                       onClick={() => {
                         setShowModal(false);
                         setEditingId(null);
+                        setAlumniSearch('');
+                        setShowAlumniSuggestions(false);
                         setFormData({
                           alumni_id: '',
                           title: '',

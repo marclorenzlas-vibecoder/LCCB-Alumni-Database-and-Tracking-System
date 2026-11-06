@@ -1301,6 +1301,32 @@ body::-webkit-scrollbar,
 }
 
 /* Receipt Styles */
+@keyframes receiptPrint {
+    0% {
+        clip-path: inset(0 0 100% 0);
+    }
+
+    85% {
+        opacity: 1;
+        clip-path: inset(0 0 0 0);
+    }
+
+    100% {
+        opacity: 1;
+        clip-path: inset(0 0 0 0);
+    }
+}
+
+.receipt-print-animation {
+    animation: receiptPrint 1.8s linear both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .receipt-print-animation {
+        animation: none;
+    }
+}
+
 .receipt-paper {
     background: #fafaf9;
     background-image: repeating-linear-gradient(

@@ -345,6 +345,8 @@ const DonatePage = () => {
   const [itemDescription, setItemDescription] = useState('');
   const [itemImages, setItemImages] = useState([]);
   const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const paymentScreenshotRef = useRef(null);
+  const paymentScreenshotInputRef = useRef(null);
 
   const [itemQuantity, setItemQuantity] = useState('1');
   const [itemCategory, setItemCategory] = useState('');
@@ -771,7 +773,9 @@ const DonatePage = () => {
     if (files.length > 1) {
       toast.warning('You can only upload 1 payment screenshot.');
     }
-    setPaymentScreenshot(files[0] || null);
+    const selectedFile = files[0] || null;
+    paymentScreenshotRef.current = selectedFile;
+    setPaymentScreenshot(selectedFile);
   };
 
   const validateStepOne = () => {
@@ -935,7 +939,9 @@ const DonatePage = () => {
     try {
       setSubmitting(true);
       setError('');
-      const effectiveScreenshot = explicitScreenshot || paymentScreenshot;
+      const inputScreenshot = paymentScreenshotInputRef.current?.files?.[0] || null;
+      const effectiveScreenshot = [explicitScreenshot, inputScreenshot, paymentScreenshotRef.current, paymentScreenshot]
+        .find((file) => file instanceof Blob) || null;
 
       if (isMoneyPath && isWalletPaymentMethod && !effectiveScreenshot) {
         toast.warning('Please upload a screenshot of your GCash or PayMaya payment first.');
@@ -1080,7 +1086,7 @@ const DonatePage = () => {
   const renderReceipt = () => {
     if (!successState) return null;
     return (
-      <div className="w-full max-w-sm mx-auto">
+      <div className="receipt-print-animation w-full max-w-sm mx-auto">
         {/* Torn edge top */}
         <div className="receipt-tear-top" />
 
@@ -1327,6 +1333,7 @@ const DonatePage = () => {
                       Upload the screenshot from your wallet app. The admin will compare the amount in this screenshot with the receipt amount.
                     </p>
                     <input
+                      ref={paymentScreenshotInputRef}
                       type="file"
                       accept="image/*"
                       multiple={false}
@@ -1833,9 +1840,7 @@ const DonatePage = () => {
                     >
                       {submitting
                         ? 'Processing...'
-                        : isMoneyPath && isWalletPaymentMethod
-                          ? 'Proceed to Upload Proof'
-                          : isMoneyPath ? 'Proceed' : 'Submit Donation Request'}
+                        : isMoneyPath ? 'Next' : 'Submit Donation Request'}
                     </button>
                   )}
                 </div>

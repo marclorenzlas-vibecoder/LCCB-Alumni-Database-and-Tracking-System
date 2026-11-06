@@ -866,7 +866,10 @@ router.post('/:id/contribute', flexibleAuthMiddleware, uploadContributionFiles, 
     const existingData = parseDescriptionMeta(existingCampaign.description || '');
     const mergedMeta = { ...existingData.meta, ...meta };
     const itemImageFiles = Array.isArray(req.files) ? req.files : (req.files?.images || []);
-    const paymentScreenshotFile = Array.isArray(req.files) ? null : (req.files?.payment_screenshot?.[0] || null);
+    const paymentScreenshotFiles = Array.isArray(req.files)
+      ? req.files.filter((file) => file.fieldname === 'payment_screenshot')
+      : (req.files?.payment_screenshot || []);
+    const paymentScreenshotFile = paymentScreenshotFiles[0] || req.file || null;
     const paymentScreenshotPath = paymentScreenshotFile ? await uploadToSupabase(paymentScreenshotFile, 'donations') : '';
     const paymentMethodLabel = String(meta.paymentMethod || extractLineValue(cleanDescription, 'Payment method') || '').toLowerCase();
     const requiresPaymentScreenshot = donationType === 'money'
