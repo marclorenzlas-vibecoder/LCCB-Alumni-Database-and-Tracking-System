@@ -60,8 +60,10 @@ class AlumniService {
       alumnus.educationHistory || alumnus.education_history,
     );
 
+    const rawUsername = alumnus.user?.username || "";
+    const usableUsername = rawUsername && !rawUsername.includes('@') ? rawUsername : "";
     const firstName =
-      alumnus.first_name || alumnus.firstName || alumnus.user?.username || "";
+      alumnus.first_name || alumnus.firstName || alumnus.user?.first_name || alumnus.user?.firstName || usableUsername;
     const lastName = alumnus.last_name || alumnus.lastName || "";
     const status = alumnus.status || "LIVING";
 

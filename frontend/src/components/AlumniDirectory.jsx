@@ -329,12 +329,14 @@ const AlumniDirectory = () => {
   const [achievements, setAchievements] = useState([]);
   const [careers, setCareers] = useState([]);
   const [expandedAchievements, setExpandedAchievements] = useState({});
+  const [isLoadingRelatedRecords, setIsLoadingRelatedRecords] = useState(false);
 
   // Batch officers
   const [batchOfficers, setBatchOfficers] = useState([]);
   const [showOfficersModal, setShowOfficersModal] = useState(false);
   const [showAssignOfficerModal, setShowAssignOfficerModal] = useState(false);
   const [officerForm, setOfficerForm] = useState({ alumni_id: '', position: '', batch: '' });
+  const [isAssigningOfficer, setIsAssigningOfficer] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // New record states
@@ -743,6 +745,7 @@ const AlumniDirectory = () => {
       return;
     }
 
+    setIsAssigningOfficer(true);
     try {
       await officerService.assignOfficer(officerForm);
       toast.success('Officer assigned successfully!');
@@ -768,6 +771,8 @@ const AlumniDirectory = () => {
       } else {
         toast.error(error.response?.data?.message || 'Failed to assign officer');
       }
+    } finally {
+      setIsAssigningOfficer(false);
     }
   };
 
@@ -899,6 +904,7 @@ const AlumniDirectory = () => {
     setAchievements([]);
     setCareers([]);
     setExpandedAchievements({});
+    setIsLoadingRelatedRecords(true);
     setShowViewModal(true);
 
     try {
@@ -921,6 +927,8 @@ const AlumniDirectory = () => {
       console.warn('Failed loading related records:', e.message);
       setAchievements([]);
       setCareers([]);
+    } finally {
+      setIsLoadingRelatedRecords(false);
     }
   };
 
@@ -1191,7 +1199,7 @@ const AlumniDirectory = () => {
               {/* Top bar */}
               <div className="relative flex items-center justify-between px-5 pt-5 pb-2 sm:px-8">
                 <button
-                  onClick={() => { setShowViewModal(false); setViewingAlumni(null); }}
+                  onClick={() => { setShowViewModal(false); setViewingAlumni(null); setIsLoadingRelatedRecords(false); }}
                   className="inline-flex items-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-semibold text-blue-950 shadow-sm transition-all duration-200 hover:-translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                 >
                   Back to Directory
@@ -1381,7 +1389,16 @@ const AlumniDirectory = () => {
                       </h3>
                     </div>
                     <div className="space-y-3">
-                      {achievements.length === 0 ? (
+                      {isLoadingRelatedRecords ? (
+                        <div className="space-y-3 animate-pulse">
+                          <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                            <div className="h-5 bg-slate-200 rounded-md w-1/3 mb-2.5"></div>
+                            <div className="h-3.5 bg-slate-200/80 rounded w-full mb-1.5"></div>
+                            <div className="h-3.5 bg-slate-200/80 rounded w-4/5 mb-3"></div>
+                            <div className="h-3 bg-slate-200/60 rounded w-20"></div>
+                          </div>
+                        </div>
+                      ) : achievements.length === 0 ? (
                         <p className="text-gray-500 text-sm">No achievements recorded yet.</p>
                       ) : (
                         achievements.map(a => {
@@ -1440,7 +1457,19 @@ const AlumniDirectory = () => {
                       )}
                     </div>
                     <div className="space-y-2">
-                      {careers.length === 0 ? (
+                      {isLoadingRelatedRecords ? (
+                        <div className="space-y-3 animate-pulse">
+                          <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="h-4.5 bg-slate-200 rounded-md w-2/5"></div>
+                              <div className="h-3.5 bg-slate-200/80 rounded w-28"></div>
+                            </div>
+                            <div className="h-3.5 bg-blue-100 rounded w-1/4 mb-3"></div>
+                            <div className="h-6 bg-slate-200/70 rounded-lg w-44 mb-2"></div>
+                            <div className="h-3.5 bg-slate-200/70 rounded w-3/4"></div>
+                          </div>
+                        </div>
+                      ) : careers.length === 0 ? (
                         <p className="text-gray-500 text-sm">No employment history recorded yet.</p>
                       ) : careers.map(c => (
                         <div key={c.id} className="rounded-2xl border border-transparent bg-transparent p-4">
@@ -2420,16 +2449,28 @@ const AlumniDirectory = () => {
                 <div className="flex gap-3 mt-6 pt-4 border-t border-gray-200">
                   <button
                     type="button"
+                    disabled={isAssigningOfficer}
                     onClick={() => setShowAssignOfficerModal(false)}
-                    className="flex-1 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex-1 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                    disabled={isAssigningOfficer}
+                    className="flex-1 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Assign Officer
+                    {isAssigningOfficer ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        Assigning...
+                      </>
+                    ) : (
+                      'Assign Officer'
+                    )}
                   </button>
                 </div>
               </form>

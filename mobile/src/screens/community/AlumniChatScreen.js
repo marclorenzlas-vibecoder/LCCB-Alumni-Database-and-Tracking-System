@@ -7,6 +7,7 @@ import {
   Image,
   KeyboardAvoidingView,
   LayoutAnimation,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -75,6 +76,103 @@ const formatChatTime = (timestamp) => {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const parseMessagePayload = (rawMessage, rawType) => {
+  if (!rawMessage) return { text: '', mediaUrl: '', mediaType: '', fileName: '' };
+
+  let text = String(rawMessage);
+  let mediaUrl = '';
+  let mediaType = rawType || '';
+  let fileName = '';
+
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.mediaUrl) {
+        mediaUrl = parsed.mediaUrl;
+        text = parsed.caption || '';
+        mediaType = parsed.mediaType || mediaType || (mediaUrl.match(/\.(mp4|webm|mov|ogg)($|\?)/i) ? 'video' : 'image');
+        fileName = parsed.fileName || '';
+        return { text, mediaUrl, mediaType, fileName };
+      }
+    } catch {}
+  }
+
+  if ((rawType === 'image' || rawType === 'video') && /^(https?:\/\/|\/)/i.test(text.trim())) {
+    mediaUrl = text.trim();
+    mediaType = rawType;
+    text = '';
+    return { text, mediaUrl, mediaType, fileName };
+  }
+
+  const trimmed = text.trim();
+  if (/^https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg|bmp)($|\?)/i.test(trimmed)) {
+    mediaUrl = trimmed;
+    mediaType = 'image';
+    text = '';
+    return { text, mediaUrl, mediaType, fileName };
+  }
+  if (/^https?:\/\/[^\s]+\.(mp4|webm|mov|ogg)($|\?)/i.test(trimmed)) {
+    mediaUrl = trimmed;
+    mediaType = 'video';
+    text = '';
+    return { text, mediaUrl, mediaType, fileName };
+  }
+
+  return { text, mediaUrl, mediaType, fileName };
+};
+
+const renderMessageContent = (text, isOwn) => {
+  if (!text) return null;
+
+  const urlPattern = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+
+    let url = match[0];
+    let trailingPunctuation = '';
+
+    const punctuationMatch = url.match(/[.,!?)]+$/);
+    if (punctuationMatch) {
+      trailingPunctuation = punctuationMatch[0];
+      url = url.slice(0, -trailingPunctuation.length);
+    }
+
+    const href = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+
+    parts.push(
+      <Text
+        key={`msg-link-${match.index}`}
+        onPress={() => Linking.openURL(href).catch(() => {})}
+        style={{
+          textDecorationLine: 'underline',
+          color: isOwn ? '#93c5fd' : '#2563eb',
+          fontWeight: '600'
+        }}
+      >
+        {url}
+      </Text>
+    );
+
+    if (trailingPunctuation) {
+      parts.push(trailingPunctuation);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
 };
 
 const formatLastActive = (status) => {
@@ -750,12 +848,53 @@ export default function AlumniChatScreen({ route, navigation, user }) {
             }
             renderItem={({ item }) => {
               const isOwn = String(item.senderId) === String(currentUserId);
+              const payload = parseMessagePayload(item.message || item.text, item.type);
+              const mediaUrl = item.mediaUrl || payload.mediaUrl;
+              const mediaType = item.mediaType || payload.mediaType;
+              const displayText = item.text !== undefined && item.text !== null && item.text !== ''
+                ? item.text
+                : payload.text;
+
               return (
                 <View style={[styles.messageRow, isOwn ? styles.messageRowOwn : styles.messageRowOther]}>
                   <View style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}>
-                    <Text style={[styles.messageText, isOwn ? styles.messageTextOwn : styles.messageTextOther]}>
-                      {item.text || item.message}
-                    </Text>
+                    {mediaUrl ? (
+                      mediaType === 'video' ? (
+                        <Pressable
+                          onPress={() => Linking.openURL(mediaUrl).catch(() => {})}
+                          style={{
+                            backgroundColor: '#0f172a',
+                            borderRadius: 12,
+                            padding: 12,
+                            marginBottom: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8
+                          }}
+                        >
+                          <Ionicons name="play-circle" size={28} color="#38bdf8" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 13 }} numberOfLines={1}>
+                              {item.fileName || payload.fileName || 'Video attachment'}
+                            </Text>
+                            <Text style={{ color: '#94a3b8', fontSize: 11 }}>Tap to play video</Text>
+                          </View>
+                        </Pressable>
+                      ) : (
+                        <Pressable onPress={() => Linking.openURL(mediaUrl).catch(() => {})}>
+                          <Image
+                            source={{ uri: mediaUrl }}
+                            style={{ width: 220, height: 180, borderRadius: 12, marginBottom: 6 }}
+                            resizeMode="cover"
+                          />
+                        </Pressable>
+                      )
+                    ) : null}
+                    {(displayText || (!mediaUrl && item.message)) ? (
+                      <Text style={[styles.messageText, isOwn ? styles.messageTextOwn : styles.messageTextOther]}>
+                        {renderMessageContent(displayText || item.message, isOwn)}
+                      </Text>
+                    ) : null}
                     <Text style={[styles.messageTime, isOwn ? styles.messageTimeOwn : styles.messageTimeOther]}>
                       {formatChatTime(item.timestamp)}
                     </Text>

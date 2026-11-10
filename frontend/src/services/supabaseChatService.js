@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { API_BASE_URL } from '../config/apiBaseUrl';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -48,18 +49,28 @@ export const getSystemUserId = (user) =>
 
 export const getAlumniChatUserId = (alumnus) =>
   toId(
-    alumnus?.userId ??
-      alumnus?.user_id ??
-      alumnus?.accountId ??
-      alumnus?.account_id ??
-      alumnus?.user?.id
+    alumnus?.userId ||
+      alumnus?.user_id ||
+      alumnus?.accountId ||
+      alumnus?.account_id ||
+      alumnus?.user?.id ||
+      (alumnus?.id ? `alumni-${alumnus.id}` : '')
   );
 
 export const normalizeChatUser = (entry = {}) => {
   const nestedUser = entry.user || {};
-  const userId = getAlumniChatUserId(entry) || getSystemUserId(entry) || getSystemUserId(nestedUser);
-  const firstName = entry.firstName || entry.first_name || nestedUser.firstName || nestedUser.first_name || '';
-  const lastName = entry.lastName || entry.last_name || nestedUser.lastName || nestedUser.last_name || '';
+  const directAlumniUserId = getAlumniChatUserId(entry);
+  const userId =
+    directAlumniUserId ||
+    toId(getSystemUserId(entry)) ||
+    toId(getSystemUserId(nestedUser)) ||
+    (entry.id ? `alumni-${entry.id}` : '');
+  const rawFirstName = entry.firstName || entry.first_name || nestedUser.firstName || nestedUser.first_name || '';
+  const rawLastName = entry.lastName || entry.last_name || nestedUser.lastName || nestedUser.last_name || '';
+  const safeFirstName = rawFirstName && !rawFirstName.includes('@') ? rawFirstName.trim() : '';
+  const safeLastName = rawLastName && !rawLastName.includes('@') ? rawLastName.trim() : '';
+  const fullName = `${safeFirstName} ${safeLastName}`.trim();
+
   const email = entry.email || nestedUser.email || '';
   const emailName = typeof email === 'string'
     ? email.split('@')[0].replace(/[._-]+/g, ' ').trim()
@@ -73,19 +84,26 @@ export const normalizeChatUser = (entry = {}) => {
   const usableDisplayName = providedDisplayName && !providedDisplayName.includes('@')
     ? providedDisplayName
     : '';
-  const displayName =
+  const rawUsername = entry.username || nestedUser.username || '';
+  const usableUsername = rawUsername && !rawUsername.includes('@') ? rawUsername.trim() : '';
+
+  let cleanDisplayName =
+    fullName ||
     usableDisplayName ||
-    entry.username ||
-    nestedUser.username ||
-    `${firstName} ${lastName}`.trim() ||
+    usableUsername ||
     friendlyEmailName ||
     'Alumni';
+
+  if (cleanDisplayName.includes('@')) {
+    const part = cleanDisplayName.split('@')[0].replace(/[._-]+/g, ' ').trim();
+    cleanDisplayName = part ? part.replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Alumni';
+  }
 
   return {
     userId,
     alumniId: entry.id ? String(entry.id) : '',
     chatId: entry.chatId || '',
-    displayName,
+    displayName: cleanDisplayName,
     email,
     profileImage: entry.profileImage || entry.profile_image || '',
     course: entry.course || '',
@@ -182,11 +200,90 @@ export const setupPresence = (user) => {
   };
 };
 
+export const parseMessagePayload = (rawMessage, rawType) => {
+  if (!rawMessage) return { text: '', mediaUrl: '', mediaType: '', fileName: '', mediaItems: [] };
+
+  let text = String(rawMessage);
+  let mediaUrl = '';
+  let mediaType = rawType || '';
+  let fileName = '';
+  let mediaItems = [];
+
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed.mediaItems) && parsed.mediaItems.length > 0) {
+        mediaItems = parsed.mediaItems.map((item) => ({
+          url: item.url,
+          mediaType: item.mediaType || (item.url?.match(/\.(mp4|webm|mov|ogg)($|\?)/i) ? 'video' : 'image'),
+          fileName: item.fileName || ''
+        }));
+        mediaUrl = mediaItems[0]?.url || '';
+        mediaType = mediaItems[0]?.mediaType || 'image';
+        fileName = mediaItems[0]?.fileName || '';
+        text = parsed.caption || '';
+        return { text, mediaUrl, mediaType, fileName, mediaItems };
+      }
+      if (parsed.mediaUrl) {
+        mediaUrl = parsed.mediaUrl;
+        text = parsed.caption || '';
+        mediaType = parsed.mediaType || mediaType || (mediaUrl.match(/\.(mp4|webm|mov|ogg)($|\?)/i) ? 'video' : 'image');
+        fileName = parsed.fileName || '';
+        mediaItems = [{ url: mediaUrl, mediaType, fileName }];
+        return { text, mediaUrl, mediaType, fileName, mediaItems };
+      }
+    } catch {}
+  }
+
+  if ((rawType === 'image' || rawType === 'video') && /^(https?:\/\/|\/)/i.test(text.trim())) {
+    mediaUrl = text.trim();
+    mediaType = rawType;
+    mediaItems = [{ url: mediaUrl, mediaType, fileName: '' }];
+    text = '';
+    return { text, mediaUrl, mediaType, fileName, mediaItems };
+  }
+
+  const trimmed = text.trim();
+  if (/^https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg|bmp)($|\?)/i.test(trimmed)) {
+    mediaUrl = trimmed;
+    mediaType = 'image';
+    mediaItems = [{ url: mediaUrl, mediaType, fileName: '' }];
+    text = '';
+    return { text, mediaUrl, mediaType, fileName, mediaItems };
+  }
+  if (/^https?:\/\/[^\s]+\.(mp4|webm|mov|ogg)($|\?)/i.test(trimmed)) {
+    mediaUrl = trimmed;
+    mediaType = 'video';
+    mediaItems = [{ url: mediaUrl, mediaType, fileName: '' }];
+    text = '';
+    return { text, mediaUrl, mediaType, fileName, mediaItems };
+  }
+
+  return { text, mediaUrl, mediaType, fileName, mediaItems };
+};
+
 export const listenToMessages = (chatId, callback, onError) => {
   if (!supabase || !chatId) {
     callback([]);
     return () => {};
   }
+
+  const formatMessageRow = (msg) => {
+    const parsed = parseMessagePayload(msg.message, msg.type);
+    return {
+      ...msg,
+      senderId: msg.sender_id,
+      receiverId: msg.receiver_id,
+      chatId: msg.chat_id,
+      text: parsed.text,
+      mediaUrl: parsed.mediaUrl,
+      mediaType: parsed.mediaType,
+      fileName: parsed.fileName,
+      mediaItems: parsed.mediaItems || [],
+      timestamp: new Date(msg.created_at).getTime(),
+      context: msg.context || DEFAULT_CHAT_CONTEXT
+    };
+  };
 
   // Initial fetch
   supabase
@@ -201,14 +298,7 @@ export const listenToMessages = (chatId, callback, onError) => {
           return;
       }
       
-      const messages = (data || []).map(msg => ({
-          ...msg,
-          senderId: msg.sender_id,
-          receiverId: msg.receiver_id,
-          chatId: msg.chat_id,
-          timestamp: new Date(msg.created_at).getTime(),
-          context: msg.context || DEFAULT_CHAT_CONTEXT
-      }));
+      const messages = (data || []).map(formatMessageRow);
       callback(messages);
     });
 
@@ -224,14 +314,7 @@ export const listenToMessages = (chatId, callback, onError) => {
         .order('created_at', { ascending: true })
         .limit(100)
         .then(({ data }) => {
-            const messages = (data || []).map(msg => ({
-                ...msg,
-                senderId: msg.sender_id,
-                receiverId: msg.receiver_id,
-                chatId: msg.chat_id,
-                timestamp: new Date(msg.created_at).getTime(),
-                context: msg.context || DEFAULT_CHAT_CONTEXT
-            }));
+            const messages = (data || []).map(formatMessageRow);
             callback(messages);
         });
     })
@@ -306,7 +389,7 @@ export const listenToConversationSummaries = (userId, callback, onError) => {
             latestMessageAt: new Date(conv.last_message_time || conv.updated_at).getTime(),
             unreadCount: p.unread_count,
             updatedAt: new Date(p.updated_at).getTime(),
-            contexts: Array.from(contextsByChatId[conv.chat_id] || [DEFAULT_CHAT_CONTEXT])
+            contexts: Array.from(contextsByChatId[conv.chat_id] || [])
         };
     }
     callback(summaries);
@@ -435,16 +518,59 @@ export const unblockChatUser = async ({ chatId, currentUserId }) => {
     .eq('chat_id', chatId);
 };
 
-export const sendChatMessage = async ({ sender, receiver, text, context = DEFAULT_CHAT_CONTEXT }) => {
+export const uploadChatMedia = async (fileOrFiles) => {
+  const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
+  if (!files.length || !files[0]) throw new Error('No file selected.');
+
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append('files', file);
+  });
+
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE_URL}/chat/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to upload media file.');
+  }
+
+  const data = await response.json();
+  const returnedFiles = data.files || [{
+    url: data.url,
+    mediaType: data.mediaType,
+    fileName: data.fileName,
+    fileSize: data.fileSize
+  }];
+
+  return returnedFiles;
+};
+
+export const sendChatMessage = async ({
+  sender,
+  receiver,
+  text = '',
+  mediaItems = [],
+  mediaUrl = '',
+  mediaType = '',
+  fileName = '',
+  context = DEFAULT_CHAT_CONTEXT
+}) => {
   if (!supabase) throw new Error('Supabase is not configured.');
   const senderUser = normalizeChatUser(sender);
   const receiverUser = normalizeChatUser(receiver);
   const cleanText = String(text || '').trim();
 
+  const hasMedia = (Array.isArray(mediaItems) && mediaItems.length > 0) || Boolean(mediaUrl);
+
   if (!senderUser.userId) throw new Error('Your account is missing a chat user ID.');
   if (!receiverUser.userId) throw new Error('This chat contact is missing a user ID.');
   if (senderUser.userId === receiverUser.userId) throw new Error('You cannot send a message to yourself.');
-  if (!cleanText) throw new Error('Please enter a message before sending.');
+  if (!cleanText && !hasMedia) throw new Error('Please enter a message or attach a file.');
   if (cleanText.length > MAX_MESSAGE_LENGTH) {
     throw new Error(`Messages must be ${MAX_MESSAGE_LENGTH} characters or less.`);
   }
@@ -478,6 +604,15 @@ export const sendChatMessage = async ({ sender, receiver, text, context = DEFAUL
     const existingStatus = existingConversation?.status || ACCEPTED_STATUS;
     const isFirstMessage = !existingConversation;
 
+    const { data: existingMessagesInContext } = await supabase
+      .from('chat_messages')
+      .select('id')
+      .eq('chat_id', chatId)
+      .eq('context', messageContext)
+      .limit(1);
+
+    const isFirstMessageInContext = !existingMessagesInContext || existingMessagesInContext.length === 0;
+
     if (existingConversation?.status === BLOCKED_STATUS) {
       if (String(existingConversation.blocked_by || '') === senderUser.userId) {
         throw new Error('You blocked this user. Unblock them to send a message.');
@@ -485,7 +620,7 @@ export const sendChatMessage = async ({ sender, receiver, text, context = DEFAUL
       throw new Error('You cannot send messages to this user.');
     }
 
-    if (existingConversation?.status === PENDING_STATUS) {
+    if (!isFirstMessageInContext && existingConversation?.status === PENDING_STATUS) {
       if (String(existingConversation.requested_by || '') !== senderUser.userId) {
         throw new Error('Accept this message request before replying.');
       }
@@ -495,18 +630,51 @@ export const sendChatMessage = async ({ sender, receiver, text, context = DEFAUL
       throw new Error('You cannot send messages to this user.');
     }
 
-    const conversationStatus = isFirstMessage ? PENDING_STATUS : existingStatus;
-    const messageType = isFirstMessage ? 'request' : 'message';
-    
+    let conversationStatus = existingStatus;
+    let requestedBy = existingConversation?.requested_by || null;
+    let requestTo = existingConversation?.request_to || null;
+
+    if (isFirstMessage || (isFirstMessageInContext && existingStatus !== ACCEPTED_STATUS)) {
+      conversationStatus = PENDING_STATUS;
+      requestedBy = senderUser.userId;
+      requestTo = receiverUser.userId;
+    }
+
+    // Determine payload and message type
+    let messagePayload = cleanText;
+    let messageType = (isFirstMessage || isFirstMessageInContext) ? 'request' : 'message';
+    let lastMessageSummary = cleanText;
+
+    let allMediaItems = Array.isArray(mediaItems) && mediaItems.length > 0 ? [...mediaItems] : [];
+    if (!allMediaItems.length && mediaUrl) {
+      allMediaItems.push({ url: mediaUrl, mediaType: mediaType || 'image', fileName });
+    }
+
+    if (allMediaItems.length > 0) {
+      const isMulti = allMediaItems.length > 1;
+      const firstIsVideo = allMediaItems[0].mediaType === 'video';
+      messageType = firstIsVideo ? 'video' : 'image';
+      messagePayload = JSON.stringify({
+        mediaItems: allMediaItems,
+        mediaUrl: allMediaItems[0].url,
+        mediaType: allMediaItems[0].mediaType,
+        caption: cleanText,
+        fileName: allMediaItems[0].fileName
+      });
+      lastMessageSummary = isMulti
+        ? `[photos:${allMediaItems.length}]`
+        : (firstIsVideo ? '[video]' : '[photo]');
+    }
+
     // 1. Upsert Conversation
     const { error: convError } = await supabase
         .from('chat_conversations')
         .upsert({
             chat_id: chatId,
-            requested_by: existingConversation?.requested_by || (isFirstMessage ? senderUser.userId : null),
-            request_to: existingConversation?.request_to || (isFirstMessage ? receiverUser.userId : null),
+            requested_by: requestedBy,
+            request_to: requestTo,
             status: conversationStatus,
-            last_message: cleanText,
+            last_message: lastMessageSummary,
             last_message_time: new Date().toISOString(),
             last_sender_id: senderUser.userId,
             updated_at: new Date().toISOString()
@@ -544,7 +712,7 @@ export const sendChatMessage = async ({ sender, receiver, text, context = DEFAUL
             chat_id: chatId,
             sender_id: senderUser.userId,
             receiver_id: receiverUser.userId,
-            message: cleanText,
+            message: messagePayload,
             type: messageType,
             context: messageContext
         })

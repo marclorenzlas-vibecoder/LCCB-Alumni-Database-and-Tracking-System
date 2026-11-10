@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const notificationService = require('../services/notificationService');
-const { authenticateToken, teacherAuthMiddleware } = require('../middleware/auth');
+const { authenticateToken, teacherAuthMiddleware, teacherOrOfficerAuthMiddleware } = require('../middleware/auth');
 const { broadcastUpdate } = require('../services/realtimeService');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { uploadToSupabase } = require('../services/storageService');
@@ -123,7 +123,7 @@ const runUpload = (req, res, next) => {
 };
 
 // Create new event
-router.post('/', teacherAuthMiddleware, runUpload, async (req, res) => {
+router.post('/', teacherOrOfficerAuthMiddleware, runUpload, async (req, res) => {
   try {
     const { name, description, date, location, sendNotification, notifyBatch, targetBatch } = req.body;
 
@@ -137,9 +137,14 @@ router.post('/', teacherAuthMiddleware, runUpload, async (req, res) => {
     const imagePath = req.file ? await uploadToSupabase(req.file, 'events') : null;
     const shouldNotify = sendNotification === 'true' || sendNotification === true;
     
-    // Safely parse target batch
-    const rawBatch = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch, 10) : null;
-    const batchValue = Number.isInteger(rawBatch) ? rawBatch : null;
+    // Safely parse target batch - Officers are strictly restricted to their assigned batch
+    let batchValue = null;
+    if (req.isBatchOfficer && !req.isStaff) {
+      batchValue = req.batchOfficer?.batch ? Number(req.batchOfficer.batch) : null;
+    } else {
+      const rawBatch = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch, 10) : null;
+      batchValue = Number.isInteger(rawBatch) ? rawBatch : null;
+    }
 
     // Safely parse date
     let parsedDate = null;
@@ -177,7 +182,12 @@ router.post('/', teacherAuthMiddleware, runUpload, async (req, res) => {
     // Send notifications if checkbox was checked
     if (shouldNotify) {
       try {
-        const batchToNotify = notifyBatch && notifyBatch !== 'all' ? parseInt(notifyBatch) : null;
+        let batchToNotify = null;
+        if (req.isBatchOfficer && !req.isStaff) {
+          batchToNotify = req.batchOfficer?.batch ? Number(req.batchOfficer.batch) : null;
+        } else {
+          batchToNotify = notifyBatch && notifyBatch !== 'all' ? parseInt(notifyBatch) : null;
+        }
         await notificationService.createNotifications({
           type: 'EVENT',
           title: `New Event: ${event.name}`,
@@ -216,7 +226,7 @@ router.post('/', teacherAuthMiddleware, runUpload, async (req, res) => {
 });
 
 // Update event
-router.put('/:id', teacherAuthMiddleware, runUpload, async (req, res) => {
+router.put('/:id', teacherOrOfficerAuthMiddleware, runUpload, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, date, location, targetBatch } = req.body;
@@ -226,12 +236,19 @@ router.put('/:id', teacherAuthMiddleware, runUpload, async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
 
+    // Batch officers can only edit events belonging to their batch and cannot change target_batch
+    if (req.isBatchOfficer && !req.isStaff) {
+      if (oldEvent.target_batch !== req.batchOfficer?.batch) {
+        return res.status(403).json({ error: 'You can only edit events belonging to your batch' });
+      }
+    }
+
     const updateData = {};
     if (name) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description ? description.trim() : null;
     if (date !== undefined) updateData.date = date ? new Date(date) : null;
     if (location !== undefined) updateData.location = location ? location.trim() : null;
-    if (targetBatch !== undefined) {
+    if (targetBatch !== undefined && (!req.isBatchOfficer || req.isStaff)) {
       updateData.target_batch = targetBatch && targetBatch !== '' && targetBatch !== 'all' ? parseInt(targetBatch) : null;
     }
     
@@ -277,7 +294,7 @@ router.put('/:id', teacherAuthMiddleware, runUpload, async (req, res) => {
 });
 
 // Delete event
-router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
+router.delete('/:id', teacherOrOfficerAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -288,6 +305,13 @@ router.delete('/:id', teacherAuthMiddleware, async (req, res) => {
 
     if (!eventToDelete) {
       return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Batch officers can only delete events belonging to their batch
+    if (req.isBatchOfficer && !req.isStaff) {
+      if (eventToDelete.target_batch !== req.batchOfficer?.batch) {
+        return res.status(403).json({ error: 'You can only delete events belonging to your batch' });
+      }
     }
 
     // Delete the event

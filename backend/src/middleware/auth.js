@@ -336,10 +336,90 @@ const flexibleAuthMiddleware = (req, res, next) => {
   }
 };
 
+// Middleware to check if user is a teacher, admin, or a batch officer
+const teacherOrOfficerAuthMiddleware = (req, res, next) => {
+  try {
+    const token = extractToken(req);
+
+    if (!token) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    verifyTokenWithGrace(token, async (user, usedGrace) => {
+      const limiterState = tryEnter({ token, user });
+      if (!limiterState.allowed) {
+        return rejectWhenAtCapacity(res, limiterState);
+      }
+
+      if (usedGrace) {
+        req.tokenNeedsRefresh = true;
+      }
+
+      req.authToken = token;
+      req.user = user;
+
+      const ok = await enforceNotBlocked(req, res);
+      if (!ok) {
+        return;
+      }
+
+      // Check if user is a teacher or admin
+      const roleUpper = String(user.role || '').toUpperCase();
+      if (roleUpper === 'TEACHER' || roleUpper === 'ADMIN') {
+        req.isStaff = true;
+        return next();
+      }
+
+      // Check if user is a batch officer
+      try {
+        const userId = Number(user.id);
+        if (userId) {
+          const officers = await prisma.batch_officer.findMany({
+            where: {
+              alumni: {
+                user_id: userId
+              }
+            },
+            orderBy: {
+              id: 'desc'
+            },
+            include: {
+              alumni: {
+                select: {
+                  batch: true
+                }
+              }
+            }
+          });
+
+          if (officers.length > 0) {
+            const officer = officers.find(o => o.batch === o.alumni?.batch) || officers[0];
+            req.isBatchOfficer = true;
+            req.batchOfficer = officer;
+            return next();
+          }
+        }
+      } catch (officerErr) {
+        console.error('Error verifying officer status in auth middleware:', officerErr);
+      }
+
+      return res.status(403).json({ error: 'Access denied. Teacher, admin, or batch officer privileges required.' });
+    }, (err) => {
+      if (err) {
+        return res.status(403).json({ error: 'Invalid or expired token' });
+      }
+    });
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(500).json({ error: 'Authentication failed' });
+  }
+};
+
 module.exports = {
   authenticateToken,
   authMiddleware,
   teacherAuthMiddleware,
+  teacherOrOfficerAuthMiddleware,
   alumniAuthMiddleware,
   flexibleAuthMiddleware,
   invalidateUserBlockCache

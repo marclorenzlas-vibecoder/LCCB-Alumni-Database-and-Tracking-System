@@ -16,6 +16,47 @@ const positionOrder = {
   'Business Manager': 7
 };
 
+// Check if the current authenticated user is an officer
+router.get('/my-status', authMiddleware, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!userId) {
+      return res.json({ isOfficer: false, officer: null });
+    }
+
+    const officers = await prisma.batch_officer.findMany({
+      where: {
+        alumni: {
+          user_id: userId
+        }
+      },
+      orderBy: {
+        id: 'desc'
+      },
+      include: {
+        alumni: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            batch: true
+          }
+        }
+      }
+    });
+
+    const officer = officers.find(o => o.batch === o.alumni?.batch) || officers[0] || null;
+
+    res.json({
+      isOfficer: Boolean(officer),
+      officer: officer
+    });
+  } catch (error) {
+    console.error('Error checking officer status:', error);
+    res.status(500).json({ error: 'Failed to check officer status' });
+  }
+});
+
 // Get all officers for a specific batch
 router.get('/batch/:batch', async (req, res) => {
   try {

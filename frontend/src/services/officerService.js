@@ -52,6 +52,17 @@ const officerService = {
   removeOfficer: async (id) => {
     const response = await axios.delete(`${API_URL}/${id}`, getAuthHeaders());
     return response.data;
+  },
+
+  // Get current logged-in user's officer status
+  getMyOfficerStatus: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/my-status`, getAuthHeaders());
+      return response.data;
+    } catch (error) {
+      console.warn('Error fetching officer status:', error);
+      return { isOfficer: false, officer: null };
+    }
   }
 };
 

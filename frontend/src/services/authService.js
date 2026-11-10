@@ -221,5 +221,28 @@ export const authService = {
     } catch {
       return false;
     }
+  },
+
+  isBatchOfficer: () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return false;
+    try {
+      const user = JSON.parse(userStr);
+      return Boolean(user.is_officer || user.isOfficer || user.officer || user.batchOfficer);
+    } catch {
+      return false;
+    }
+  },
+
+  getOfficerBatch: () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    try {
+      const user = JSON.parse(userStr);
+      const batch = user.officer?.batch || user.batchOfficer?.batch || user.officer?.alumni?.batch;
+      return batch ? String(batch) : null;
+    } catch {
+      return null;
+    }
   }
 };

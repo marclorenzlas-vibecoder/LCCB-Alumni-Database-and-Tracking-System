@@ -29,6 +29,7 @@ const alumniListRoutes = require('./routes/alumniListRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const configRoutes = require('./routes/configRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 const prisma = require('./config/prisma');
 const eventStatusService = require('./services/eventStatusService');
 const birthdayNotificationService = require('./services/birthdayNotificationService');
@@ -139,6 +140,7 @@ app.use('/api/alumni-list', alumniListRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

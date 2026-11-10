@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   acceptMessageRequest,
   blockMessageRequest,
@@ -9,10 +10,13 @@ import {
   listenToUserStatuses,
   markConversationRead,
   normalizeChatUser,
+  parseMessagePayload,
   sendChatMessage,
-  unblockChatUser
+  unblockChatUser,
+  uploadChatMedia
 } from '../services/supabaseChatService';
 import { API_BASE_URL } from '../config/apiBaseUrl';
+import alumniService from '../services/alumniService';
 
 const getAvatarFallbackUrl = (name) =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=2563eb&color=ffffff&size=160`;
@@ -73,6 +77,274 @@ const formatChatSeparatorDate = (timestamp) => {
   });
 };
 
+const formatMessengerRelativeTime = (timestamp) => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return 'now';
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d`;
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks < 52) return `${diffWeeks}w`;
+  return `${Math.floor(diffDays / 365)}y`;
+};
+
+const formatConversationSnippet = (summary, contact, currentUserId) => {
+  if (!summary?.latestMessageText) {
+    return formatLastActive(contact?.status);
+  }
+
+  const raw = String(summary.latestMessageText || '').trim();
+  const rawSenderId = String(summary.latestMessageSenderId || '');
+
+  let isOwn = false;
+  if (rawSenderId) {
+    isOwn = rawSenderId === String(currentUserId);
+  } else if (summary.requestedBy && summary.status === 'pending') {
+    isOwn = String(summary.requestedBy) === String(currentUserId);
+  }
+
+  const senderName = isOwn
+    ? 'You'
+    : (contact?.displayName ? contact.displayName.trim().split(' ')[0] : 'User');
+
+  let snippet = '';
+
+  // Check if it's JSON payload
+  if (raw.startsWith('{') && raw.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.mediaItems && parsed.mediaItems.length > 0) {
+        if (parsed.mediaItems.length > 1) {
+          snippet = `${senderName} sent ${parsed.mediaItems.length} photos.`;
+        } else if (parsed.mediaItems[0].mediaType === 'video') {
+          snippet = `${senderName} sent a video.`;
+        } else {
+          snippet = `${senderName} sent a photo.`;
+        }
+      } else if (parsed.mediaUrl) {
+        if (parsed.mediaType === 'video') {
+          snippet = `${senderName} sent a video.`;
+        } else {
+          snippet = `${senderName} sent a photo.`;
+        }
+      } else if (parsed.text) {
+        snippet = isOwn ? `You: ${parsed.text}` : parsed.text;
+      }
+    } catch {
+      // not JSON
+    }
+  }
+
+  if (!snippet) {
+    // Check for multi-photo pattern like [photos:3] or 📷 3 photos
+    const multiMatch = raw.match(/\[photos?:(\d+)\]/i) || raw.match(/📷\s*\[?(\d+)\s*photos?\]?/i);
+    if (multiMatch) {
+      const count = multiMatch[1];
+      snippet = `${senderName} sent ${count} photos.`;
+    } else if (raw === '[video]' || raw.startsWith('🎥') || raw.toLowerCase().includes('video')) {
+      snippet = `${senderName} sent a video.`;
+    } else if (raw === '[photo]' || raw.startsWith('📷') || raw.toLowerCase().includes('photo')) {
+      snippet = `${senderName} sent a photo.`;
+    } else if (isOwn) {
+      snippet = `You: ${raw}`;
+    } else {
+      snippet = raw;
+    }
+  }
+
+  const timeStr = summary.latestMessageAt ? formatMessengerRelativeTime(summary.latestMessageAt) : '';
+  if (timeStr) {
+    return `${snippet} · ${timeStr}`;
+  }
+  return snippet;
+};
+
+const renderMessageContent = (text, isOwn) => {
+  if (!text) return null;
+
+  const urlPattern = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+
+    let url = match[0];
+    let trailingPunctuation = '';
+
+    const punctuationMatch = url.match(/[.,!?)]+$/);
+    if (punctuationMatch) {
+      trailingPunctuation = punctuationMatch[0];
+      url = url.slice(0, -trailingPunctuation.length);
+    }
+
+    const href = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+
+    parts.push(
+      <a
+        key={`msg-link-${match.index}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => event.stopPropagation()}
+        className={`underline underline-offset-2 break-all font-medium transition-colors ${
+          isOwn
+            ? 'text-blue-200 hover:text-white hover:underline'
+            : 'text-blue-600 hover:text-blue-800 hover:underline'
+        }`}
+      >
+        {url}
+      </a>
+    );
+
+    if (trailingPunctuation) {
+      parts.push(trailingPunctuation);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
+};
+
+const renderMessengerMediaGrid = (items, onSelectImage, isFlushWithCaption = false) => {
+  if (!items || !items.length) return null;
+  const roundedClass = isFlushWithCaption ? 'rounded-t-2xl rounded-b-none' : 'rounded-2xl';
+
+  if (items.length === 1) {
+    const item = items[0];
+    if (item.mediaType === 'video') {
+      return (
+        <video
+          src={item.url}
+          controls
+          playsInline
+          preload="metadata"
+          onClick={(e) => e.stopPropagation()}
+          className={`max-h-80 w-full ${roundedClass} object-contain bg-black shadow-xs block`}
+        />
+      );
+    }
+    return (
+      <img
+        src={item.url}
+        alt={item.fileName || 'Photo'}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectImage(0);
+        }}
+        className={`max-h-80 w-full ${roundedClass} object-cover shadow-xs transition-opacity duration-150 hover:opacity-95 cursor-pointer block`}
+      />
+    );
+  }
+
+  if (items.length === 2) {
+    return (
+      <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
+        {items.map((item, idx) => (
+          <div
+            key={idx}
+            className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectImage(idx);
+            }}
+          >
+            {item.mediaType === 'video' ? (
+              <video src={item.url} className="h-full w-full object-cover" />
+            ) : (
+              <img src={item.url} alt="Photo" className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (items.length === 3) {
+    return (
+      <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
+        <div
+          className="col-span-2 relative aspect-[16/9] overflow-hidden bg-slate-900 cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectImage(0);
+          }}
+        >
+          {items[0].mediaType === 'video' ? (
+            <video src={items[0].url} className="h-full w-full object-cover" />
+          ) : (
+            <img src={items[0].url} alt="Photo" className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
+          )}
+        </div>
+        {items.slice(1, 3).map((item, idx) => (
+          <div
+            key={idx}
+            className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectImage(idx + 1);
+            }}
+          >
+            {item.mediaType === 'video' ? (
+              <video src={item.url} className="h-full w-full object-cover" />
+            ) : (
+              <img src={item.url} alt="Photo" className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const displayItems = items.slice(0, 4);
+  const remainingCount = items.length - 4;
+
+  return (
+    <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
+      {displayItems.map((item, idx) => {
+        const isFourthWithMore = idx === 3 && remainingCount > 0;
+        return (
+          <div
+            key={idx}
+            className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer group"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectImage(idx);
+            }}
+          >
+            {item.mediaType === 'video' ? (
+              <video src={item.url} className="h-full w-full object-cover" />
+            ) : (
+              <img src={item.url} alt="Photo" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
+            )}
+            {isFourthWithMore && (
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center text-white font-bold text-2xl transition-colors hover:bg-black/50">
+                +{remainingCount + 1}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const isDifferentDay = (timestamp1, timestamp2) => {
   if (!timestamp1 || !timestamp2) return true;
   const d1 = new Date(timestamp1);
@@ -125,7 +397,7 @@ const isSearchableAlumniAccount = (entry = {}) => {
   const user = entry.user || {};
   const accountStatus = String(entry.status || entry.account_status || user.status || user.account_status || '').toUpperCase();
 
-  if (accountStatus === 'BLOCKED' || accountStatus === 'DEACTIVATED' || accountStatus === 'INACTIVE') return false;
+  if (accountStatus === 'BLOCKED' || accountStatus === 'DEACTIVATED' || accountStatus === 'INACTIVE' || accountStatus === 'DECEASED') return false;
   if (entry.is_blocked || entry.isBlocked || user.is_blocked || user.isBlocked) return false;
   if (entry.is_deactivated || entry.isDeactivated || user.is_deactivated || user.isDeactivated) return false;
   if (entry.is_active === false || entry.isActive === false || user.is_active === false || user.isActive === false) {
@@ -237,12 +509,18 @@ const AlumniChatPanel = ({
   const [search, setSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
   const [staffContacts, setStaffContacts] = useState([]);
+  const [missingProfiles, setMissingProfiles] = useState({});
+  const [internalAlumniContacts, setInternalAlumniContacts] = useState([]);
   const [statuses, setStatuses] = useState({});
   const [conversationSummaries, setConversationSummaries] = useState({});
   const [messages, setMessages] = useState([]);
   const [chatContext, setChatContext] = useState(initialChatContext === 'employment' ? 'employment' : 'alumni');
   const [externalContact, setExternalContact] = useState(null);
   const [messageText, setMessageText] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [lightboxState, setLightboxState] = useState(null);
   const [error, setError] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [requestActionId, setRequestActionId] = useState('');
@@ -253,6 +531,7 @@ const AlumniChatPanel = ({
   const previousMessageCountRef = useRef(0);
   const closeTimerRef = useRef(null);
   const pendingStaffSelectionRef = useRef(false);
+  const fileInputRef = useRef(null);
 
   const currentUserId = getSystemUserId(currentUser);
   const visibleMessages = useMemo(
@@ -263,6 +542,30 @@ const AlumniChatPanel = ({
   useEffect(() => {
     setChatContext(initialChatContext === 'employment' ? 'employment' : 'alumni');
   }, [initialChatContext]);
+
+  // Keyboard navigation for media lightbox (Esc to close, Left/Right arrows to navigate)
+  useEffect(() => {
+    if (!lightboxState) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setLightboxState(null);
+      } else if (e.key === 'ArrowLeft') {
+        setLightboxState((prev) => {
+          if (!prev || prev.index <= 0) return prev;
+          return { ...prev, index: prev.index - 1 };
+        });
+      } else if (e.key === 'ArrowRight') {
+        setLightboxState((prev) => {
+          if (!prev || prev.index >= prev.items.length - 1) return prev;
+          return { ...prev, index: prev.index + 1 };
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxState]);
 
   useEffect(() => {
     if (externalOpen) {
@@ -299,11 +602,51 @@ const AlumniChatPanel = ({
     setSelectedContactId(String(staffContact.userId));
   }, [currentUserId, externalOpen, staffContacts]);
 
+  useEffect(() => {
+    const hasProps = Array.isArray(alumniContacts) ? alumniContacts.length > 0 : Boolean(alumniContacts?.alumni?.length);
+    if (!hasProps && internalAlumniContacts.length === 0) {
+      alumniService
+        .getAllAlumni()
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setInternalAlumniContacts(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [alumniContacts, internalAlumniContacts.length]);
+
   const safeAlumniContacts = useMemo(() => {
-    if (Array.isArray(alumniContacts)) return alumniContacts;
-    if (Array.isArray(alumniContacts?.alumni)) return alumniContacts.alumni;
-    return [];
-  }, [alumniContacts]);
+    if (Array.isArray(alumniContacts) && alumniContacts.length > 0) return alumniContacts;
+    if (Array.isArray(alumniContacts?.alumni) && alumniContacts.alumni.length > 0) return alumniContacts.alumni;
+    return internalAlumniContacts;
+  }, [alumniContacts, internalAlumniContacts]);
+
+  const currentAlumniId = useMemo(() => {
+    const fromUser = currentUser?.alumniId || currentUser?.alumni_id || currentUser?.alumni?.id;
+    if (fromUser) return String(fromUser);
+    const ownProfile = (safeAlumniContacts || []).find((entry) => {
+      const uId = String(entry.userId || entry.user_id || entry.user?.id || '');
+      return uId && uId === String(currentUserId);
+    });
+    return ownProfile?.id ? String(ownProfile.id) : '';
+  }, [currentUser, safeAlumniContacts, currentUserId]);
+
+  const currentChatUser = useMemo(() => {
+    const ownProfile = (safeAlumniContacts || []).find((entry) => {
+      const uId = String(entry.userId || entry.user_id || entry.user?.id || '');
+      return (uId && uId === String(currentUserId)) || (currentAlumniId && String(entry.id) === currentAlumniId);
+    });
+
+    return normalizeChatUser({
+      ...ownProfile,
+      id: ownProfile?.id || currentAlumniId,
+      userId: currentUserId,
+      username: currentUser?.username,
+      email: currentUser?.email,
+      profileImage: ownProfile?.profileImage
+    });
+  }, [safeAlumniContacts, currentUser, currentUserId, currentAlumniId]);
 
   const alumniSearchContacts = useMemo(() => {
     const seen = new Set();
@@ -318,44 +661,101 @@ const AlumniChatPanel = ({
         };
       })
       .filter((contact) => {
-        if (!contact.userId || contact.userId === currentUserId || seen.has(contact.userId)) return false;
+        if (!contact.userId || seen.has(contact.userId)) return false;
+        if (contact.userId === currentUserId) return false;
+        if (currentAlumniId && (contact.alumniId === currentAlumniId || contact.userId === `alumni-${currentAlumniId}`)) {
+          return false;
+        }
         seen.add(contact.userId);
         return true;
       })
       .sort((first, second) => first.displayName.localeCompare(second.displayName));
-  }, [safeAlumniContacts, currentUserId]);
+  }, [safeAlumniContacts, currentUserId, currentAlumniId]);
 
   const knownProfilesByUserId = useMemo(() => {
     const profiles = new Map();
 
-    [...alumniSearchContacts, ...staffContacts.map((entry) => normalizeChatUser(entry))].forEach((profile) => {
-      if (profile.userId) profiles.set(profile.userId, profile);
+    [
+      ...alumniSearchContacts,
+      ...Object.values(missingProfiles),
+      ...staffContacts.map((entry) => normalizeChatUser(entry))
+    ].forEach((profile) => {
+      if (profile.userId) {
+        profiles.set(String(profile.userId), profile);
+      }
+      if (profile.alumniId) {
+        profiles.set(String(profile.alumniId), profile);
+        profiles.set(`alumni-${profile.alumniId}`, profile);
+      }
     });
 
     return profiles;
-  }, [alumniSearchContacts, staffContacts]);
+  }, [alumniSearchContacts, missingProfiles, staffContacts]);
+
+  useEffect(() => {
+    const missingUserIds = Object.values(conversationSummaries)
+      .map((summary) => String(summary?.otherUserId || summary?.otherUser?.userId || ''))
+      .filter((id) => id && id !== currentUserId && !knownProfilesByUserId.has(id) && !missingProfiles[id]);
+
+    if (!missingUserIds.length) return;
+
+    alumniService
+      .getAllAlumni()
+      .then((list) => {
+        const newlyFound = {};
+        (list || []).forEach((item) => {
+          const uId = String(item.userId || item.user_id || item.user?.id || '');
+          const altId = item.id ? `alumni-${item.id}` : '';
+          const norm = normalizeChatUser(item);
+          if (uId && missingUserIds.includes(uId)) {
+            newlyFound[uId] = norm;
+          }
+          if (altId && missingUserIds.includes(altId)) {
+            newlyFound[altId] = norm;
+          }
+        });
+        if (Object.keys(newlyFound).length > 0) {
+          setMissingProfiles((prev) => ({ ...prev, ...newlyFound }));
+        }
+      })
+      .catch((err) => console.warn('Failed to fetch missing chat profiles:', err));
+  }, [conversationSummaries, currentUserId, knownProfilesByUserId, missingProfiles]);
 
   const conversationContacts = useMemo(
     () =>
       Object.entries(conversationSummaries)
-        .filter(([, summary]) => (summary?.contexts || ['alumni']).includes(chatContext))
+        .filter(([, summary]) => {
+          const isBlocked = isBlockedConversationStatus(getConversationStatus(summary));
+          const contexts = summary?.contexts || [];
+          const hasMessagesInContext = contexts.includes(chatContext) && Boolean(summary?.latestMessageText);
+          return hasMessagesInContext || isBlocked;
+        })
         .map(([summaryChatId, summary]) => {
           const otherUserId = String(summary?.otherUserId || summary?.otherUser?.userId || '');
           if (!otherUserId || otherUserId === currentUserId) return null;
 
           const profile = knownProfilesByUserId.get(otherUserId) || {};
+          const rawSummaryUser = summary.otherUser || {};
+          const safeSummaryDisplayName =
+            rawSummaryUser.displayName && !rawSummaryUser.displayName.includes('@')
+              ? rawSummaryUser.displayName
+              : '';
+          const safeSummaryUsername =
+            rawSummaryUser.username && !rawSummaryUser.username.includes('@')
+              ? rawSummaryUser.username
+              : '';
+
           const contact = normalizeChatUser({
             ...profile,
-            ...(summary.otherUser || {}),
+            ...rawSummaryUser,
             userId: otherUserId,
             chatId: summary.chatId || summaryChatId,
             displayName:
-              summary.otherUser?.displayName ||
-              summary.otherUser?.username ||
               profile.displayName ||
-              summary.otherUser?.email ||
+              safeSummaryDisplayName ||
+              safeSummaryUsername ||
               'User',
-            role: summary.otherUser?.role || profile.role || ''
+            role: rawSummaryUser.role || profile.role || ''
           });
 
           return {
@@ -366,32 +766,19 @@ const AlumniChatPanel = ({
           };
         })
         .filter(Boolean)
-        .filter((contact) => !isGenericChatContact(contact)),
+        .filter((contact) => !isGenericChatContact(contact) || Boolean(contact.summary)),
     [chatContext, conversationSummaries, currentUserId, knownProfilesByUserId, statuses]
   );
-
-  const currentChatUser = useMemo(() => {
-    const ownProfile = (safeAlumniContacts || []).find((entry) => {
-      const user = normalizeChatUser(entry);
-      return user.userId === currentUserId;
-    });
-
-    return normalizeChatUser({
-      ...ownProfile,
-      id: ownProfile?.id,
-      userId: currentUserId,
-      username: currentUser?.username,
-      email: currentUser?.email,
-      profileImage: ownProfile?.profileImage
-    });
-  }, [safeAlumniContacts, currentUser, currentUserId]);
 
   const messageRequests = useMemo(
     () =>
       conversationContacts
         .filter((contact) => {
           const summary = contact.summary;
+          const contexts = summary?.contexts || [];
           return (
+            Boolean(summary?.latestMessageText) &&
+            contexts.includes(chatContext) &&
             getConversationStatus(summary) === 'pending' &&
             String(summary?.requestTo || '') === String(currentUserId)
           );
@@ -401,19 +788,24 @@ const AlumniChatPanel = ({
           const secondTime = second.summary?.latestMessageAt || second.summary?.updatedAt || 0;
           return secondTime - firstTime;
         }),
-    [conversationContacts, currentUserId]
+    [chatContext, conversationContacts, currentUserId]
   );
 
   const sentRequests = useMemo(
     () =>
       conversationContacts
-        .filter(
-          (contact) =>
+        .filter((contact) => {
+          const summary = contact.summary;
+          const contexts = summary?.contexts || [];
+          return (
+            Boolean(summary?.latestMessageText) &&
+            contexts.includes(chatContext) &&
             getConversationStatus(contact.summary) === 'pending' &&
             String(contact.summary?.requestedBy || '') === String(currentUserId)
-        )
+          );
+        })
         .sort(sortByLatestActivity),
-    [conversationContacts, currentUserId]
+    [chatContext, conversationContacts, currentUserId]
   );
 
   const blockedContacts = useMemo(
@@ -437,9 +829,17 @@ const AlumniChatPanel = ({
   const acceptedConversationContacts = useMemo(
     () =>
       conversationContacts
-        .filter((contact) => getConversationStatus(contact.summary) === 'accepted')
+        .filter((contact) => {
+          const summary = contact.summary;
+          const contexts = summary?.contexts || [];
+          return (
+            Boolean(summary?.latestMessageText) &&
+            contexts.includes(chatContext) &&
+            getConversationStatus(contact.summary) === 'accepted'
+          );
+        })
         .sort(sortByLatestActivity),
-    [conversationContacts]
+    [chatContext, conversationContacts]
   );
 
   const searchResults = useMemo(() => {
@@ -525,11 +925,22 @@ const AlumniChatPanel = ({
   const selectedSummary = selectedChatId ? conversationSummaries[selectedChatId] : null;
   const selectedUnreadCount = Number(selectedSummary?.unreadCount) || 0;
   const selectedConversationStatus = getConversationStatus(selectedSummary);
+  const hasMessagesInCurrentContext = visibleMessages.length > 0;
+  const hasContextInSummary = Boolean(
+    selectedSummary &&
+    (selectedSummary.contexts || []).includes(chatContext) &&
+    selectedSummary.latestMessageText
+  );
+  const isRequestActiveInCurrentContext =
+    hasMessagesInCurrentContext &&
+    hasContextInSummary &&
+    selectedConversationStatus === 'pending';
+
   const isSelectedIncomingRequest =
-    selectedConversationStatus === 'pending' &&
+    isRequestActiveInCurrentContext &&
     String(selectedSummary?.requestTo || '') === String(currentUserId);
   const isSelectedOutgoingRequest =
-    selectedConversationStatus === 'pending' &&
+    isRequestActiveInCurrentContext &&
     String(selectedSummary?.requestedBy || '') === String(currentUserId);
   const isSelectedBlocked = isBlockedConversationStatus(selectedConversationStatus);
   const didCurrentUserBlockSelected = didCurrentUserBlockSummary(selectedSummary, currentUserId);
@@ -544,6 +955,24 @@ const AlumniChatPanel = ({
         (sum, summary) => sum + (Number(summary?.unreadCount) || 0),
         0
       ),
+    [conversationSummaries]
+  );
+
+  const alumniUnreadCount = useMemo(
+    () =>
+      Object.values(conversationSummaries).reduce((sum, summary) => {
+        const contexts = summary?.contexts || [];
+        return contexts.includes('alumni') ? sum + (Number(summary?.unreadCount) || 0) : sum;
+      }, 0),
+    [conversationSummaries]
+  );
+
+  const employmentUnreadCount = useMemo(
+    () =>
+      Object.values(conversationSummaries).reduce((sum, summary) => {
+        const contexts = summary?.contexts || [];
+        return contexts.includes('employment') ? sum + (Number(summary?.unreadCount) || 0) : sum;
+      }, 0),
     [conversationSummaries]
   );
 
@@ -710,41 +1139,191 @@ const AlumniChatPanel = ({
     []
   );
 
+  useEffect(() => {
+    if (!lightboxState) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setLightboxState(null);
+      } else if (event.key === 'ArrowLeft' && lightboxState.items?.length > 1) {
+        setLightboxState((prev) => ({
+          ...prev,
+          index: (prev.index - 1 + prev.items.length) % prev.items.length
+        }));
+      } else if (event.key === 'ArrowRight' && lightboxState.items?.length > 1) {
+        setLightboxState((prev) => ({
+          ...prev,
+          index: (prev.index + 1) % prev.items.length
+        }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxState]);
+
+  const addFilesToAttachments = (fileList) => {
+    if (!fileList || !fileList.length) return;
+    const incomingFiles = Array.from(fileList);
+    const valid = [];
+
+    for (const file of incomingFiles) {
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        setError('Only image and video files are supported.');
+        continue;
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        setError(`File "${file.name}" is too large (max 50MB).`);
+        continue;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      const isVideo = file.type.startsWith('video/');
+      valid.push({
+        file,
+        previewUrl,
+        mediaType: isVideo ? 'video' : 'image',
+        fileName: file.name,
+        fileSize: file.size
+      });
+    }
+
+    if (valid.length) {
+      setError('');
+      setPendingAttachments((prev) => [...prev, ...valid].slice(0, 10));
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    addFilesToAttachments(event.target.files);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAttachment = (indexToRemove) => {
+    setPendingAttachments((prev) => {
+      const removed = prev[indexToRemove];
+      if (removed?.previewUrl) {
+        URL.revokeObjectURL(removed.previewUrl);
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
+  };
+
+  const handlePaste = (event) => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    const files = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/') || items[i].type.startsWith('video/')) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length) {
+      event.preventDefault();
+      addFilesToAttachments(files);
+    }
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isDraggingOver) {
+      setIsDraggingOver(true);
+    }
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsDraggingOver(false);
+    }
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+    if (event.dataTransfer?.files?.length) {
+      addFilesToAttachments(event.dataTransfer.files);
+    }
+  };
+
   const handleSendMessage = async (event) => {
     event?.preventDefault?.();
-    if (!messageText.trim()) return;
+    if (!messageText.trim() && !pendingAttachments.length) return;
+    if (isSending || isUploadingMedia) return;
 
     setError('');
-    
-    const textToSend = messageText;
+    const textToSend = messageText.trim();
+    const attachmentsToSend = [...pendingAttachments];
+
+    setMessageText('');
+    setPendingAttachments([]);
+
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg = {
       id: tempId,
       senderId: currentChatUser.userId,
       receiverId: selectedContact.userId,
       text: textToSend,
+      mediaItems: attachmentsToSend.map((att) => ({
+        url: att.previewUrl,
+        mediaType: att.mediaType,
+        fileName: att.fileName
+      })),
+      mediaUrl: attachmentsToSend[0]?.previewUrl || '',
+      mediaType: attachmentsToSend[0]?.mediaType || '',
+      fileName: attachmentsToSend[0]?.fileName || '',
       context: chatContext,
       timestamp: new Date().toISOString(),
       status: 'sending'
     };
-    
+
     setMessages((prev) => [...prev, optimisticMsg]);
-    setMessageText('');
 
     try {
+      let uploadedMediaItems = [];
+
+      if (attachmentsToSend.length > 0) {
+        setIsUploadingMedia(true);
+        const filesToUpload = attachmentsToSend.map((att) => att.file);
+        const uploadResults = await uploadChatMedia(filesToUpload);
+        uploadedMediaItems = uploadResults.map((res) => ({
+          url: res.url,
+          mediaType: res.mediaType,
+          fileName: res.fileName
+        }));
+      }
+
       await sendChatMessage({
         sender: currentChatUser,
         receiver: selectedContact,
         text: textToSend,
+        mediaItems: uploadedMediaItems,
+        mediaUrl: uploadedMediaItems[0]?.url || '',
+        mediaType: uploadedMediaItems[0]?.mediaType || '',
+        fileName: uploadedMediaItems[0]?.fileName || '',
         context: chatContext
       });
-      setMessages((prev) => 
-        prev.map((msg) => msg.id === tempId ? { ...msg, status: 'sent' } : msg)
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === tempId
+            ? { ...msg, mediaItems: uploadedMediaItems, mediaUrl: uploadedMediaItems[0]?.url || '', status: 'sent' }
+            : msg
+        )
       );
     } catch (sendError) {
       setError(sendError.message || 'Unable to send message.');
-      setMessageText(textToSend); // Restore text on failure
-      setMessages((prev) => prev.map((msg) => msg.id === tempId ? { ...msg, status: 'error' } : msg));
+      setMessageText(textToSend);
+      if (attachmentsToSend.length > 0) {
+        setPendingAttachments(attachmentsToSend);
+      }
+      setMessages((prev) => prev.map((msg) => (msg.id === tempId ? { ...msg, status: 'error' } : msg)));
+    } finally {
+      setIsUploadingMedia(false);
     }
   };
 
@@ -854,28 +1433,84 @@ const AlumniChatPanel = ({
                   </svg>
                 </button>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
-                {[
-                  { value: 'alumni', label: 'Alumni' },
-                  { value: 'employment', label: 'Employment' }
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      setChatContext(option.value);
-                      setSelectedContactId('');
-                      setError('');
-                    }}
-                    className={`rounded-lg px-2 py-2 text-[11px] font-semibold transition ${
-                      chatContext === option.value
-                        ? 'bg-blue-700 text-white shadow-sm'
-                        : 'text-slate-600 hover:bg-white'
+              <div className="mt-3 flex items-center border-b border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatContext('alumni');
+                    setSelectedContactId('');
+                    setError('');
+                  }}
+                  className={`group relative flex flex-1 items-center justify-center gap-2 pb-2.5 pt-1 text-xs font-semibold transition-all ${
+                    chatContext === 'alumni'
+                      ? 'text-blue-600'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <svg
+                    className={`h-4 w-4 transition-colors ${
+                      chatContext === 'alumni' ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
                     }`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
                   >
-                    {option.label}
-                  </button>
-                ))}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                  <span>Alumni</span>
+                  {alumniUnreadCount > 0 && (
+                    <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold leading-none text-white">
+                      {alumniUnreadCount}
+                    </span>
+                  )}
+                  {chatContext === 'alumni' && (
+                    <span className="absolute -bottom-px left-2 right-2 h-0.5 rounded-full bg-blue-600 transition-all" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatContext('employment');
+                    setSelectedContactId('');
+                    setError('');
+                  }}
+                  className={`group relative flex flex-1 items-center justify-center gap-2 pb-2.5 pt-1 text-xs font-semibold transition-all ${
+                    chatContext === 'employment'
+                      ? 'text-blue-600'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <svg
+                    className={`h-4 w-4 transition-colors ${
+                      chatContext === 'employment' ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
+                    }`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <span>Employment</span>
+                  {employmentUnreadCount > 0 && (
+                    <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold leading-none text-white">
+                      {employmentUnreadCount}
+                    </span>
+                  )}
+                  {chatContext === 'employment' && (
+                    <span className="absolute -bottom-px left-2 right-2 h-0.5 rounded-full bg-blue-600 transition-all" />
+                  )}
+                </button>
               </div>
               <div className="mt-4">
                 <input
@@ -939,7 +1574,7 @@ const AlumniChatPanel = ({
                                 </span>
                               </span>
                               <span className="mt-0.5 block truncate text-xs text-slate-600">
-                                {contact.summary?.latestMessageText || 'New message request'}
+                                {formatConversationSnippet(contact.summary, contact, currentUserId) || 'New message request'}
                               </span>
                             </span>
                           </span>
@@ -1066,7 +1701,7 @@ const AlumniChatPanel = ({
                         )}
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-slate-500">
-                        {contact.summary?.latestMessageText || formatLastActive(contact.status)}
+                        {formatConversationSnippet(contact.summary, contact, currentUserId)}
                       </span>
                     </span>
                   </button>
@@ -1086,9 +1721,13 @@ const AlumniChatPanel = ({
                       const contactStatus = getConversationStatus(contact.summary);
                       const isOutgoingSearchRequest =
                         contactStatus === 'pending' &&
+                        Boolean(contact.summary?.latestMessageText) &&
+                        (contact.summary?.contexts || []).includes(chatContext) &&
                         String(contact.summary?.requestedBy || '') === String(currentUserId);
                       const isIncomingSearchRequest =
                         contactStatus === 'pending' &&
+                        Boolean(contact.summary?.latestMessageText) &&
+                        (contact.summary?.contexts || []).includes(chatContext) &&
                         String(contact.summary?.requestTo || '') === String(currentUserId);
                       const didCurrentUserBlockSearchContact = didCurrentUserBlockSummary(contact.summary, currentUserId);
                       return (
@@ -1158,7 +1797,24 @@ const AlumniChatPanel = ({
             </div>
           </aside>
 
-          <main key={selectedChatId || 'empty-chat'} className={`lccb-chat-conversation flex min-w-0 flex-col bg-white md:flex-1 ${selectedContact ? 'w-full' : 'hidden md:flex'}`}>
+          <main
+            key={selectedChatId || 'empty-chat'}
+            onDragEnter={handleDragOver}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`lccb-chat-conversation relative flex min-w-0 flex-col bg-white md:flex-1 ${selectedContact ? 'w-full' : 'hidden md:flex'}`}
+          >
+            {/* Drag and Drop Overlay */}
+            {isDraggingOver && canSendMessage && (
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-blue-600/90 p-6 text-white backdrop-blur-xs border-4 border-dashed border-white pointer-events-none animate-in fade-in duration-150">
+                <svg className="h-16 w-16 mb-2 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="text-lg font-bold">Drop photos or videos here</p>
+                <p className="text-xs text-blue-100">Release to attach to your message</p>
+              </div>
+            )}
             {selectedContact ? (
               <>
                 <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
@@ -1288,16 +1944,92 @@ const AlumniChatPanel = ({
 
                               {/* Message Bubble */}
                               <div className={`lccb-chat-message flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                <div
-                                  onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
-                                  className={`cursor-pointer max-w-[78%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-xs transition-all ${
-                                    isOwn
-                                      ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
-                                      : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  <p className="whitespace-pre-wrap break-words">{message.text || message.message}</p>
-                                </div>
+                                {(() => {
+                                  const payload = parseMessagePayload(message.message || message.text, message.type);
+                                  const mediaItems = (message.mediaItems && message.mediaItems.length > 0)
+                                    ? message.mediaItems
+                                    : (payload.mediaItems && payload.mediaItems.length > 0)
+                                      ? payload.mediaItems
+                                      : (message.mediaUrl || payload.mediaUrl)
+                                        ? [{
+                                            url: message.mediaUrl || payload.mediaUrl,
+                                            mediaType: message.mediaType || payload.mediaType || 'image',
+                                            fileName: message.fileName || payload.fileName || ''
+                                          }]
+                                        : [];
+
+                                  const displayText = (message.text !== undefined && message.text !== null && message.text !== '')
+                                    ? message.text
+                                    : payload.text;
+
+                                  const hasMedia = mediaItems.length > 0;
+                                  const hasText = Boolean(displayText && displayText.trim());
+
+                                  // Standalone media (no text caption) -> Transparent container!
+                                  if (hasMedia && !hasText) {
+                                    return (
+                                      <div
+                                        onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                        className="max-w-[85%] rounded-2xl overflow-hidden cursor-pointer"
+                                      >
+                                        {renderMessengerMediaGrid(mediaItems, (imgIndex) => {
+                                          setLightboxState({
+                                            items: mediaItems,
+                                            index: imgIndex
+                                          });
+                                        })}
+                                      </div>
+                                    );
+                                  }
+
+                                  // Media with text caption -> Flush at top, caption underneath in matching bubble
+                                  if (hasMedia && hasText) {
+                                    return (
+                                      <div
+                                        onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                        className={`cursor-pointer max-w-[85%] overflow-hidden rounded-2xl shadow-xs transition-all ${
+                                          isOwn
+                                            ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
+                                            : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                      >
+                                        <div className="w-full overflow-hidden">
+                                          {renderMessengerMediaGrid(
+                                            mediaItems,
+                                            (imgIndex) => {
+                                              setLightboxState({
+                                                items: mediaItems,
+                                                index: imgIndex
+                                              });
+                                            },
+                                            true
+                                          )}
+                                        </div>
+                                        <div className="px-3.5 py-2.5 text-[15px] leading-relaxed">
+                                          <p className="whitespace-pre-wrap break-words">
+                                            {renderMessageContent(displayText, isOwn)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  // Standard text bubble
+                                  return (
+                                    <div
+                                      onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                      className={`cursor-pointer max-w-[78%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-xs transition-all ${
+                                        isOwn
+                                          ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
+                                          : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <p className="whitespace-pre-wrap break-words">
+                                        {renderMessageContent(displayText || message.message, isOwn)}
+                                      </p>
+                                    </div>
+                                  );
+                                })()}
                               </div>
 
                               {/* Message Status */}
@@ -1339,10 +2071,83 @@ const AlumniChatPanel = ({
 
                 <form onSubmit={handleSendMessage} className="border-t border-slate-200 bg-white p-4">
                   {error && <p className="mb-2 text-xs font-medium text-red-600">{error}</p>}
-                  <div className="flex items-end gap-3">
+
+                  {/* Pending Attachments Multi-Preview Strip */}
+                  {pendingAttachments.length > 0 && (
+                    <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50/70 p-2.5">
+                      <div className="mb-2 flex items-center justify-between text-xs text-slate-600">
+                        <span className="font-semibold text-blue-900">
+                          Attached ({pendingAttachments.length}/10)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            pendingAttachments.forEach((att) => {
+                              if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+                            });
+                            setPendingAttachments([]);
+                          }}
+                          className="font-medium text-slate-500 hover:text-red-600 transition-colors"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {pendingAttachments.map((att, idx) => (
+                          <div key={idx} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-blue-200 bg-slate-900 shadow-xs group">
+                            {att.mediaType === 'video' ? (
+                              <video src={att.previewUrl} className="h-full w-full object-cover" />
+                            ) : (
+                              <img src={att.previewUrl} alt={att.fileName} className="h-full w-full object-cover" />
+                            )}
+                            <span className="absolute bottom-0 right-0 rounded-tl bg-blue-700 px-1 text-[8px] font-bold text-white uppercase">
+                              {att.mediaType === 'video' ? 'VID' : 'IMG'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAttachment(idx)}
+                              className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-red-600 cursor-pointer"
+                              title="Remove file"
+                              aria-label="Remove file"
+                            >
+                              <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-end gap-2.5">
+                    {/* Hidden file input */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*,video/*"
+                      multiple
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+
+                    {/* Attachment button */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={!canSendMessage || isSending || isUploadingMedia}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+                      title="Attach images or videos"
+                    >
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                    </button>
+
                     <textarea
                       value={messageText}
                       onChange={(event) => setMessageText(event.target.value)}
+                      onPaste={handlePaste}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();
@@ -1355,27 +2160,39 @@ const AlumniChatPanel = ({
                         isSelectedIncomingRequest
                           ? 'Accept this request to reply'
                           : isSelectedOutgoingRequest
-                            ? 'Type a message...'
+                            ? pendingAttachments.length
+                              ? 'Add an optional caption...'
+                              : 'Type a message...'
                             : isSelectedBlocked
                               ? didCurrentUserBlockSelected
                                 ? 'Unblock this user to send a message'
                                 : 'You cannot send messages to this user'
-                              : 'Type a message...'
+                              : pendingAttachments.length
+                                ? 'Add an optional caption...'
+                                : 'Type a message...'
                       }
                       rows={1}
                       maxLength={1000}
                       disabled={!canSendMessage}
                       className="max-h-28 min-h-[44px] flex-1 resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
                     />
+
                     <button
                       type="submit"
-                      disabled={isSending || !messageText.trim() || !canSendMessage}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      disabled={isSending || isUploadingMedia || (!messageText.trim() && !pendingAttachments.length) || !canSendMessage}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                       aria-label="Send message"
                     >
-                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3.478 2.405a.75.75 0 0 0-.926.94l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.405Z" />
-                      </svg>
+                      {isUploadingMedia ? (
+                        <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                      ) : (
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M3.478 2.405a.75.75 0 0 0-.926.94l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.405Z" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -1388,6 +2205,107 @@ const AlumniChatPanel = ({
           </main>
         </div>
       </section>
+
+      {/* Media Lightbox Modal */}
+      {lightboxState && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm pointer-events-auto select-none"
+          onClick={() => setLightboxState(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="relative max-h-[92vh] max-w-[92vw] overflow-hidden rounded-2xl bg-black/60 shadow-2xl border border-white/10 flex items-center justify-center p-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close (X) button placed directly on the top-right of the image */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxState(null);
+              }}
+              className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition-all hover:bg-red-600 hover:scale-110 cursor-pointer shadow-lg border border-white/20"
+              title="Close"
+              aria-label="Close"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+
+            {/* Photo Counter Pill (shown if multiple items) */}
+            {lightboxState.items.length > 1 && (
+              <div className="absolute top-3 left-3 z-20 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-md border border-white/20">
+                {lightboxState.index + 1} / {lightboxState.items.length}
+              </div>
+            )}
+
+            {/* Previous Navigation Button */}
+            {lightboxState.items.length > 1 && lightboxState.index > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxState((prev) => ({ ...prev, index: prev.index - 1 }));
+                }}
+                className="absolute left-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition-all hover:bg-black/90 hover:scale-110 cursor-pointer shadow-lg border border-white/20"
+                title="Previous"
+                aria-label="Previous"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+
+            {/* Media Content */}
+            {(() => {
+              const currentItem = lightboxState.items[lightboxState.index];
+              if (!currentItem) return null;
+              if (currentItem.mediaType === 'video') {
+                return (
+                  <video
+                    key={currentItem.url}
+                    src={currentItem.url}
+                    controls
+                    autoPlay
+                    className="max-h-[88vh] max-w-[90vw] rounded-xl object-contain"
+                  />
+                );
+              }
+              return (
+                <img
+                  key={currentItem.url}
+                  src={currentItem.url}
+                  alt="Full view"
+                  className="max-h-[88vh] max-w-[90vw] rounded-xl object-contain select-none"
+                />
+              );
+            })()}
+
+            {/* Next Navigation Button */}
+            {lightboxState.items.length > 1 && lightboxState.index < lightboxState.items.length - 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxState((prev) => ({ ...prev, index: prev.index + 1 }));
+                }}
+                className="absolute right-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition-all hover:bg-black/90 hover:scale-110 cursor-pointer shadow-lg border border-white/20"
+                title="Next"
+                aria-label="Next"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
       <button
         type="button"
         className={`lccb-chat-toggle-button ${isOpen && !isClosing ? 'lccb-chat-toggle-button--hidden' : ''}`}

@@ -7,6 +7,7 @@ import ConfirmModal from './ConfirmModal';
 import FilterMenu from './FilterMenu';
 import MobileFilterButton from './MobileFilterButton';
 import { authService } from '../services/authService';
+import officerService from '../services/officerService';
 import UserLayout from './UserLayout';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
 import { toast } from 'react-toastify';
@@ -14,13 +15,87 @@ import CardSkeleton from './CardSkeleton';
 
 const Events = () => {
   const isTeacher = authService.isTeacher();
+  const [isBatchOfficer, setIsBatchOfficer] = useState(() => authService.isBatchOfficer());
+  const [officerBatch, setOfficerBatch] = useState(() => authService.getOfficerBatch());
+  const canManageEvents = isTeacher || isBatchOfficer;
+
+  useEffect(() => {
+    if (!isTeacher) {
+      officerService
+        .getMyOfficerStatus()
+        .then((res) => {
+          if (res?.isOfficer) {
+            setIsBatchOfficer(true);
+            const batchVal = res.officer?.batch || res.officer?.alumni?.batch;
+            if (batchVal) {
+              setOfficerBatch(String(batchVal));
+              try {
+                const stored = localStorage.getItem('user');
+                if (stored) {
+                  const parsed = JSON.parse(stored);
+                  parsed.officer = res.officer;
+                  parsed.is_officer = true;
+                  parsed.isOfficer = true;
+                  localStorage.setItem('user', JSON.stringify(parsed));
+                }
+              } catch {}
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isTeacher]);
+
+  const getDefaultBatch = useCallback(() => {
+    if (!isTeacher && officerBatch) {
+      return String(officerBatch);
+    }
+    return 'all';
+  }, [isTeacher, officerBatch]);
+
+  const canManageEventForCard = useCallback((event) => {
+    if (isTeacher) return true;
+    if (isBatchOfficer && officerBatch && String(event?.target_batch) === String(officerBatch)) {
+      return true;
+    }
+    return false;
+  }, [isTeacher, isBatchOfficer, officerBatch]);
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
+  const [newEvent, setNewEvent] = useState(() => {
+    const def = (!isTeacher && authService.getOfficerBatch()) ? String(authService.getOfficerBatch()) : 'all';
+    return { name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: def, targetBatch: def };
+  });
+
+  useEffect(() => {
+    if (!isTeacher && officerBatch && !editingId) {
+      setNewEvent((prev) => ({
+        ...prev,
+        targetBatch: String(officerBatch),
+        notifyBatch: prev.notifyBatch === 'all' ? String(officerBatch) : prev.notifyBatch
+      }));
+    }
+  }, [isTeacher, officerBatch, editingId]);
+
+  const handleOpenAddModal = () => {
+    setEditingId(null);
+    const def = getDefaultBatch();
+    setNewEvent({
+      name: '',
+      description: '',
+      date: '',
+      location: '',
+      image: null,
+      sendNotification: false,
+      notifyBatch: def,
+      targetBatch: def
+    });
+    setShowEventModal(true);
+  };
 
   const uniqueEvents = useMemo(() => {
     const map = new Map();
@@ -77,6 +152,12 @@ const Events = () => {
       ]
     }
   ]), [eventTargetBatches]);
+
+  const availableModalBatches = useMemo(() => {
+    const set = new Set(['2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026']);
+    if (officerBatch) set.add(String(officerBatch));
+    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+  }, [officerBatch]);
 
   const statusMenuSections = [
     {
@@ -263,7 +344,8 @@ const Events = () => {
       }
       setShowEventModal(false);
       setEditingId(null);
-      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
+      const defBatch = getDefaultBatch();
+      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: defBatch, targetBatch: defBatch });
       setIsUpcomingEventsExpanded(true);
       setIsCurrentEventsExpanded(true);
       setIsPastEventsExpanded(false);
@@ -281,6 +363,8 @@ const Events = () => {
 
   const handleEditEvent = (event) => {
     setEditingId(event.id);
+    const defBatch = getDefaultBatch();
+    const eventBatch = event.target_batch ? String(event.target_batch) : defBatch;
     setNewEvent({
       name: event.name || '',
       description: event.description || '',
@@ -288,8 +372,8 @@ const Events = () => {
       location: event.location || '',
       image: null,
       sendNotification: false,
-      notifyBatch: 'all',
-      targetBatch: event.target_batch ? String(event.target_batch) : 'all'
+      notifyBatch: eventBatch,
+      targetBatch: eventBatch
     });
     setShowEventModal(true);
   };
@@ -484,9 +568,9 @@ const Events = () => {
                 Stay connected with our vibrant alumni community through exciting events, workshops, and networking opportunities.
               </p>
             </div>
-            {isTeacher && (
+            {canManageEvents && (
               <button
-                onClick={() => setShowEventModal(true)}
+                onClick={handleOpenAddModal}
                 className="app-primary-button"
               >
                 Add New
@@ -700,7 +784,7 @@ const Events = () => {
                   <div className="overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-1 pb-1">
                       {categorizedEvents.upcoming.map((event) => (
-                        <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                        <EventCard key={event.id} event={event} isTeacher={canManageEventForCard(event)} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                       ))}
                     </div>
                   </div>
@@ -741,7 +825,7 @@ const Events = () => {
                     <div className="overflow-hidden">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-1 pb-1">
                         {categorizedEvents.current.map((event) => (
-                          <EventCard key={event.id} event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                          <EventCard key={event.id} event={event} isTeacher={canManageEventForCard(event)} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                         ))}
                       </div>
                     </div>
@@ -787,7 +871,7 @@ const Events = () => {
                           className={index >= 10 ? 'animate-event-reveal' : ''}
                           style={index >= 10 ? { animationDelay: `${(index % 10) * 45}ms` } : undefined}
                         >
-                          <EventCard event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                          <EventCard event={event} isTeacher={canManageEventForCard(event)} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                         </div>
                       ))}
                     </div>
@@ -845,7 +929,7 @@ const Events = () => {
                   className={selectedStatus === 'past' && index >= 10 ? 'animate-event-reveal' : ''}
                   style={selectedStatus === 'past' && index >= 10 ? { animationDelay: `${(index % 10) * 45}ms` } : undefined}
                 >
-                  <EventCard event={event} isTeacher={isTeacher} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
+                  <EventCard event={event} isTeacher={canManageEventForCard(event)} handleEditEvent={handleEditEvent} handleDeleteEvent={handleDeleteEvent} />
                 </div>
               ))}
             </div>
@@ -1006,62 +1090,66 @@ const Events = () => {
 
                   {newEvent.sendNotification && (
                     <div className="ml-7 pl-3 border-l-2 border-blue-200">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Select Batch to Notify
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Select Batch to Notify
+                        </label>
+                        {!isTeacher && isBatchOfficer && (
+                          <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            Batch {officerBatch || newEvent.notifyBatch}
+                          </span>
+                        )}
+                      </div>
                       <select
                         value={newEvent.notifyBatch}
                         onChange={(e) => setNewEvent(prev => ({ ...prev, notifyBatch: e.target.value }))}
-                        className="app-select"
+                        disabled={!isTeacher}
+                        className={`app-select ${!isTeacher ? 'bg-gray-100 text-gray-700 cursor-not-allowed border-gray-300 opacity-90' : ''}`}
                       >
                         <option value="all">All Alumni</option>
-                        <option value="2015">Batch 2015</option>
-                        <option value="2016">Batch 2016</option>
-                        <option value="2017">Batch 2017</option>
-                        <option value="2018">Batch 2018</option>
-                        <option value="2019">Batch 2019</option>
-                        <option value="2020">Batch 2020</option>
-                        <option value="2021">Batch 2021</option>
-                        <option value="2022">Batch 2022</option>
-                        <option value="2023">Batch 2023</option>
-                        <option value="2024">Batch 2024</option>
-                        <option value="2025">Batch 2025</option>
+                        {availableModalBatches.map((b) => (
+                          <option key={`notify-${b}`} value={b}>Batch {b}</option>
+                        ))}
                       </select>
                       <p className="text-xs text-gray-500 mt-1">
-                        {newEvent.notifyBatch === 'all' 
-                          ? 'All alumni with notifications enabled will be notified' 
-                          : `Only Batch ${newEvent.notifyBatch} alumni will be notified`}
+                        {!isTeacher && isBatchOfficer
+                          ? `Notifications will be sent to Batch ${officerBatch || newEvent.notifyBatch} alumni only.`
+                          : newEvent.notifyBatch === 'all' 
+                            ? 'All alumni with notifications enabled will be notified' 
+                            : `Only Batch ${newEvent.notifyBatch} alumni will be notified`}
                       </p>
                     </div>
                   )}
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Restrict Attendance to Batch
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Restrict Attendance to Batch
+                    </label>
+                    {!isTeacher && isBatchOfficer && (
+                      <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Locked to Batch {officerBatch || newEvent.targetBatch}
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={newEvent.targetBatch}
                     onChange={(e) => setNewEvent(prev => ({ ...prev, targetBatch: e.target.value }))}
-                    className="app-select"
+                    disabled={!isTeacher}
+                    className={`app-select ${!isTeacher ? 'bg-gray-100 text-gray-700 cursor-not-allowed border-gray-300 opacity-90' : ''}`}
                   >
                     <option value="all">Open to All Batches</option>
-                    <option value="2015">Batch 2015</option>
-                    <option value="2016">Batch 2016</option>
-                    <option value="2017">Batch 2017</option>
-                    <option value="2018">Batch 2018</option>
-                    <option value="2019">Batch 2019</option>
-                    <option value="2020">Batch 2020</option>
-                    <option value="2021">Batch 2021</option>
-                    <option value="2022">Batch 2022</option>
-                    <option value="2023">Batch 2023</option>
-                    <option value="2024">Batch 2024</option>
-                    <option value="2025">Batch 2025</option>
+                    {availableModalBatches.map((b) => (
+                      <option key={`target-${b}`} value={b}>Batch {b}</option>
+                    ))}
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    {newEvent.targetBatch === 'all'
-                      ? 'All alumni can join this event'
-                      : `Only Batch ${newEvent.targetBatch} alumni can join. Others can view but not register.`}
+                    {!isTeacher && isBatchOfficer
+                      ? `As a Batch ${officerBatch || newEvent.targetBatch} officer, events you create are restricted to Batch ${officerBatch || newEvent.targetBatch}. Only administrators can change this restriction.`
+                      : newEvent.targetBatch === 'all'
+                        ? 'All alumni can join this event'
+                        : `Only Batch ${newEvent.targetBatch} alumni can join. Others can view but not register.`}
                   </p>
                 </div>
 
@@ -1072,7 +1160,8 @@ const Events = () => {
                     onClick={() => {
                       setShowEventModal(false);
                       setEditingId(null);
-                      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: 'all', targetBatch: 'all' });
+                      const defBatch = getDefaultBatch();
+                      setNewEvent({ name: '', description: '', date: '', location: '', image: null, sendNotification: false, notifyBatch: defBatch, targetBatch: defBatch });
                     }}
                     className="app-secondary-button disabled:opacity-50 disabled:cursor-not-allowed"
                   >

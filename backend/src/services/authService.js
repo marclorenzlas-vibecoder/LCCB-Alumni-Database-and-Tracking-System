@@ -386,9 +386,23 @@ async function loginUser(email, password) {
       throw new Error('Invalid credentials');
     }
 
+    // Check if alumni is a batch officer
+    let isOfficer = false;
+    let officerRecord = null;
+    if (user.alumni?.id) {
+      const officers = await prisma.batch_officer.findMany({
+        where: { alumni_id: user.alumni.id },
+        orderBy: { id: 'desc' }
+      });
+      if (officers.length > 0) {
+        officerRecord = officers.find(o => o.batch === user.alumni.batch) || officers[0];
+        isOfficer = true;
+      }
+    }
+
     // Allow login with approval status
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, alumniId: user.alumni?.id || null },
+      { id: user.id, email: user.email, role: user.role, alumniId: user.alumni?.id || null, isOfficer },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -400,6 +414,9 @@ async function loginUser(email, password) {
         email: user.email,
         username: user.username,
         role: user.role,
+        is_officer: isOfficer,
+        isOfficer: isOfficer,
+        officer: officerRecord,
         profile_image: user.profile_image,
         approval_status: user.approval_status,
         is_active: user.is_active,
