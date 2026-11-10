@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { registerUser, loginUser, registerTeacher, loginTeacher } = require('../services/authService');
 const jwt = require('jsonwebtoken');
 const passport = require('../middleware/passport');
@@ -150,8 +151,35 @@ const alumniPrivacyPayload = (alumni = {}) => ({
   is_skills_public: readPrivacyFlag(alumni, 'is_skills_public')
 });
 
+// Rate limiters to prevent brute-force and registration spam
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 failed login attempts per 15-minute window
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many failed login attempts. Please try again after 15 minutes.' }
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 registration attempts per 15-minute window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many registration attempts from this IP. Please try again after 15 minutes.' }
+});
+
+const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit failed password change attempts
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password change attempts. Please try again after 15 minutes.' }
+});
+
 // Register route (Alumni/Students only - Gmail)
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { 
       username, email, password, level, course, batch, graduationYear,
@@ -197,7 +225,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login route (Unified for both teachers and alumni)
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : req.body.email;
     const { password } = req.body;
@@ -1613,7 +1641,7 @@ router.put('/profile/:id', authMiddleware, upload.single('profileImage'), async 
 });
 
 // Change password
-router.put('/change-password/:id', authMiddleware, async (req, res) => {
+router.put('/change-password/:id', authMiddleware, passwordChangeLimiter, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const { currentPassword, newPassword, email } = req.body;

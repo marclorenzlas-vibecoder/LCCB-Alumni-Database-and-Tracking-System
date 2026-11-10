@@ -818,6 +818,22 @@ body::-webkit-scrollbar,
     will-change: transform, opacity;
 }
 
+@keyframes dropdownExit {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.98);
+    }
+}
+
+.dropdown-menu-panel.is-closing,
+.app-navbar-dropdown.is-closing {
+    animation: dropdownExit 180ms ease-in forwards !important;
+}
+
 @keyframes notificationDropdownExit {
     from {
         opacity: 1;
@@ -979,6 +995,8 @@ body::-webkit-scrollbar,
 
 @media (prefers-reduced-motion: reduce) {
     .dropdown-menu-panel,
+    .dropdown-menu-panel.is-closing,
+    .app-navbar-dropdown.is-closing,
     .dropdown-menu-item {
         animation: none !important;
     }

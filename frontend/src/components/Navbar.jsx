@@ -182,6 +182,7 @@ const Navbar = () => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isUserMenuClosing, setIsUserMenuClosing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isNotificationsClosing, setIsNotificationsClosing] = useState(false);
   const [bellFilter, setBellFilter] = useState('all');
@@ -223,6 +224,7 @@ const Navbar = () => {
     : 0;
   const notificationRef = useRef(null);
   const notificationCloseTimerRef = useRef(null);
+  const userMenuCloseTimerRef = useRef(null);
   const bellMenuRef = useRef(null);
   const userMenuRef = useRef(null);
 
@@ -238,9 +240,24 @@ const Navbar = () => {
     }, 180);
   }, []);
 
+  const closeUserMenu = useCallback(() => {
+    setIsUserMenuClosing(true);
+    if (userMenuCloseTimerRef.current) {
+      window.clearTimeout(userMenuCloseTimerRef.current);
+    }
+    userMenuCloseTimerRef.current = window.setTimeout(() => {
+      setShowUserMenu(false);
+      setIsUserMenuClosing(false);
+      userMenuCloseTimerRef.current = null;
+    }, 180);
+  }, []);
+
   useEffect(() => () => {
     if (notificationCloseTimerRef.current) {
       window.clearTimeout(notificationCloseTimerRef.current);
+    }
+    if (userMenuCloseTimerRef.current) {
+      window.clearTimeout(userMenuCloseTimerRef.current);
     }
   }, []);
 
@@ -622,18 +639,18 @@ const Navbar = () => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
-        setShowUserMenu(false);
+        closeUserMenu();
       }
     };
 
-    if (showUserMenu) {
+    if (showUserMenu && !isUserMenuClosing) {
       document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showUserMenu]);
+  }, [showUserMenu, isUserMenuClosing, closeUserMenu]);
 
   const handleLogout = async () => {
     setLogoutStatus("processing");
@@ -717,7 +734,7 @@ const Navbar = () => {
   };
 
   const openLogoutConfirm = () => {
-    setShowUserMenu(false);
+    closeUserMenu();
     setIsMobileMenuOpen(false);
     setConfirmLogoutOpen(true);
   };
@@ -1288,7 +1305,14 @@ const Navbar = () => {
                   ref={userMenuRef}
                 >
                   <button
-                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    onClick={() => {
+                      if (showUserMenu) {
+                        closeUserMenu();
+                      } else {
+                        setIsUserMenuClosing(false);
+                        setShowUserMenu(true);
+                      }
+                    }}
                     className="app-navbar-menu-button whitespace-nowrap"
                   >
                     {user?.profile_image ? (
@@ -1306,7 +1330,7 @@ const Navbar = () => {
                       {user?.username || "User"}
                     </span>
                     <svg
-                      className={`h-3.5 w-3.5 transition-transform duration-300 ${showUserMenu ? "rotate-180" : ""}`}
+                      className={`h-3.5 w-3.5 transition-transform duration-300 ${showUserMenu && !isUserMenuClosing ? "rotate-180" : ""}`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1320,8 +1344,8 @@ const Navbar = () => {
                     </svg>
                   </button>
 
-                  {showUserMenu && (
-                    <div className="dropdown-menu-panel app-navbar-dropdown absolute right-0 mt-3 w-56 z-50">
+                  {(showUserMenu || isUserMenuClosing) && (
+                    <div className={`dropdown-menu-panel app-navbar-dropdown absolute right-0 mt-3 w-56 z-50 ${isUserMenuClosing ? "is-closing" : ""}`}>
                       <div className="app-navbar-dropdown-header border-b border-gray-100">
                         <div className="flex items-center gap-2.5">
                           <div className="h-9 w-9 rounded-lg overflow-hidden bg-white ring-1 ring-slate-200/80 shadow-sm flex items-center justify-center shrink-0">
@@ -1355,7 +1379,7 @@ const Navbar = () => {
                             location.pathname.startsWith("/settings/")
                           }
                           onClick={(event) => {
-                            setShowUserMenu(false);
+                            closeUserMenu();
                             if (
                               location.pathname === "/settings" ||
                               location.pathname.startsWith("/settings/")
@@ -1384,7 +1408,7 @@ const Navbar = () => {
                           <>
                             <Link
                               to="/pending-approval"
-                              onClick={() => setShowUserMenu(false)}
+                              onClick={() => closeUserMenu()}
                               className="dropdown-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 transition-colors group hover:bg-blue-50/80 hover:text-blue-700"
                             >
                               <svg
@@ -1404,7 +1428,7 @@ const Navbar = () => {
                             </Link>
                             <Link
                               to="/manage-users"
-                              onClick={() => setShowUserMenu(false)}
+                              onClick={() => closeUserMenu()}
                               className="dropdown-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 transition-colors group hover:bg-blue-50/80 hover:text-blue-700"
                             >
                               <svg

@@ -11,6 +11,7 @@ if (!process.env.VERCEL) {
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const session = require('express-session');
 const passport = require('passport');
 require('./middleware/passport');
@@ -46,6 +47,14 @@ console.log('Environment variables loaded:', {
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5001;
+
+// Security headers via Helmet (allow cross-origin static media & inline assets)
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: false
+  })
+);
 
 
 // Flexible CORS setup for development (localhost, 127.0.0.1, LAN IPs) and production
