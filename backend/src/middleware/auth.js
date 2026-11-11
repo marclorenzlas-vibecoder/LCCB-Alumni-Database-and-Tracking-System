@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { tryEnter } = require('../services/activeUserLimiter');
 const prisma = require('../config/prisma');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const EXPIRED_TOKEN_GRACE_SECONDS = Number(process.env.JWT_EXPIRED_GRACE_SECONDS || 7 * 24 * 60 * 60);
+const EXPIRED_TOKEN_GRACE_SECONDS = Number(process.env.JWT_EXPIRED_GRACE_SECONDS || 5 * 60);
 
 
 

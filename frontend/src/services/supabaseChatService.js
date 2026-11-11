@@ -201,17 +201,31 @@ export const setupPresence = (user) => {
 };
 
 export const parseMessagePayload = (rawMessage, rawType) => {
-  if (!rawMessage) return { text: '', mediaUrl: '', mediaType: '', fileName: '', mediaItems: [] };
+  if (!rawMessage) return { text: '', mediaUrl: '', mediaType: '', fileName: '', mediaItems: [], replyTo: null, isUnsent: false };
 
   let text = String(rawMessage);
   let mediaUrl = '';
   let mediaType = rawType || '';
   let fileName = '';
   let mediaItems = [];
+  let replyTo = null;
 
   if (text.startsWith('{') && text.endsWith('}')) {
     try {
       const parsed = JSON.parse(text);
+      if (parsed.isUnsent) {
+        return {
+          text: '',
+          mediaUrl: '',
+          mediaType: '',
+          fileName: '',
+          mediaItems: [],
+          replyTo: null,
+          isUnsent: true,
+          unsentBy: parsed.unsentBy
+        };
+      }
+      replyTo = parsed.replyTo || null;
       if (Array.isArray(parsed.mediaItems) && parsed.mediaItems.length > 0) {
         mediaItems = parsed.mediaItems.map((item) => ({
           url: item.url,
@@ -221,16 +235,20 @@ export const parseMessagePayload = (rawMessage, rawType) => {
         mediaUrl = mediaItems[0]?.url || '';
         mediaType = mediaItems[0]?.mediaType || 'image';
         fileName = mediaItems[0]?.fileName || '';
-        text = parsed.caption || '';
-        return { text, mediaUrl, mediaType, fileName, mediaItems };
+        text = parsed.caption || parsed.text || '';
+        return { text, mediaUrl, mediaType, fileName, mediaItems, replyTo, isUnsent: false };
       }
       if (parsed.mediaUrl) {
         mediaUrl = parsed.mediaUrl;
-        text = parsed.caption || '';
+        text = parsed.caption || parsed.text || '';
         mediaType = parsed.mediaType || mediaType || (mediaUrl.match(/\.(mp4|webm|mov|ogg)($|\?)/i) ? 'video' : 'image');
         fileName = parsed.fileName || '';
         mediaItems = [{ url: mediaUrl, mediaType, fileName }];
-        return { text, mediaUrl, mediaType, fileName, mediaItems };
+        return { text, mediaUrl, mediaType, fileName, mediaItems, replyTo, isUnsent: false };
+      }
+      if (parsed.text !== undefined || parsed.replyTo !== undefined) {
+        text = parsed.text || parsed.caption || '';
+        return { text, mediaUrl, mediaType, fileName, mediaItems, replyTo, isUnsent: false };
       }
     } catch {}
   }
@@ -240,7 +258,7 @@ export const parseMessagePayload = (rawMessage, rawType) => {
     mediaType = rawType;
     mediaItems = [{ url: mediaUrl, mediaType, fileName: '' }];
     text = '';
-    return { text, mediaUrl, mediaType, fileName, mediaItems };
+    return { text, mediaUrl, mediaType, fileName, mediaItems, replyTo: null, isUnsent: false };
   }
 
   const trimmed = text.trim();
@@ -249,17 +267,17 @@ export const parseMessagePayload = (rawMessage, rawType) => {
     mediaType = 'image';
     mediaItems = [{ url: mediaUrl, mediaType, fileName: '' }];
     text = '';
-    return { text, mediaUrl, mediaType, fileName, mediaItems };
+    return { text, mediaUrl, mediaType, fileName, mediaItems, replyTo: null, isUnsent: false };
   }
   if (/^https?:\/\/[^\s]+\.(mp4|webm|mov|ogg)($|\?)/i.test(trimmed)) {
     mediaUrl = trimmed;
     mediaType = 'video';
     mediaItems = [{ url: mediaUrl, mediaType, fileName: '' }];
     text = '';
-    return { text, mediaUrl, mediaType, fileName, mediaItems };
+    return { text, mediaUrl, mediaType, fileName, mediaItems, replyTo: null, isUnsent: false };
   }
 
-  return { text, mediaUrl, mediaType, fileName, mediaItems };
+  return { text, mediaUrl, mediaType, fileName, mediaItems, replyTo: null, isUnsent: false };
 };
 
 export const listenToMessages = (chatId, callback, onError) => {
@@ -280,6 +298,9 @@ export const listenToMessages = (chatId, callback, onError) => {
       mediaType: parsed.mediaType,
       fileName: parsed.fileName,
       mediaItems: parsed.mediaItems || [],
+      replyTo: parsed.replyTo || null,
+      isUnsent: parsed.isUnsent || msg.type === 'unsent',
+      unsentBy: parsed.unsentBy,
       timestamp: new Date(msg.created_at).getTime(),
       context: msg.context || DEFAULT_CHAT_CONTEXT
     };
@@ -558,7 +579,8 @@ export const sendChatMessage = async ({
   mediaUrl = '',
   mediaType = '',
   fileName = '',
-  context = DEFAULT_CHAT_CONTEXT
+  context = DEFAULT_CHAT_CONTEXT,
+  replyTo = null
 }) => {
   if (!supabase) throw new Error('Supabase is not configured.');
   const senderUser = normalizeChatUser(sender);
@@ -650,20 +672,33 @@ export const sendChatMessage = async ({
       allMediaItems.push({ url: mediaUrl, mediaType: mediaType || 'image', fileName });
     }
 
-    if (allMediaItems.length > 0) {
+    if (allMediaItems.length > 0 || replyTo) {
       const isMulti = allMediaItems.length > 1;
-      const firstIsVideo = allMediaItems[0].mediaType === 'video';
-      messageType = firstIsVideo ? 'video' : 'image';
+      const firstIsVideo = allMediaItems[0]?.mediaType === 'video';
+      if (allMediaItems.length > 0) {
+        messageType = firstIsVideo ? 'video' : 'image';
+      }
       messagePayload = JSON.stringify({
         mediaItems: allMediaItems,
-        mediaUrl: allMediaItems[0].url,
-        mediaType: allMediaItems[0].mediaType,
+        mediaUrl: allMediaItems[0]?.url || '',
+        mediaType: allMediaItems[0]?.mediaType || '',
         caption: cleanText,
-        fileName: allMediaItems[0].fileName
+        text: cleanText,
+        fileName: allMediaItems[0]?.fileName || '',
+        replyTo: replyTo ? {
+          id: replyTo.id,
+          senderId: replyTo.senderId,
+          senderName: replyTo.senderName || '',
+          text: replyTo.text || (replyTo.mediaItems?.length ? (replyTo.mediaType === 'video' ? '[video]' : '[photo]') : ''),
+          mediaUrl: replyTo.mediaUrl || (replyTo.mediaItems?.[0]?.url || ''),
+          mediaType: replyTo.mediaType || (replyTo.mediaItems?.[0]?.mediaType || '')
+        } : null
       });
-      lastMessageSummary = isMulti
-        ? `[photos:${allMediaItems.length}]`
-        : (firstIsVideo ? '[video]' : '[photo]');
+      if (allMediaItems.length > 0) {
+        lastMessageSummary = isMulti
+          ? `[photos:${allMediaItems.length}]`
+          : (firstIsVideo ? '[video]' : '[photo]');
+      }
     }
 
     // 1. Upsert Conversation
@@ -723,6 +758,63 @@ export const sendChatMessage = async ({
 
     return { chatId, messageId: msgData.id };
   } catch (err) {
+    throw err;
+  }
+};
+
+export const unsendMessage = async (messageId, chatId) => {
+  if (!supabase || !messageId) throw new Error('Message ID required.');
+
+  try {
+    const unsentPayload = JSON.stringify({
+      isUnsent: true,
+      unsentAt: new Date().toISOString()
+    });
+
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({
+        message: unsentPayload,
+        type: 'unsent'
+      })
+      .eq('id', messageId);
+
+    if (error) {
+      console.warn('Supabase update failed, attempting delete fallback:', error.message);
+      const { error: delError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('id', messageId);
+      if (delError) throw delError;
+    }
+
+    if (chatId) {
+      const { data: latestMsg } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestMsg) {
+        const parsed = parseMessagePayload(latestMsg.message, latestMsg.type);
+        const lastMsgText = parsed.isUnsent
+          ? 'Unsent a message'
+          : (parsed.text || (parsed.mediaItems?.length ? '[photo]' : ''));
+        await supabase
+          .from('chat_conversations')
+          .update({
+            last_message: lastMsgText,
+            updated_at: new Date().toISOString()
+          })
+          .eq('chat_id', chatId);
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Failed to unsend message:', err);
     throw err;
   }
 };

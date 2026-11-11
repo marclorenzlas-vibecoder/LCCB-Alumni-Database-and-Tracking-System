@@ -13,6 +13,7 @@ import {
   parseMessagePayload,
   sendChatMessage,
   unblockChatUser,
+  unsendMessage,
   uploadChatMedia
 } from '../services/supabaseChatService';
 import { API_BASE_URL } from '../config/apiBaseUrl';
@@ -220,6 +221,115 @@ const renderMessageContent = (text, isOwn) => {
   }
 
   return parts;
+};
+
+const linkPreviewCache = new Map();
+
+const extractFirstUrl = (text) => {
+  if (!text || typeof text !== 'string') return null;
+  const match = text.match(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/i);
+  if (!match) return null;
+  let url = match[0];
+  const punct = url.match(/[.,!?)]+$/);
+  if (punct) {
+    url = url.slice(0, -punct[0].length);
+  }
+  return url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+};
+
+const LinkPreviewCard = ({ url, isOwn }) => {
+  const [preview, setPreview] = useState(() => linkPreviewCache.get(url) || null);
+  const [loading, setLoading] = useState(() => !linkPreviewCache.has(url));
+
+  useEffect(() => {
+    if (!url) return;
+    if (linkPreviewCache.has(url)) {
+      setPreview(linkPreviewCache.get(url));
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchPreview = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${API_BASE_URL}/chat/link-preview?url=${encodeURIComponent(url)}`, {
+          headers
+        });
+        if (!res.ok) {
+          linkPreviewCache.set(url, null);
+          if (isMounted) setLoading(false);
+          return;
+        }
+        const data = await res.json();
+        if (data && (data.title || data.image)) {
+          linkPreviewCache.set(url, data);
+          if (isMounted) {
+            setPreview(data);
+            setLoading(false);
+          }
+        } else {
+          linkPreviewCache.set(url, null);
+          if (isMounted) setLoading(false);
+        }
+      } catch {
+        linkPreviewCache.set(url, null);
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchPreview();
+    return () => {
+      isMounted = false;
+    };
+  }, [url]);
+
+  if (loading || !preview) return null;
+
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    hostname = '';
+  }
+
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation();
+        window.open(preview.url || url, '_blank', 'noopener,noreferrer');
+      }}
+      className={`group/preview mt-1 block w-[280px] sm:w-[320px] max-w-full rounded-2xl overflow-hidden text-left transition-colors cursor-pointer border shadow-xs animate-[fadeIn_0.2s_ease-out] ${
+        isOwn
+          ? 'border-blue-800/60 bg-blue-900 hover:bg-blue-800 text-white'
+          : 'border-slate-200/90 bg-white hover:bg-slate-50 text-slate-900'
+      }`}
+    >
+      {preview.image && (
+        <div className="relative w-full aspect-video max-h-52 overflow-hidden bg-black/40">
+          <img
+            src={preview.image}
+            alt={preview.title || 'Link Preview'}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover/preview:scale-102"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      )}
+      <div className={`p-3 ${isOwn ? 'bg-blue-950/50' : 'bg-slate-50/80'}`}>
+        {preview.title && (
+          <h4 className="font-semibold text-[13.5px] leading-snug line-clamp-2">
+            {preview.title}
+          </h4>
+        )}
+        <p className={`mt-1 text-[11.5px] line-clamp-1 ${isOwn ? 'text-blue-200/80' : 'text-slate-500'}`}>
+          {preview.description || preview.siteName || hostname}
+        </p>
+      </div>
+    </div>
+  );
 };
 
 const renderMessengerMediaGrid = (items, onSelectImage, isFlushWithCaption = false) => {
@@ -525,6 +635,10 @@ const AlumniChatPanel = ({
   const [isSending, setIsSending] = useState(false);
   const [requestActionId, setRequestActionId] = useState('');
   const [clickedMessageId, setClickedMessageId] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [activeActionMenuId, setActiveActionMenuId] = useState(null);
+  const [unsendingMessageId, setUnsendingMessageId] = useState(null);
+  const messageInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const scrolledChatIdRef = useRef(null);
@@ -1250,6 +1364,62 @@ const AlumniChatPanel = ({
     }
   };
 
+  const handleStartReply = (message) => {
+    setActiveActionMenuId(null);
+    if (!message || message.isUnsent) return;
+    const isOwn = String(message.senderId) === String(currentUserId);
+    const payload = parseMessagePayload(message.message || message.text, message.type);
+    const resolvedText = (message.text !== undefined && message.text !== null && message.text !== '')
+      ? message.text
+      : payload.text;
+    const resolvedMediaUrl = message.mediaUrl || message.mediaItems?.[0]?.url || payload.mediaUrl || payload.mediaItems?.[0]?.url || '';
+    const resolvedMediaType = message.mediaType || message.mediaItems?.[0]?.mediaType || payload.mediaType || payload.mediaItems?.[0]?.mediaType || '';
+    setReplyingTo({
+      id: message.id,
+      senderId: message.senderId,
+      senderName: isOwn ? 'You' : (selectedContact?.displayName || 'User'),
+      text: resolvedText || (resolvedMediaUrl ? (resolvedMediaType === 'video' ? '[Video]' : '[Photo]') : ''),
+      mediaUrl: resolvedMediaUrl,
+      mediaType: resolvedMediaType
+    });
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 50);
+  };
+
+  const handleUnsend = async (messageId) => {
+    setActiveActionMenuId(null);
+    if (!messageId) return;
+    try {
+      setUnsendingMessageId(messageId);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, isUnsent: true, text: '', mediaItems: [], mediaUrl: '', replyTo: null }
+            : msg
+        )
+      );
+      await unsendMessage(messageId, selectedChatId);
+    } catch (err) {
+      console.error('Failed to unsend message:', err);
+      setError(err.message || 'Failed to unsend message.');
+    } finally {
+      setUnsendingMessageId(null);
+    }
+  };
+
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      setActiveActionMenuId(null);
+    };
+    if (activeActionMenuId) {
+      document.addEventListener('click', handleDocumentClick);
+    }
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, [activeActionMenuId]);
+
   const handleSendMessage = async (event) => {
     event?.preventDefault?.();
     if (!messageText.trim() && !pendingAttachments.length) return;
@@ -1258,9 +1428,11 @@ const AlumniChatPanel = ({
     setError('');
     const textToSend = messageText.trim();
     const attachmentsToSend = [...pendingAttachments];
+    const replyToSend = replyingTo;
 
     setMessageText('');
     setPendingAttachments([]);
+    setReplyingTo(null);
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg = {
@@ -1276,6 +1448,7 @@ const AlumniChatPanel = ({
       mediaUrl: attachmentsToSend[0]?.previewUrl || '',
       mediaType: attachmentsToSend[0]?.mediaType || '',
       fileName: attachmentsToSend[0]?.fileName || '',
+      replyTo: replyToSend,
       context: chatContext,
       timestamp: new Date().toISOString(),
       status: 'sending'
@@ -1305,7 +1478,8 @@ const AlumniChatPanel = ({
         mediaUrl: uploadedMediaItems[0]?.url || '',
         mediaType: uploadedMediaItems[0]?.mediaType || '',
         fileName: uploadedMediaItems[0]?.fileName || '',
-        context: chatContext
+        context: chatContext,
+        replyTo: replyToSend
       });
 
       setMessages((prev) =>
@@ -1942,9 +2116,15 @@ const AlumniChatPanel = ({
                                 </span>
                               </div>
 
-                              {/* Message Bubble */}
-                              <div className={`lccb-chat-message flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                {(() => {
+                              {/* Message Bubble or Unsent Tombstone */}
+                              {message.isUnsent ? (
+                                <div className={`lccb-chat-message flex ${isOwn ? 'justify-end' : 'justify-start'} my-0.5`}>
+                                  <div className="rounded-full border border-slate-300/80 bg-slate-100/70 dark:bg-slate-800/60 px-3.5 py-1 text-xs italic text-slate-400 select-none">
+                                    {isOwn ? 'You unsent a message' : `${selectedContact?.displayName || 'User'} unsent a message`}
+                                  </div>
+                                </div>
+                              ) : (
+                                (() => {
                                   const payload = parseMessagePayload(message.message || message.text, message.type);
                                   const mediaItems = (message.mediaItems && message.mediaItems.length > 0)
                                     ? message.mediaItems
@@ -1962,75 +2142,245 @@ const AlumniChatPanel = ({
                                     ? message.text
                                     : payload.text;
 
+                                  const replyData = message.replyTo || payload.replyTo;
+                                  const isReplyingToSelf = replyData
+                                    ? String(replyData.senderId) === String(currentUserId)
+                                    : false;
+                                  const otherSenderName = (replyData?.senderName && replyData.senderName !== 'You')
+                                    ? replyData.senderName
+                                    : (selectedContact?.displayName || 'User');
+                                  const replyHeaderLabel = replyData
+                                    ? isOwn
+                                      ? (isReplyingToSelf ? 'You replied to yourself' : `You replied to ${otherSenderName}`)
+                                      : (isReplyingToSelf ? `${selectedContact?.displayName || otherSenderName} replied to you` : `${selectedContact?.displayName || otherSenderName} replied to themselves`)
+                                    : '';
+
                                   const hasMedia = mediaItems.length > 0;
                                   const hasText = Boolean(displayText && displayText.trim());
 
-                                  // Standalone media (no text caption) -> Transparent container!
-                                  if (hasMedia && !hasText) {
-                                    return (
-                                      <div
-                                        onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
-                                        className="max-w-[85%] rounded-2xl overflow-hidden cursor-pointer"
-                                      >
-                                        {renderMessengerMediaGrid(mediaItems, (imgIndex) => {
-                                          setLightboxState({
-                                            items: mediaItems,
-                                            index: imgIndex
-                                          });
-                                        })}
-                                      </div>
-                                    );
-                                  }
-
-                                  // Media with text caption -> Flush at top, caption underneath in matching bubble
-                                  if (hasMedia && hasText) {
-                                    return (
-                                      <div
-                                        onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
-                                        className={`cursor-pointer max-w-[85%] overflow-hidden rounded-2xl shadow-xs transition-all ${
-                                          isOwn
-                                            ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
-                                            : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
-                                        }`}
-                                      >
-                                        <div className="w-full overflow-hidden">
-                                          {renderMessengerMediaGrid(
-                                            mediaItems,
-                                            (imgIndex) => {
-                                              setLightboxState({
-                                                items: mediaItems,
-                                                index: imgIndex
-                                              });
-                                            },
-                                            true
-                                          )}
-                                        </div>
-                                        <div className="px-3.5 py-2.5 text-[15px] leading-relaxed">
-                                          <p className="whitespace-pre-wrap break-words">
-                                            {renderMessageContent(displayText, isOwn)}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-
-                                  // Standard text bubble
                                   return (
-                                    <div
-                                      onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
-                                      className={`cursor-pointer max-w-[78%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-xs transition-all ${
-                                        isOwn
-                                          ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
-                                          : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
-                                      }`}
-                                    >
-                                      <p className="whitespace-pre-wrap break-words">
-                                        {renderMessageContent(displayText || message.message, isOwn)}
-                                      </p>
+                                    <div className={`group/msg relative lccb-chat-message flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                                      {/* Messenger-Style Reply Header & Quoted Bubble */}
+                                      {replyData && (
+                                        <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[78%] mt-1`}>
+                                          <div className={`flex items-center gap-1.5 text-[11.5px] text-slate-400 dark:text-slate-400 mb-1 px-1 select-none ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                                            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                              <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z" />
+                                            </svg>
+                                            <span>{replyHeaderLabel}</span>
+                                          </div>
+                                          <div
+                                            onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                            className={`w-fit max-w-full rounded-[18px] px-3.5 pt-2 pb-4 text-[13.5px] leading-snug select-none cursor-pointer ${
+                                              isOwn
+                                                ? 'bg-slate-200/80 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                                                : 'bg-slate-200/70 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300'
+                                            }`}
+                                          >
+                                            {replyData.mediaUrl && (
+                                              <img
+                                                src={replyData.mediaUrl}
+                                                alt=""
+                                                className={`h-12 w-12 rounded-xl object-cover opacity-80 ${
+                                                  replyData.text && replyData.text !== '[Photo]' && replyData.text !== '[Video]' && replyData.text !== 'Attachment'
+                                                    ? 'mb-1.5'
+                                                    : ''
+                                                }`}
+                                              />
+                                            )}
+                                            {(!replyData.mediaUrl || (replyData.text && replyData.text !== '[Photo]' && replyData.text !== '[Video]' && replyData.text !== 'Attachment')) && (
+                                              <p className="line-clamp-2 break-words">
+                                                {replyData.text || 'Attachment'}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      <div className={`relative z-10 flex items-center w-full ${isOwn ? 'justify-end' : 'justify-start'} ${replyData ? '-mt-2.5' : ''}`}>
+                                        {/* Action Buttons (Reply & Three-Dots) */}
+                                        <div
+                                          className={`flex items-center gap-1 transition-opacity ${
+                                            isOwn ? 'order-first mr-1.5' : 'order-last ml-1.5'
+                                          } ${activeActionMenuId === message.id ? 'opacity-100' : 'opacity-0 group-hover/msg:opacity-100'}`}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleStartReply(message);
+                                            }}
+                                            className="h-7 w-7 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors shadow-xs"
+                                            title="Reply"
+                                          >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                            </svg>
+                                          </button>
+
+                                          <div className="relative">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveActionMenuId(activeActionMenuId === message.id ? null : message.id);
+                                              }}
+                                              className={`h-7 w-7 rounded-full ${
+                                                activeActionMenuId === message.id
+                                                  ? 'bg-slate-200 text-slate-800 dark:bg-slate-700'
+                                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                              } flex items-center justify-center transition-colors shadow-xs`}
+                                              title="More actions"
+                                            >
+                                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                                <circle cx="12" cy="5" r="2" />
+                                                <circle cx="12" cy="12" r="2" />
+                                                <circle cx="12" cy="19" r="2" />
+                                              </svg>
+                                            </button>
+
+                                            {/* Dropdown Menu Popup (Matches Messenger!) */}
+                                            {activeActionMenuId === message.id && (
+                                              <div
+                                                onClick={(e) => e.stopPropagation()}
+                                                className={`absolute bottom-full mb-1.5 ${
+                                                  isOwn ? 'right-0' : 'left-0'
+                                                } z-30 w-32 rounded-xl bg-slate-900 text-white shadow-xl py-1 border border-slate-700/80 animate-fade-in text-xs font-medium`}
+                                              >
+                                                {isOwn && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleUnsend(message.id)}
+                                                    className="w-full text-left px-3 py-1.5 hover:bg-rose-900/40 text-rose-400 hover:text-rose-300 flex items-center gap-2 transition-colors"
+                                                  >
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                    Unsend
+                                                  </button>
+                                                )}
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStartReply(message)}
+                                                  className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-200 flex items-center gap-2 transition-colors"
+                                                >
+                                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                                  </svg>
+                                                  Reply
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setActiveActionMenuId(null);
+                                                    const copyText = displayText || message.text || message.message || '';
+                                                    if (copyText) {
+                                                      navigator.clipboard?.writeText(copyText);
+                                                    }
+                                                  }}
+                                                  className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-200 flex items-center gap-2 transition-colors"
+                                                >
+                                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                  </svg>
+                                                  Copy
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {(() => {
+                                          // Standalone media (no text caption) -> Transparent container!
+                                          if (hasMedia && !hasText) {
+                                            return (
+                                              <div
+                                                onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                                className="max-w-[85%] rounded-2xl overflow-hidden cursor-pointer"
+                                              >
+                                                {renderMessengerMediaGrid(mediaItems, (imgIndex) => {
+                                                  setLightboxState({
+                                                    items: mediaItems,
+                                                    index: imgIndex
+                                                  });
+                                                })}
+                                              </div>
+                                            );
+                                          }
+
+                                          // Media with text caption -> Flush at top, caption underneath in matching bubble
+                                          if (hasMedia && hasText) {
+                                            const firstUrl = extractFirstUrl(displayText);
+                                            return (
+                                              <div
+                                                onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                                className={`cursor-pointer flex flex-col ${isOwn ? 'items-end' : 'items-start'} ${
+                                                  firstUrl ? 'max-w-[85%] sm:max-w-[320px]' : 'max-w-[85%]'
+                                                }`}
+                                              >
+                                                <div
+                                                  className={`w-fit max-w-full overflow-hidden rounded-2xl shadow-xs transition-all ${
+                                                    isOwn
+                                                      ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
+                                                      : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
+                                                  }`}
+                                                >
+                                                  <div className="w-full overflow-hidden">
+                                                    {renderMessengerMediaGrid(
+                                                      mediaItems,
+                                                      (imgIndex) => {
+                                                        setLightboxState({
+                                                          items: mediaItems,
+                                                          index: imgIndex
+                                                        });
+                                                      },
+                                                      true
+                                                    )}
+                                                  </div>
+                                                  <div className="px-3.5 py-2.5 text-[15px] leading-relaxed">
+                                                    <p className="whitespace-pre-wrap break-words">
+                                                      {renderMessageContent(displayText, isOwn)}
+                                                    </p>
+                                                  </div>
+                                                </div>
+                                                {firstUrl && (
+                                                  <LinkPreviewCard url={firstUrl} isOwn={isOwn} />
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
+                                          // Standard text bubble
+                                          const firstUrl = extractFirstUrl(displayText || message.message);
+                                          return (
+                                            <div
+                                              onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
+                                              className={`cursor-pointer flex flex-col ${isOwn ? 'items-end' : 'items-start'} ${
+                                                firstUrl ? 'max-w-[85%] sm:max-w-[320px]' : 'max-w-[78%]'
+                                              }`}
+                                            >
+                                              <div
+                                                className={`w-fit max-w-full overflow-hidden rounded-2xl shadow-xs transition-all px-4 py-2.5 text-[15px] leading-relaxed ${
+                                                  isOwn
+                                                    ? 'rounded-br-md bg-blue-900 text-white hover:bg-blue-800'
+                                                    : 'rounded-bl-md border border-slate-200/90 bg-white text-slate-900 hover:bg-slate-50'
+                                                }`}
+                                              >
+                                                <p className="whitespace-pre-wrap break-words">
+                                                  {renderMessageContent(displayText || message.message, isOwn)}
+                                                </p>
+                                              </div>
+                                              {firstUrl && (
+                                                <LinkPreviewCard url={firstUrl} isOwn={isOwn} />
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
                                     </div>
                                   );
-                                })()}
-                              </div>
+                                })()
+                              )}
 
                               {/* Message Status */}
                               {showStatus && (
@@ -2120,6 +2470,42 @@ const AlumniChatPanel = ({
                     </div>
                   )}
 
+                  {/* Active Reply Banner */}
+                  {replyingTo && (
+                    <div className="mb-2 flex items-center justify-between gap-2.5 rounded-xl border border-blue-200/90 bg-blue-50/90 px-3.5 py-2 text-xs transition-all shadow-xs animate-fade-in">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <svg className="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-800">
+                              Replying to {replyingTo.senderName}
+                            </span>
+                          </div>
+                          <p className="truncate text-slate-500 font-normal">
+                            {replyingTo.text || (replyingTo.mediaUrl ? 'Attachment' : '')}
+                          </p>
+                        </div>
+                      </div>
+                      {replyingTo.mediaUrl && (
+                        <div className="h-8 w-8 rounded overflow-hidden bg-slate-200 shrink-0 border border-blue-200">
+                          <img src={replyingTo.mediaUrl} alt="" className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setReplyingTo(null)}
+                        className="h-6 w-6 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+                        title="Cancel reply"
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-end gap-2.5">
                     {/* Hidden file input */}
                     <input
@@ -2145,6 +2531,7 @@ const AlumniChatPanel = ({
                     </button>
 
                     <textarea
+                      ref={messageInputRef}
                       value={messageText}
                       onChange={(event) => setMessageText(event.target.value)}
                       onPaste={handlePaste}

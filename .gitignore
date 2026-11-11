@@ -2,3 +2,7 @@ node_modules
 lccb-alumni-fb433-firebase-adminsdk-*.json
 *.log
 .tmp-chat-widget-check
+.env
+.env.*
+!.env.example
+!.env.*.example
