@@ -638,6 +638,8 @@ const AlumniChatPanel = ({
   const [replyingTo, setReplyingTo] = useState(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState(null);
   const [unsendingMessageId, setUnsendingMessageId] = useState(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [recentSearchList, setRecentSearchList] = useState([]);
   const messageInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -956,27 +958,133 @@ const AlumniChatPanel = ({
     [chatContext, conversationContacts]
   );
 
+  const recentSearchStorageKey = useMemo(
+    () => (currentUserId ? `lccb_chat_recent_searches_${currentUserId}_${chatContext}` : ''),
+    [currentUserId, chatContext]
+  );
+
+  useEffect(() => {
+    if (!recentSearchStorageKey) {
+      setRecentSearchList([]);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(recentSearchStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setRecentSearchList(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setRecentSearchList([]);
+    }
+  }, [recentSearchStorageKey]);
+
+  const addRecentSearch = (contact) => {
+    if (!contact?.userId || !recentSearchStorageKey) return;
+    const item = {
+      userId: String(contact.userId),
+      displayName: contact.displayName || 'User',
+      profileImage: contact.profileImage || '',
+      course: contact.course || '',
+      batch: contact.batch || '',
+      role: contact.role || ''
+    };
+    setRecentSearchList((prev) => {
+      const next = [item, ...prev.filter((entry) => String(entry.userId) !== item.userId)].slice(0, 8);
+      try {
+        localStorage.setItem(recentSearchStorageKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const removeRecentSearch = (userIdToRemove) => {
+    if (!recentSearchStorageKey) return;
+    setRecentSearchList((prev) => {
+      const next = prev.filter((entry) => String(entry.userId) !== String(userIdToRemove));
+      try {
+        localStorage.setItem(recentSearchStorageKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const recentSearchContacts = useMemo(() => {
+    const conversationByUserId = new Map(conversationContacts.map((c) => [String(c.userId), c]));
+    return recentSearchList
+      .map((item) => {
+        const uid = String(item.userId || '');
+        if (!uid || uid === String(currentUserId)) return null;
+        const known = knownProfilesByUserId.get(uid) || {};
+        const conv = conversationByUserId.get(uid) || {};
+        return {
+          ...item,
+          ...known,
+          ...conv,
+          userId: uid,
+          displayName: conv.displayName || known.displayName || item.displayName || 'User',
+          profileImage: conv.profileImage || known.profileImage || item.profileImage || '',
+          status: statuses[uid] || conv.status || null
+        };
+      })
+      .filter(Boolean);
+  }, [recentSearchList, conversationContacts, currentUserId, knownProfilesByUserId, statuses]);
+
+  const yourChattedContacts = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    [...acceptedConversationContacts, ...sentRequests, ...messageRequests].forEach((contact) => {
+      const uid = String(contact?.userId || '');
+      if (!uid || seen.has(uid)) return;
+      seen.add(uid);
+      result.push(contact);
+    });
+    return result;
+  }, [acceptedConversationContacts, sentRequests, messageRequests]);
+
   const searchResults = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return [];
 
-    const acceptedChatUserIds = new Set(
-      conversationContacts
-        .filter((contact) => getConversationStatus(contact.summary) === 'accepted')
-        .map((contact) => contact.userId)
-    );
-    const conversationByUserId = new Map(conversationContacts.map((contact) => [contact.userId, contact]));
+    const conversationByUserId = new Map(conversationContacts.map((contact) => [String(contact.userId), contact]));
+    const seen = new Set();
+    const combined = [];
 
-    return alumniSearchContacts
-      .filter((contact) => !acceptedChatUserIds.has(contact.userId))
-      .filter((contact) => String(contact.searchText || '').includes(term))
-      .map((contact) => ({
-        ...(conversationByUserId.get(contact.userId) || {}),
-        ...contact,
-        chatId: conversationByUserId.get(contact.userId)?.chatId || getChatId(currentUserId, contact.userId),
-        summary: conversationByUserId.get(contact.userId)?.summary || null,
-        status: statuses[contact.userId] || null
-      }));
+    conversationContacts.forEach((contact) => {
+      const uid = String(contact.userId || '');
+      if (!uid || seen.has(uid)) return;
+      const haystack = [
+        contact.displayName,
+        contact.username,
+        contact.email,
+        contact.course,
+        contact.batch,
+        contact.searchText
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (haystack.includes(term)) {
+        seen.add(uid);
+        combined.push(contact);
+      }
+    });
+
+    alumniSearchContacts.forEach((contact) => {
+      const uid = String(contact.userId || '');
+      if (!uid || seen.has(uid)) return;
+      if (String(contact.searchText || '').includes(term) || String(contact.displayName || '').toLowerCase().includes(term)) {
+        seen.add(uid);
+        const existingConv = conversationByUserId.get(uid);
+        combined.push({
+          ...(existingConv || {}),
+          ...contact,
+          chatId: existingConv?.chatId || getChatId(currentUserId, contact.userId),
+          summary: existingConv?.summary || null,
+          status: statuses[contact.userId] || null
+        });
+      }
+    });
+
+    return combined;
   }, [alumniSearchContacts, conversationContacts, currentUserId, search, statuses]);
 
   const selectableContacts = useMemo(
@@ -1686,206 +1794,50 @@ const AlumniChatPanel = ({
                   )}
                 </button>
               </div>
-              <div className="mt-4">
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search people"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                />
+              <div className="mt-4 flex items-center gap-2">
+                {(isSearchFocused || Boolean(search.trim())) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSearchFocused(false);
+                      setSearch('');
+                    }}
+                    className="animate-chat-search-back inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                    aria-label="Back to conversations"
+                    title="Back"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                  </button>
+                )}
+                <div className="relative flex-1">
+                  <svg
+                    className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
+                  <input
+                    type="search"
+                    value={search}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search people"
+                    className="w-full rounded-full border border-slate-200 bg-slate-100/80 py-2 pl-9 pr-4 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {messageRequests.length > 0 && (
-                <div className="mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowMessageRequests((previous) => !previous)}
-                    className="flex w-full items-center justify-between rounded-lg px-2 pb-2 pt-1 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 transition hover:bg-white"
-                    aria-expanded={showMessageRequests}
-                  >
-                    <span>Message Requests</span>
-                    <span className={`lccb-chat-chevron ${showMessageRequests ? 'lccb-chat-chevron--open' : ''}`}>
-                      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
-                      </svg>
-                    </span>
-                  </button>
-                  <div className={`lccb-chat-requests ${showMessageRequests ? 'lccb-chat-requests--open' : 'lccb-chat-requests--closed'}`}>
-                    {messageRequests.map((contact) => {
-                      const isSelected = selectedContactId === contact.userId;
-                      return (
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          key={`request-${contact.userId}`}
-                          onClick={() => {
-                            setSelectedContactId(contact.userId);
-                            setError('');
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              setSelectedContactId(contact.userId);
-                              setError('');
-                            }
-                          }}
-                          className={`mb-2 w-full rounded-xl border px-3 py-3 text-left transition ${
-                            isSelected
-                              ? 'border-blue-200 bg-white shadow-sm ring-1 ring-blue-100'
-                              : 'border-amber-200 bg-amber-50 hover:bg-white hover:shadow-sm'
-                          }`}
-                        >
-                          <span className="flex items-start gap-3">
-                            <ContactAvatar contact={contact} status={contact.status} />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center justify-between gap-2">
-                                <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
-                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
-                                  {getRoleLabel(contact.role)}
-                                </span>
-                              </span>
-                              <span className="mt-0.5 block truncate text-xs text-slate-600">
-                                {formatConversationSnippet(contact.summary, contact, currentUserId) || 'New message request'}
-                              </span>
-                            </span>
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {sentRequests.length > 0 && (
-                <div className="mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowSentRequests((previous) => !previous)}
-                    className="flex w-full items-center justify-between rounded-lg px-2 pb-2 pt-1 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 transition hover:bg-white"
-                    aria-expanded={showSentRequests}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      Requests Sent
-                      <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-blue-700 px-1.5 text-[10px] font-bold text-white">
-                        {sentRequests.length > 99 ? '99+' : sentRequests.length}
-                      </span>
-                    </span>
-                    <span className={`lccb-chat-chevron ${showSentRequests ? 'lccb-chat-chevron--open' : ''}`}>
-                      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
-                      </svg>
-                    </span>
-                  </button>
-                  <div className={`lccb-chat-requests ${showSentRequests ? 'lccb-chat-requests--open' : 'lccb-chat-requests--closed'}`}>
-                    {sentRequests.map((contact) => {
-                      const isSelected = selectedContactId === contact.userId;
-                      return (
-                        <button
-                          type="button"
-                          key={`sent-${contact.userId}`}
-                          onClick={() => {
-                            setSelectedContactId(contact.userId);
-                            setError('');
-                          }}
-                          className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
-                            isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
-                          }`}
-                        >
-                          <ContactAvatar contact={contact} status={contact.status} />
-                          <span className="min-w-0 flex-1">
-                            <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
-                            <span className="mt-0.5 block truncate text-xs text-amber-700">Message request sent</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {blockedContacts.length > 0 && (
-                <div className="mb-3">
-                  <div className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    Blocked Users
-                  </div>
-                  {blockedContacts.map((contact) => {
-                    const isSelected = selectedContactId === contact.userId;
-                    const isBusy = requestActionId === contact.chatId;
-                    return (
-                      <button
-                        type="button"
-                        key={`blocked-${contact.userId}`}
-                        onClick={() => {
-                          setSelectedContactId(contact.userId);
-                          setError('');
-                        }}
-                        className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
-                          isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
-                        }`}
-                      >
-                        <ContactAvatar contact={contact} status={contact.status} />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
-                            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-100">
-                              Blocked
-                            </span>
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-slate-500">
-                            {isBusy ? 'Updating...' : 'Click to manage block'}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {acceptedConversationContacts.length > 0 && (
-                <div className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                  Conversations
-                </div>
-              )}
-              {acceptedConversationContacts.map((contact) => {
-                const unreadCount = Number(contact.summary?.unreadCount) || 0;
-                const isSelected = selectedContactId === contact.userId;
-                return (
-                  <button
-                    type="button"
-                    key={`conversation-${contact.userId}`}
-                    onClick={() => {
-                      setSelectedContactId(contact.userId);
-                      setError('');
-                    }}
-                    className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
-                      isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
-                    }`}
-                  >
-                    <ContactAvatar contact={contact} status={contact.status} />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
-                        {unreadCount > 0 && (
-                          <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-blue-700 px-1.5 text-xs font-bold text-white">
-                            {unreadCount > 99 ? '99+' : unreadCount}
-                          </span>
-                        )}
-                      </span>
-                      <span className="mt-0.5 block truncate text-xs text-slate-500">
-                        {formatConversationSnippet(contact.summary, contact, currentUserId)}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-
-              {search.trim() && (
-                <div className="mt-3">
-                  <div className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    Search Results
+              {search.trim() ? (
+                <div key="chat-search-results-view" className="animate-chat-search-view">
+                  <div className="px-2 pb-2 pt-1 text-xs font-semibold text-slate-500">
+                    Search results
                   </div>
                   {searchResults.length === 0 ? (
                     <div className="px-4 py-5 text-center text-sm text-slate-500">No alumni found.</div>
@@ -1909,10 +1861,13 @@ const AlumniChatPanel = ({
                           type="button"
                           key={`search-${contact.userId}`}
                           onClick={() => {
+                            addRecentSearch(contact);
                             setSelectedContactId(contact.userId);
+                            setIsSearchFocused(false);
+                            setSearch('');
                             setError('');
                           }}
-                          className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
+                          className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                             isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
                           }`}
                         >
@@ -1958,16 +1913,290 @@ const AlumniChatPanel = ({
                     })
                   )}
                 </div>
-              )}
-
-              {!search.trim() &&
-                messageRequests.length === 0 &&
-                sentRequests.length === 0 &&
-                acceptedConversationContacts.length === 0 && (
-                  <div className="px-4 py-8 text-center text-sm text-slate-500">
-                    No conversations yet. Search alumni to start a chat.
+              ) : isSearchFocused ? (
+                <div key="chat-search-recent-view" className="animate-chat-search-view">
+                  <div className="px-2 pb-1.5 pt-1 text-xs font-semibold text-slate-500">
+                    Recent searches
                   </div>
-                )}
+                  {recentSearchContacts.length === 0 ? (
+                    <div className="px-3 py-2.5 text-xs text-slate-400">No recent searches</div>
+                  ) : (
+                    recentSearchContacts.map((contact) => {
+                      const isSelected = selectedContactId === contact.userId;
+                      return (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          key={`recent-search-${contact.userId}`}
+                          onClick={() => {
+                            addRecentSearch(contact);
+                            setSelectedContactId(contact.userId);
+                            setIsSearchFocused(false);
+                            setSearch('');
+                            setError('');
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              addRecentSearch(contact);
+                              setSelectedContactId(contact.userId);
+                              setIsSearchFocused(false);
+                              setSearch('');
+                              setError('');
+                            }
+                          }}
+                          className={`mb-1 flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition ${
+                            isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
+                          }`}
+                        >
+                          <span className="flex min-w-0 flex-1 items-center gap-3">
+                            <ContactAvatar contact={contact} status={contact.status} />
+                            <span className="truncate text-sm font-medium text-slate-900">{contact.displayName}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeRecentSearch(contact.userId);
+                            }}
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200/70 text-slate-500 transition hover:bg-slate-300 hover:text-slate-800"
+                            aria-label={`Remove ${contact.displayName} from recent searches`}
+                            title="Remove"
+                          >
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+
+                  <div className="mt-3 px-2 pb-1.5 pt-1 text-xs font-semibold text-slate-500">
+                    Your contacts
+                  </div>
+                  {yourChattedContacts.length === 0 ? (
+                    <div className="px-3 py-2.5 text-xs text-slate-400">No contacts yet</div>
+                  ) : (
+                    yourChattedContacts.map((contact) => {
+                      const isSelected = selectedContactId === contact.userId;
+                      return (
+                        <button
+                          type="button"
+                          key={`your-contact-${contact.userId}`}
+                          onClick={() => {
+                            addRecentSearch(contact);
+                            setSelectedContactId(contact.userId);
+                            setIsSearchFocused(false);
+                            setSearch('');
+                            setError('');
+                          }}
+                          className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${
+                            isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
+                          }`}
+                        >
+                          <ContactAvatar contact={contact} status={contact.status} />
+                          <span className="truncate text-sm font-medium text-slate-900">{contact.displayName}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              ) : (
+                <div key="chat-conversations-view" className="animate-chat-search-view">
+                  {messageRequests.length > 0 && (
+                    <div className="mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowMessageRequests((previous) => !previous)}
+                        className="flex w-full items-center justify-between rounded-lg px-2 pb-2 pt-1 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 transition hover:bg-white"
+                        aria-expanded={showMessageRequests}
+                      >
+                        <span>Message Requests</span>
+                        <span className={`lccb-chat-chevron ${showMessageRequests ? 'lccb-chat-chevron--open' : ''}`}>
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      </button>
+                      <div className={`lccb-chat-requests ${showMessageRequests ? 'lccb-chat-requests--open' : 'lccb-chat-requests--closed'}`}>
+                        {messageRequests.map((contact) => {
+                          const isSelected = selectedContactId === contact.userId;
+                          return (
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              key={`request-${contact.userId}`}
+                              onClick={() => {
+                                setSelectedContactId(contact.userId);
+                                setError('');
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  setSelectedContactId(contact.userId);
+                                  setError('');
+                                }
+                              }}
+                              className={`mb-2 w-full rounded-xl border px-3 py-3 text-left transition ${
+                                isSelected
+                                  ? 'border-blue-200 bg-white shadow-sm ring-1 ring-blue-100'
+                                  : 'border-amber-200 bg-amber-50 hover:bg-white hover:shadow-sm'
+                              }`}
+                            >
+                              <span className="flex items-start gap-3">
+                                <ContactAvatar contact={contact} status={contact.status} />
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex items-center justify-between gap-2">
+                                    <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
+                                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                                      {getRoleLabel(contact.role)}
+                                    </span>
+                                  </span>
+                                  <span className="mt-0.5 block truncate text-xs text-slate-600">
+                                    {formatConversationSnippet(contact.summary, contact, currentUserId) || 'New message request'}
+                                  </span>
+                                </span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {sentRequests.length > 0 && (
+                    <div className="mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowSentRequests((previous) => !previous)}
+                        className="flex w-full items-center justify-between rounded-lg px-2 pb-2 pt-1 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 transition hover:bg-white"
+                        aria-expanded={showSentRequests}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          Requests Sent
+                          <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-blue-700 px-1.5 text-[10px] font-bold text-white">
+                            {sentRequests.length > 99 ? '99+' : sentRequests.length}
+                          </span>
+                        </span>
+                        <span className={`lccb-chat-chevron ${showSentRequests ? 'lccb-chat-chevron--open' : ''}`}>
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      </button>
+                      <div className={`lccb-chat-requests ${showSentRequests ? 'lccb-chat-requests--open' : 'lccb-chat-requests--closed'}`}>
+                        {sentRequests.map((contact) => {
+                          const isSelected = selectedContactId === contact.userId;
+                          return (
+                            <button
+                              type="button"
+                              key={`sent-${contact.userId}`}
+                              onClick={() => {
+                                setSelectedContactId(contact.userId);
+                                setError('');
+                              }}
+                              className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
+                                isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
+                              }`}
+                            >
+                              <ContactAvatar contact={contact} status={contact.status} />
+                              <span className="min-w-0 flex-1">
+                                <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
+                                <span className="mt-0.5 block truncate text-xs text-amber-700">Message request sent</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {blockedContacts.length > 0 && (
+                    <div className="mb-3">
+                      <div className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                        Blocked Users
+                      </div>
+                      {blockedContacts.map((contact) => {
+                        const isSelected = selectedContactId === contact.userId;
+                        const isBusy = requestActionId === contact.chatId;
+                        return (
+                          <button
+                            type="button"
+                            key={`blocked-${contact.userId}`}
+                            onClick={() => {
+                              setSelectedContactId(contact.userId);
+                              setError('');
+                            }}
+                            className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
+                              isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
+                            }`}
+                          >
+                            <ContactAvatar contact={contact} status={contact.status} />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
+                                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-100">
+                                  Blocked
+                                </span>
+                              </span>
+                              <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                {isBusy ? 'Updating...' : 'Click to manage block'}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {acceptedConversationContacts.length > 0 && (
+                    <div className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                      Conversations
+                    </div>
+                  )}
+                  {acceptedConversationContacts.map((contact) => {
+                    const unreadCount = Number(contact.summary?.unreadCount) || 0;
+                    const isSelected = selectedContactId === contact.userId;
+                    return (
+                      <button
+                        type="button"
+                        key={`conversation-${contact.userId}`}
+                        onClick={() => {
+                          setSelectedContactId(contact.userId);
+                          setError('');
+                        }}
+                        className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
+                          isSelected ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'hover:bg-white hover:shadow-sm'
+                        }`}
+                      >
+                        <ContactAvatar contact={contact} status={contact.status} />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-semibold text-slate-950">{contact.displayName}</span>
+                            {unreadCount > 0 && (
+                              <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-blue-700 px-1.5 text-xs font-bold text-white">
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                              </span>
+                            )}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-slate-500">
+                            {formatConversationSnippet(contact.summary, contact, currentUserId)}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {messageRequests.length === 0 &&
+                    sentRequests.length === 0 &&
+                    acceptedConversationContacts.length === 0 && (
+                      <div className="px-4 py-8 text-center text-sm text-slate-500">
+                        No conversations yet. Search alumni to start a chat.
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
           </aside>
 
