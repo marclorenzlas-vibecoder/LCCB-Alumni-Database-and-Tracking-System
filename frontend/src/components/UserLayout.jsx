@@ -390,27 +390,28 @@ const UserLayout = ({ children }) => {
   const sidebarContent = (
     <>
       <div className="sidebar-top app-sidebar-pad flex h-14 shrink-0 items-center gap-1 border-b border-blue-800/50">
-        <button
-          type="button"
-          onClick={() => {
-            if (location.pathname !== "/dashboard") {
-              navigate("/dashboard");
-            }
-          }}
-          className="sidebar-brand-btn app-sidebar-row min-w-0 flex-1 rounded-lg hover:bg-blue-800/60"
-          title="Dashboard"
-        >
-          <span className="app-sidebar-track">
+        <div className="sidebar-brand-btn app-sidebar-row min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (location.pathname !== "/dashboard") {
+                navigate("/dashboard");
+              }
+            }}
+            className="app-sidebar-track rounded-lg transition-colors hover:bg-blue-800/60 cursor-pointer"
+            title="Dashboard"
+            aria-label="Dashboard"
+          >
             <img
               src={AlumniLogo}
               alt=""
               className="h-8 w-8 rounded-lg bg-white/95 p-0.5 object-contain"
             />
-          </span>
-          <span className="app-sidebar-label app-sidebar-fade truncate text-sm font-semibold text-white">
+          </button>
+          <span className="app-sidebar-label app-sidebar-fade truncate text-sm font-semibold text-white select-none">
             LCCB Admin
           </span>
-        </button>
+        </div>
         <SidebarPanelToggle
           onClick={toggleCollapsed}
           expanded={!isDesktopCollapsed}
@@ -438,40 +439,43 @@ const UserLayout = ({ children }) => {
         )}
       </nav>
 
-      <div className="app-sidebar-pad mt-auto shrink-0 border-t border-blue-800/50 py-1">
-        <div className="sidebar-footer-panel flex flex-col gap-px py-0.5">
-          <div
-            className="app-sidebar-row py-0.5"
-            title={isDesktopCollapsed ? displayName : undefined}
-          >
-            <span className="app-sidebar-track">
-              <span className="block h-8 w-8 overflow-hidden rounded-full border border-blue-400/40">
-                {renderProfileAvatar()}
-              </span>
+      <div className="app-sidebar-pad mt-auto shrink-0 border-t border-blue-800/50 py-2">
+        <div
+          className="sidebar-footer-panel flex items-center py-1.5"
+          title={isDesktopCollapsed ? `${displayName} (${roleLabel})` : undefined}
+        >
+          <span className="app-sidebar-track">
+            <span className="block h-8 w-8 overflow-hidden rounded-full border border-blue-400/40 shadow-xs">
+              {renderProfileAvatar()}
             </span>
-            <span className="app-sidebar-label app-sidebar-fade min-w-0">
-              <span className="block truncate text-sm font-medium text-white">
+          </span>
+          <span className="app-sidebar-fade min-w-0 flex-1">
+            <span className="block min-w-0 pl-2.5">
+              <span className="block truncate text-sm font-semibold leading-tight text-white">
                 {displayName}
               </span>
-              <span className="block truncate text-xs text-blue-200/75">
+              <span className="mt-0.5 block truncate text-[11px] font-medium text-blue-200/75">
                 {roleLabel}
               </span>
             </span>
-          </div>
-          <button
-            type="button"
-            onClick={openLogoutConfirm}
-            className="app-sidebar-logout-btn app-sidebar-row rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-500"
-            aria-label="Log out"
-            title={isDesktopCollapsed ? "Log out" : undefined}
+          </span>
+          <span
+            className={`app-sidebar-fade shrink-0 ${isDesktopCollapsed ? "pointer-events-none" : ""}`}
+            aria-hidden={isDesktopCollapsed}
           >
-            <span className="app-sidebar-track">
-              <LogoutIcon className="h-5 w-5" />
+            <span className="block pl-1.5 pr-2">
+              <button
+                type="button"
+                onClick={openLogoutConfirm}
+                tabIndex={isDesktopCollapsed ? -1 : undefined}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-blue-200/85 transition-colors hover:bg-red-500/25 hover:text-red-200 cursor-pointer"
+                aria-label="Log out"
+                title="Log out"
+              >
+                <LogoutIcon className="h-[18px] w-[18px]" />
+              </button>
             </span>
-            <span className="app-sidebar-label app-sidebar-fade truncate text-left">
-              Log out
-            </span>
-          </button>
+          </span>
         </div>
       </div>
     </>

@@ -2208,16 +2208,6 @@ const AlumniChatPanel = ({
             onDrop={handleDrop}
             className={`lccb-chat-conversation relative flex min-w-0 flex-col bg-white md:flex-1 ${selectedContact ? 'w-full' : 'hidden md:flex'}`}
           >
-            {/* Drag and Drop Overlay */}
-            {isDraggingOver && canSendMessage && (
-              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-blue-600/90 p-6 text-white backdrop-blur-xs border-4 border-dashed border-white pointer-events-none animate-in fade-in duration-150">
-                <svg className="h-16 w-16 mb-2 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p className="text-lg font-bold">Drop photos or videos here</p>
-                <p className="text-xs text-blue-100">Release to attach to your message</p>
-              </div>
-            )}
             {selectedContact ? (
               <>
                 <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
@@ -2313,7 +2303,18 @@ const AlumniChatPanel = ({
                   </div>
                 )}
 
-                <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
+                <div className="relative flex min-h-0 flex-1 flex-col">
+                  {/* Drag and Drop Overlay (covers only the chat messages area) */}
+                  {isDraggingOver && canSendMessage && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-blue-600/90 p-6 text-white backdrop-blur-xs border-4 border-dashed border-white pointer-events-none animate-in fade-in duration-150">
+                      <svg className="h-16 w-16 mb-2 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="text-lg font-bold">Drop photos or videos here</p>
+                      <p className="text-xs text-blue-100">Release to attach to your message</p>
+                    </div>
+                  )}
+                  <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
                   {visibleMessages.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
                       Start a conversation with {selectedContact.displayName}.
@@ -2646,6 +2647,7 @@ const AlumniChatPanel = ({
                       <div ref={messagesEndRef} />
                     </div>
                   )}
+                  </div>
                 </div>
 
                 <form onSubmit={handleSendMessage} className="border-t border-slate-200 bg-white p-4">

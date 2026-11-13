@@ -625,15 +625,15 @@ body::-webkit-scrollbar,
 /* Footer uses same track grid as nav — expanded card styling only */
 .sidebar-footer-panel {
     border-radius: 0.75rem;
-    border: 1px solid rgb(30 58 138 / 0.5);
+    box-shadow: inset 0 0 0 1px rgb(30 58 138 / 0.5);
     background-color: rgb(30 58 138 / 0.5);
     transition:
-        border-color 280ms cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 280ms cubic-bezier(0.4, 0, 0.2, 1),
         background-color 280ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .app-sidebar-aside[data-collapsed="true"] .sidebar-footer-panel {
-    border-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
     background-color: transparent;
 }
 
