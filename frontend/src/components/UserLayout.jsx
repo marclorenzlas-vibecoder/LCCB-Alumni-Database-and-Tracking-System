@@ -482,9 +482,7 @@ const UserLayout = ({ children }) => {
   );
 
   return (
-    <div
-      className={`bg-white ${isLargeScreen && isAdminSide ? "h-screen overflow-hidden" : "min-h-screen"}`}
-    >
+    <div className="min-h-screen bg-white">
       <ConfirmModal
         isOpen={confirmLogoutOpen}
         onClose={() => setConfirmLogoutOpen(false)}
@@ -510,10 +508,10 @@ const UserLayout = ({ children }) => {
       )}
 
       {isLargeScreen ? (
-        <div className="app-sidebar-shell h-full">
+        <div className="app-sidebar-shell">
           <div className="app-sidebar-rail-spacer" aria-hidden="true" />
           <aside
-            className="app-sidebar-aside flex h-full flex-col overflow-hidden border-r border-blue-800/50 bg-blue-950 text-white"
+            className="app-sidebar-aside flex flex-col overflow-hidden border-r border-blue-800/50 bg-blue-950 text-white"
             data-collapsed={isDesktopCollapsed ? "true" : "false"}
           >
             {sidebarContent}
@@ -526,7 +524,7 @@ const UserLayout = ({ children }) => {
             />
           )}
           <div
-            className="app-sidebar-main h-full overflow-y-auto overflow-x-hidden bg-white"
+            className="app-sidebar-main min-h-screen bg-white"
             data-sidebar-collapsed={isDesktopCollapsed ? "true" : "false"}
           >
             <main className="px-4 py-3 sm:px-5 lg:px-6 lg:py-4">

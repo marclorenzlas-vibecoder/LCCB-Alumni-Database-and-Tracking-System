@@ -530,15 +530,14 @@ body::-webkit-scrollbar,
 .app-sidebar-shell {
     position: relative;
     display: flex;
-    height: 100%;
+    min-height: 100vh;
     width: 100%;
-    overflow: hidden;
+    overflow-x: clip;
 }
 
 .app-sidebar-rail-spacer {
     width: 64px;
     min-width: 64px;
-    height: 100%;
     flex-shrink: 0;
 }
 
@@ -559,7 +558,7 @@ body::-webkit-scrollbar,
 
 /* In desktop shell: sidebar overlays content rather than compressing it */
 .app-sidebar-shell .app-sidebar-aside {
-    position: absolute;
+    position: fixed;
     top: 0;
     bottom: 0;
     left: 0;
@@ -575,10 +574,8 @@ body::-webkit-scrollbar,
 .app-sidebar-main {
     min-width: 0;
     flex: 1 1 0%;
-    height: 100%;
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    min-height: 100vh;
+    overflow-x: clip;
 }
 
 .app-sidebar-pad {
