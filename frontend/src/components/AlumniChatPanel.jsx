@@ -124,15 +124,25 @@ const formatConversationSnippet = (summary, contact, currentUserId) => {
       const parsed = JSON.parse(raw);
       if (parsed.mediaItems && parsed.mediaItems.length > 0) {
         if (parsed.mediaItems.length > 1) {
-          snippet = `${senderName} sent ${parsed.mediaItems.length} photos.`;
+          const allFiles = parsed.mediaItems.every((item) => item?.mediaType === 'file');
+          const allImages = parsed.mediaItems.every((item) => !item?.mediaType || item?.mediaType === 'image');
+          snippet = allFiles
+            ? `${senderName} sent ${parsed.mediaItems.length} files.`
+            : allImages
+              ? `${senderName} sent ${parsed.mediaItems.length} photos.`
+              : `${senderName} sent ${parsed.mediaItems.length} attachments.`;
         } else if (parsed.mediaItems[0].mediaType === 'video') {
           snippet = `${senderName} sent a video.`;
+        } else if (parsed.mediaItems[0].mediaType === 'file') {
+          snippet = `${senderName} sent a file.`;
         } else {
           snippet = `${senderName} sent a photo.`;
         }
       } else if (parsed.mediaUrl) {
         if (parsed.mediaType === 'video') {
           snippet = `${senderName} sent a video.`;
+        } else if (parsed.mediaType === 'file') {
+          snippet = `${senderName} sent a file.`;
         } else {
           snippet = `${senderName} sent a photo.`;
         }
@@ -145,11 +155,19 @@ const formatConversationSnippet = (summary, contact, currentUserId) => {
   }
 
   if (!snippet) {
-    // Check for multi-photo pattern like [photos:3] or 📷 3 photos
+    // Check for multi-photo / multi-file patterns
+    const multiFilesMatch = raw.match(/\[files?:(\d+)\]/i);
+    const multiAttachMatch = raw.match(/\[attachments?:(\d+)\]/i);
     const multiMatch = raw.match(/\[photos?:(\d+)\]/i) || raw.match(/📷\s*\[?(\d+)\s*photos?\]?/i);
-    if (multiMatch) {
+    if (multiFilesMatch) {
+      snippet = `${senderName} sent ${multiFilesMatch[1]} files.`;
+    } else if (multiAttachMatch) {
+      snippet = `${senderName} sent ${multiAttachMatch[1]} attachments.`;
+    } else if (multiMatch) {
       const count = multiMatch[1];
       snippet = `${senderName} sent ${count} photos.`;
+    } else if (raw === '[file]') {
+      snippet = `${senderName} sent a file.`;
     } else if (raw === '[video]' || raw.startsWith('🎥') || raw.toLowerCase().includes('video')) {
       snippet = `${senderName} sent a video.`;
     } else if (raw === '[photo]' || raw.startsWith('📷') || raw.toLowerCase().includes('photo')) {
@@ -332,125 +350,249 @@ const LinkPreviewCard = ({ url, isOwn }) => {
   );
 };
 
-const renderMessengerMediaGrid = (items, onSelectImage, isFlushWithCaption = false) => {
+const formatFileSize = (bytes) => {
+  const size = Number(bytes);
+  if (!size || Number.isNaN(size) || size <= 0) return '';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const getFileExtension = (fileName = '') => {
+  const parts = String(fileName || '').split('.');
+  if (parts.length < 2) return 'FILE';
+  const ext = parts.pop().trim().toUpperCase();
+  return ext ? ext.slice(0, 6) : 'FILE';
+};
+
+const isPreviewableFile = (item = {}) => {
+  const ext = getFileExtension(item.fileName).toLowerCase();
+  const mime = String(item.mimeType || '').toLowerCase();
+  if (mime === 'application/pdf' || ext === 'pdf') return true;
+  if (mime.startsWith('text/') || ['txt', 'csv', 'json', 'xml', 'md', 'log'].includes(ext)) return true;
+  if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(ext)) return true;
+  return false;
+};
+
+const downloadAttachmentFile = async (url, fileName = 'attachment') => {
+  if (!url) return;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Download failed');
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName || 'attachment';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+};
+
+const handleAttachmentFileClick = (item) => {
+  if (!item?.url) return;
+  if (isPreviewableFile(item)) {
+    window.open(item.url, '_blank', 'noopener,noreferrer');
+  } else {
+    downloadAttachmentFile(item.url, item.fileName || 'attachment');
+  }
+};
+
+const renderFileCard = (item, idx, isOwn = false, isFlushWithCaption = false) => {
+  const ext = getFileExtension(item.fileName);
+  const sizeLabel = formatFileSize(item.fileSize);
+  const canView = isPreviewableFile(item);
+  const subLabel = [ext, sizeLabel, canView ? 'Click to view' : 'Click to download']
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div
+      key={`file-${idx}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        handleAttachmentFileClick(item);
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          handleAttachmentFileClick(item);
+        }
+      }}
+      title={canView ? `View ${item.fileName || 'file'}` : `Download ${item.fileName || 'file'}`}
+      className={`group/file flex items-center gap-3 px-3 py-2.5 min-w-[220px] max-w-[300px] cursor-pointer transition-colors ${
+        isFlushWithCaption
+          ? isOwn
+            ? 'bg-blue-950/35 hover:bg-blue-950/50 text-white border-b border-white/10'
+            : 'bg-slate-50 hover:bg-slate-100 text-slate-900 border-b border-slate-200/80'
+          : isOwn
+            ? 'rounded-2xl rounded-br-md bg-blue-900 hover:bg-blue-800 text-white shadow-xs'
+            : 'rounded-2xl rounded-bl-md bg-white hover:bg-slate-50 text-slate-900 border border-slate-200/90 shadow-xs'
+      }`}
+    >
+      <div
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[10px] font-bold tracking-wide ${
+          isOwn ? 'bg-white/15 text-white' : 'bg-blue-50 text-blue-700 border border-blue-100'
+        }`}
+      >
+        {ext}
+      </div>
+      <div className="min-w-0 flex-1 text-left">
+        <p className="truncate text-[13.5px] font-semibold leading-tight">
+          {item.fileName || 'Attachment'}
+        </p>
+        <p className={`mt-0.5 truncate text-[11px] ${isOwn ? 'text-blue-200/85' : 'text-slate-500'}`}>
+          {subLabel}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const renderMessengerMediaGrid = (items, onSelectImage, isFlushWithCaption = false, isOwn = false) => {
   if (!items || !items.length) return null;
   const roundedClass = isFlushWithCaption ? 'rounded-t-2xl rounded-b-none' : 'rounded-2xl';
 
-  if (items.length === 1) {
-    const item = items[0];
-    if (item.mediaType === 'video') {
+  const indexedItems = items.map((item, idx) => ({ item, idx }));
+  const mediaEntries = indexedItems.filter(({ item }) => item.mediaType !== 'file');
+  const fileEntries = indexedItems.filter(({ item }) => item.mediaType === 'file');
+
+  const renderMediaSection = () => {
+    if (!mediaEntries.length) return null;
+    if (mediaEntries.length === 1) {
+      const { item, idx } = mediaEntries[0];
+      if (item.mediaType === 'video') {
+        return (
+          <video
+            src={item.url}
+            controls
+            playsInline
+            preload="metadata"
+            onClick={(e) => e.stopPropagation()}
+            className={`max-h-80 w-full ${roundedClass} object-contain bg-black shadow-xs block`}
+          />
+        );
+      }
       return (
-        <video
+        <img
           src={item.url}
-          controls
-          playsInline
-          preload="metadata"
-          onClick={(e) => e.stopPropagation()}
-          className={`max-h-80 w-full ${roundedClass} object-contain bg-black shadow-xs block`}
+          alt={item.fileName || 'Photo'}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectImage(idx);
+          }}
+          className={`max-h-80 w-full ${roundedClass} object-cover shadow-xs transition-opacity duration-150 hover:opacity-95 cursor-pointer block`}
         />
       );
     }
-    return (
-      <img
-        src={item.url}
-        alt={item.fileName || 'Photo'}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelectImage(0);
-        }}
-        className={`max-h-80 w-full ${roundedClass} object-cover shadow-xs transition-opacity duration-150 hover:opacity-95 cursor-pointer block`}
-      />
-    );
-  }
 
-  if (items.length === 2) {
-    return (
-      <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
-        {items.map((item, idx) => (
-          <div
-            key={idx}
-            className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectImage(idx);
-            }}
-          >
-            {item.mediaType === 'video' ? (
-              <video src={item.url} className="h-full w-full object-cover" />
-            ) : (
-              <img src={item.url} alt="Photo" className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (items.length === 3) {
-    return (
-      <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
-        <div
-          className="col-span-2 relative aspect-[16/9] overflow-hidden bg-slate-900 cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectImage(0);
-          }}
-        >
-          {items[0].mediaType === 'video' ? (
-            <video src={items[0].url} className="h-full w-full object-cover" />
-          ) : (
-            <img src={items[0].url} alt="Photo" className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
-          )}
+    if (mediaEntries.length === 2) {
+      return (
+        <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
+          {mediaEntries.map(({ item, idx }) => (
+            <div
+              key={idx}
+              className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectImage(idx);
+              }}
+            >
+              {item.mediaType === 'video' ? (
+                <video src={item.url} className="h-full w-full object-cover" />
+              ) : (
+                <img src={item.url} alt={item.fileName || 'Photo'} className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
+              )}
+            </div>
+          ))}
         </div>
-        {items.slice(1, 3).map((item, idx) => (
+      );
+    }
+
+    if (mediaEntries.length === 3) {
+      return (
+        <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
           <div
-            key={idx}
-            className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer"
+            className="col-span-2 relative aspect-[16/9] overflow-hidden bg-slate-900 cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
-              onSelectImage(idx + 1);
+              onSelectImage(mediaEntries[0].idx);
             }}
           >
-            {item.mediaType === 'video' ? (
-              <video src={item.url} className="h-full w-full object-cover" />
+            {mediaEntries[0].item.mediaType === 'video' ? (
+              <video src={mediaEntries[0].item.url} className="h-full w-full object-cover" />
             ) : (
-              <img src={item.url} alt="Photo" className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
+              <img src={mediaEntries[0].item.url} alt={mediaEntries[0].item.fileName || 'Photo'} className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
             )}
           </div>
-        ))}
+          {mediaEntries.slice(1, 3).map(({ item, idx }) => (
+            <div
+              key={idx}
+              className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectImage(idx);
+              }}
+            >
+              {item.mediaType === 'video' ? (
+                <video src={item.url} className="h-full w-full object-cover" />
+              ) : (
+                <img src={item.url} alt={item.fileName || 'Photo'} className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    const displayEntries = mediaEntries.slice(0, 4);
+    const remainingCount = mediaEntries.length - 4;
+
+    return (
+      <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
+        {displayEntries.map(({ item, idx }, pos) => {
+          const isFourthWithMore = pos === 3 && remainingCount > 0;
+          return (
+            <div
+              key={idx}
+              className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer group"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectImage(idx);
+              }}
+            >
+              {item.mediaType === 'video' ? (
+                <video src={item.url} className="h-full w-full object-cover" />
+              ) : (
+                <img src={item.url} alt={item.fileName || 'Photo'} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
+              )}
+              {isFourthWithMore && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center text-white font-bold text-2xl transition-colors hover:bg-black/50">
+                  +{remainingCount + 1}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
-  }
+  };
 
-  const displayItems = items.slice(0, 4);
-  const remainingCount = items.length - 4;
+  if (fileEntries.length === 0) {
+    return renderMediaSection();
+  }
 
   return (
-    <div className={`grid grid-cols-2 gap-1 ${roundedClass} overflow-hidden max-w-[360px] shadow-xs`}>
-      {displayItems.map((item, idx) => {
-        const isFourthWithMore = idx === 3 && remainingCount > 0;
-        return (
-          <div
-            key={idx}
-            className="relative aspect-square overflow-hidden bg-slate-900 cursor-pointer group"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectImage(idx);
-            }}
-          >
-            {item.mediaType === 'video' ? (
-              <video src={item.url} className="h-full w-full object-cover" />
-            ) : (
-              <img src={item.url} alt="Photo" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
-            )}
-            {isFourthWithMore && (
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center text-white font-bold text-2xl transition-colors hover:bg-black/50">
-                +{remainingCount + 1}
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className={`flex flex-col ${isFlushWithCaption ? '' : 'gap-1.5'} ${isOwn ? 'items-end' : 'items-start'}`}>
+      {renderMediaSection()}
+      {fileEntries.map(({ item, idx }) => renderFileCard(item, idx, isOwn, isFlushWithCaption))}
     </div>
   );
 };
@@ -1388,22 +1530,22 @@ const AlumniChatPanel = ({
     const valid = [];
 
     for (const file of incomingFiles) {
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        setError('Only image and video files are supported.');
-        continue;
-      }
       if (file.size > 50 * 1024 * 1024) {
         setError(`File "${file.name}" is too large (max 50MB).`);
         continue;
       }
-      const previewUrl = URL.createObjectURL(file);
-      const isVideo = file.type.startsWith('video/');
+      const mime = String(file.type || '').toLowerCase();
+      const isImage = mime.startsWith('image/');
+      const isVideo = mime.startsWith('video/');
+      const mediaType = isImage ? 'image' : isVideo ? 'video' : 'file';
+      const previewUrl = isImage || isVideo ? URL.createObjectURL(file) : '';
       valid.push({
         file,
         previewUrl,
-        mediaType: isVideo ? 'video' : 'image',
+        mediaType,
         fileName: file.name,
-        fileSize: file.size
+        fileSize: file.size,
+        mimeType: file.type || ''
       });
     }
 
@@ -1482,11 +1624,12 @@ const AlumniChatPanel = ({
       : payload.text;
     const resolvedMediaUrl = message.mediaUrl || message.mediaItems?.[0]?.url || payload.mediaUrl || payload.mediaItems?.[0]?.url || '';
     const resolvedMediaType = message.mediaType || message.mediaItems?.[0]?.mediaType || payload.mediaType || payload.mediaItems?.[0]?.mediaType || '';
+    const resolvedFileName = message.fileName || message.mediaItems?.[0]?.fileName || payload.fileName || payload.mediaItems?.[0]?.fileName || '';
     setReplyingTo({
       id: message.id,
       senderId: message.senderId,
       senderName: isOwn ? 'You' : (selectedContact?.displayName || 'User'),
-      text: resolvedText || (resolvedMediaUrl ? (resolvedMediaType === 'video' ? '[Video]' : '[Photo]') : ''),
+      text: resolvedText || (resolvedMediaUrl ? (resolvedMediaType === 'video' ? '[Video]' : resolvedMediaType === 'file' ? (resolvedFileName || '[File]') : '[Photo]') : ''),
       mediaUrl: resolvedMediaUrl,
       mediaType: resolvedMediaType
     });
@@ -1551,7 +1694,9 @@ const AlumniChatPanel = ({
       mediaItems: attachmentsToSend.map((att) => ({
         url: att.previewUrl,
         mediaType: att.mediaType,
-        fileName: att.fileName
+        fileName: att.fileName,
+        fileSize: att.fileSize,
+        mimeType: att.mimeType
       })),
       mediaUrl: attachmentsToSend[0]?.previewUrl || '',
       mediaType: attachmentsToSend[0]?.mediaType || '',
@@ -1574,7 +1719,9 @@ const AlumniChatPanel = ({
         uploadedMediaItems = uploadResults.map((res) => ({
           url: res.url,
           mediaType: res.mediaType,
-          fileName: res.fileName
+          fileName: res.fileName,
+          fileSize: res.fileSize,
+          mimeType: res.mimeType
         }));
       }
 
@@ -2407,18 +2554,18 @@ const AlumniChatPanel = ({
                                                 : 'bg-slate-200/70 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300'
                                             }`}
                                           >
-                                            {replyData.mediaUrl && (
+                                            {replyData.mediaUrl && replyData.mediaType !== 'file' && (
                                               <img
                                                 src={replyData.mediaUrl}
                                                 alt=""
                                                 className={`h-12 w-12 rounded-xl object-cover opacity-80 ${
-                                                  replyData.text && replyData.text !== '[Photo]' && replyData.text !== '[Video]' && replyData.text !== 'Attachment'
+                                                  replyData.text && replyData.text !== '[Photo]' && replyData.text !== '[Video]' && replyData.text !== '[File]' && replyData.text !== 'Attachment'
                                                     ? 'mb-1.5'
                                                     : ''
                                                 }`}
                                               />
                                             )}
-                                            {(!replyData.mediaUrl || (replyData.text && replyData.text !== '[Photo]' && replyData.text !== '[Video]' && replyData.text !== 'Attachment')) && (
+                                            {(!replyData.mediaUrl || replyData.mediaType === 'file' || (replyData.text && replyData.text !== '[Photo]' && replyData.text !== '[Video]' && replyData.text !== '[File]' && replyData.text !== 'Attachment')) && (
                                               <p className="line-clamp-2 break-words">
                                                 {replyData.text || 'Attachment'}
                                               </p>
@@ -2528,12 +2675,22 @@ const AlumniChatPanel = ({
                                                 onClick={() => setClickedMessageId(clickedMessageId === message.id ? null : message.id)}
                                                 className="max-w-[85%] rounded-2xl overflow-hidden cursor-pointer"
                                               >
-                                                {renderMessengerMediaGrid(mediaItems, (imgIndex) => {
-                                                  setLightboxState({
-                                                    items: mediaItems,
-                                                    index: imgIndex
-                                                  });
-                                                })}
+                                                {renderMessengerMediaGrid(
+                                                  mediaItems,
+                                                  (imgIndex) => {
+                                                    const onlyMedia = mediaItems.filter((item) => item.mediaType !== 'file');
+                                                    const clickedItem = mediaItems[imgIndex];
+                                                    const mappedIndex = onlyMedia.indexOf(clickedItem);
+                                                    if (mappedIndex !== -1) {
+                                                      setLightboxState({
+                                                        items: onlyMedia,
+                                                        index: mappedIndex
+                                                      });
+                                                    }
+                                                  },
+                                                  false,
+                                                  isOwn
+                                                )}
                                               </div>
                                             );
                                           }
@@ -2559,12 +2716,18 @@ const AlumniChatPanel = ({
                                                     {renderMessengerMediaGrid(
                                                       mediaItems,
                                                       (imgIndex) => {
-                                                        setLightboxState({
-                                                          items: mediaItems,
-                                                          index: imgIndex
-                                                        });
+                                                        const onlyMedia = mediaItems.filter((item) => item.mediaType !== 'file');
+                                                        const clickedItem = mediaItems[imgIndex];
+                                                        const mappedIndex = onlyMedia.indexOf(clickedItem);
+                                                        if (mappedIndex !== -1) {
+                                                          setLightboxState({
+                                                            items: onlyMedia,
+                                                            index: mappedIndex
+                                                          });
+                                                        }
                                                       },
-                                                      true
+                                                      true,
+                                                      isOwn
                                                     )}
                                                   </div>
                                                   <div className="px-3.5 py-2.5 text-[15px] leading-relaxed">
@@ -2675,27 +2838,57 @@ const AlumniChatPanel = ({
                       </div>
                       <div className="flex gap-2 overflow-x-auto pb-1">
                         {pendingAttachments.map((att, idx) => (
-                          <div key={idx} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-blue-200 bg-slate-900 shadow-xs group">
-                            {att.mediaType === 'video' ? (
-                              <video src={att.previewUrl} className="h-full w-full object-cover" />
-                            ) : (
-                              <img src={att.previewUrl} alt={att.fileName} className="h-full w-full object-cover" />
-                            )}
-                            <span className="absolute bottom-0 right-0 rounded-tl bg-blue-700 px-1 text-[8px] font-bold text-white uppercase">
-                              {att.mediaType === 'video' ? 'VID' : 'IMG'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveAttachment(idx)}
-                              className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-red-600 cursor-pointer"
-                              title="Remove file"
-                              aria-label="Remove file"
+                          att.mediaType === 'file' ? (
+                            <div
+                              key={idx}
+                              className="relative flex h-16 w-40 shrink-0 items-center gap-2 overflow-hidden rounded-lg border border-blue-200 bg-white px-2.5 pr-6 shadow-xs"
                             >
-                              <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          </div>
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[10px] font-bold text-blue-700 border border-blue-100">
+                                {getFileExtension(att.fileName)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-semibold text-slate-800" title={att.fileName}>
+                                  {att.fileName}
+                                </p>
+                                <p className="truncate text-[10px] text-slate-500">
+                                  {formatFileSize(att.fileSize) || 'File'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAttachment(idx)}
+                                className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-700/80 text-white transition hover:bg-red-600 cursor-pointer"
+                                title="Remove file"
+                                aria-label="Remove file"
+                              >
+                                <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                          ) : (
+                            <div key={idx} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-blue-200 bg-slate-900 shadow-xs group">
+                              {att.mediaType === 'video' ? (
+                                <video src={att.previewUrl} className="h-full w-full object-cover" />
+                              ) : (
+                                <img src={att.previewUrl} alt={att.fileName} className="h-full w-full object-cover" />
+                              )}
+                              <span className="absolute bottom-0 right-0 rounded-tl bg-blue-700 px-1 text-[8px] font-bold text-white uppercase">
+                                {att.mediaType === 'video' ? 'VID' : 'IMG'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAttachment(idx)}
+                                className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-red-600 cursor-pointer"
+                                title="Remove file"
+                                aria-label="Remove file"
+                              >
+                                <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                          )
                         ))}
                       </div>
                     </div>
@@ -2719,7 +2912,7 @@ const AlumniChatPanel = ({
                           </p>
                         </div>
                       </div>
-                      {replyingTo.mediaUrl && (
+                      {replyingTo.mediaUrl && replyingTo.mediaType !== 'file' && (
                         <div className="h-8 w-8 rounded overflow-hidden bg-slate-200 shrink-0 border border-blue-200">
                           <img src={replyingTo.mediaUrl} alt="" className="h-full w-full object-cover" />
                         </div>
@@ -2742,7 +2935,6 @@ const AlumniChatPanel = ({
                     <input
                       type="file"
                       ref={fileInputRef}
-                      accept="image/*,video/*"
                       multiple
                       onChange={handleFileSelect}
                       className="hidden"
@@ -2754,7 +2946,7 @@ const AlumniChatPanel = ({
                       onClick={() => fileInputRef.current?.click()}
                       disabled={!canSendMessage || isSending || isUploadingMedia}
                       className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
-                      title="Attach images or videos"
+                      title="Attach files, images, or videos"
                     >
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />

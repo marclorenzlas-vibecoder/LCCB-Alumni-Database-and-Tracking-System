@@ -21,7 +21,7 @@ const uploadToSupabase = async (file, folder) => {
     .storage
     .from('alumni-uploads')
     .upload(fullPath, file.buffer, {
-      contentType: file.mimetype,
+      contentType: file.mimetype || 'application/octet-stream',
       upsert: true
     });
 

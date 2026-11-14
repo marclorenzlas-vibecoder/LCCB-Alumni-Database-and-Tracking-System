@@ -565,7 +565,8 @@ export const uploadChatMedia = async (fileOrFiles) => {
     url: data.url,
     mediaType: data.mediaType,
     fileName: data.fileName,
-    fileSize: data.fileSize
+    fileSize: data.fileSize,
+    mimeType: data.mimeType
   }];
 
   return returnedFiles;
@@ -674,10 +675,15 @@ export const sendChatMessage = async ({
 
     if (allMediaItems.length > 0 || replyTo) {
       const isMulti = allMediaItems.length > 1;
-      const firstIsVideo = allMediaItems[0]?.mediaType === 'video';
+      const firstType = allMediaItems[0]?.mediaType || 'image';
+      const allFiles = allMediaItems.every((item) => item?.mediaType === 'file');
+      const allImages = allMediaItems.every((item) => !item?.mediaType || item?.mediaType === 'image');
       if (allMediaItems.length > 0) {
-        messageType = firstIsVideo ? 'video' : 'image';
+        messageType = firstType === 'video' ? 'video' : firstType === 'file' ? 'file' : 'image';
       }
+      const replyMediaFallback = replyTo?.mediaItems?.length || replyTo?.mediaUrl
+        ? (replyTo.mediaType === 'video' ? '[video]' : replyTo.mediaType === 'file' ? '[file]' : '[photo]')
+        : '';
       messagePayload = JSON.stringify({
         mediaItems: allMediaItems,
         mediaUrl: allMediaItems[0]?.url || '',
@@ -689,15 +695,15 @@ export const sendChatMessage = async ({
           id: replyTo.id,
           senderId: replyTo.senderId,
           senderName: replyTo.senderName || '',
-          text: replyTo.text || (replyTo.mediaItems?.length ? (replyTo.mediaType === 'video' ? '[video]' : '[photo]') : ''),
+          text: replyTo.text || replyMediaFallback,
           mediaUrl: replyTo.mediaUrl || (replyTo.mediaItems?.[0]?.url || ''),
           mediaType: replyTo.mediaType || (replyTo.mediaItems?.[0]?.mediaType || '')
         } : null
       });
       if (allMediaItems.length > 0) {
         lastMessageSummary = isMulti
-          ? `[photos:${allMediaItems.length}]`
-          : (firstIsVideo ? '[video]' : '[photo]');
+          ? (allFiles ? `[files:${allMediaItems.length}]` : allImages ? `[photos:${allMediaItems.length}]` : `[attachments:${allMediaItems.length}]`)
+          : (firstType === 'video' ? '[video]' : firstType === 'file' ? '[file]' : '[photo]');
       }
     }
 
@@ -799,9 +805,13 @@ export const unsendMessage = async (messageId, chatId) => {
 
       if (latestMsg) {
         const parsed = parseMessagePayload(latestMsg.message, latestMsg.type);
+        const firstMediaType = parsed.mediaItems?.[0]?.mediaType || parsed.mediaType;
+        const mediaFallback = parsed.mediaItems?.length
+          ? (firstMediaType === 'file' ? '[file]' : firstMediaType === 'video' ? '[video]' : '[photo]')
+          : '';
         const lastMsgText = parsed.isUnsent
           ? 'Unsent a message'
-          : (parsed.text || (parsed.mediaItems?.length ? '[photo]' : ''));
+          : (parsed.text || mediaFallback);
         await supabase
           .from('chat_conversations')
           .update({

@@ -7,20 +7,11 @@ const cheerio = require('cheerio');
 const { authenticateToken } = require('../middleware/auth');
 const { uploadToSupabase } = require('../services/storageService');
 
-// Configure multer memory storage with 50MB limit for photos/videos
+// Configure multer memory storage with 50MB limit for chat files
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 50 * 1024 * 1024 // 50MB
-  },
-  fileFilter: (req, file, cb) => {
-    const isImage = file.mimetype.startsWith('image/');
-    const isVideo = file.mimetype.startsWith('video/');
-    if (isImage || isVideo) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image and video files are supported.'));
-    }
   }
 });
 
@@ -41,7 +32,7 @@ const handleUpload = (req, res, next) => {
 
 /**
  * POST /api/chat/upload
- * Upload image or video to Supabase Storage for chat (supports single or multiple files)
+ * Upload images, videos, or any files to Supabase Storage for chat (supports single or multiple files)
  */
 router.post('/upload', authenticateToken, handleUpload, async (req, res) => {
   try {
@@ -52,9 +43,11 @@ router.post('/upload', authenticateToken, handleUpload, async (req, res) => {
 
     const uploaded = await Promise.all(
       rawFiles.map(async (file) => {
-        const isVideo = file.mimetype.startsWith('video/');
-        const mediaType = isVideo ? 'video' : 'image';
-        const folder = isVideo ? 'chat/videos' : 'chat/images';
+        const mime = String(file.mimetype || '').toLowerCase();
+        const isImage = mime.startsWith('image/');
+        const isVideo = mime.startsWith('video/');
+        const mediaType = isImage ? 'image' : isVideo ? 'video' : 'file';
+        const folder = isImage ? 'chat/images' : isVideo ? 'chat/videos' : 'chat/files';
 
         const publicUrl = await uploadToSupabase(file, folder);
 
@@ -63,7 +56,7 @@ router.post('/upload', authenticateToken, handleUpload, async (req, res) => {
           mediaType,
           fileName: file.originalname,
           fileSize: file.size,
-          mimeType: file.mimetype
+          mimeType: file.mimetype || 'application/octet-stream'
         };
       })
     );

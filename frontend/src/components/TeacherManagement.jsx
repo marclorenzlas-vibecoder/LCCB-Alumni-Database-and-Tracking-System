@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
 import ConfirmModal from './ConfirmModal';
 import { API_BASE_URL } from '../config/apiBaseUrl';
 import UserLayout from './UserLayout';
@@ -140,13 +141,18 @@ const TeacherManagement = () => {
         throw new Error(await readResponseError(response, editingTeacherId ? 'Failed to update teacher account' : 'Failed to create teacher account'));
       }
 
-      setSuccess(editingTeacherId ? 'Teacher account updated successfully!' : 'Teacher account created successfully!');
+      const successMessage = editingTeacherId
+        ? 'Teacher account updated successfully!'
+        : 'Teacher account created successfully!';
+      setSuccess(successMessage);
+      toast.success(successMessage);
       setShowAddModal(false);
       setEditingTeacherId(null);
       setFormData({ username: '', email: '', password: '' });
       fetchTeachers();
     } catch (err) {
       setError(err.message);
+      toast.error(err.message || 'Failed to save teacher account');
     } finally {
       setLoading(false);
     }
@@ -161,17 +167,22 @@ const TeacherManagement = () => {
       onConfirm: async () => {
         try {
           const token = localStorage.getItem('token');
-          await fetch(`${API_BASE_URL}/auth/teachers/${id}`, {
+          const response = await fetch(`${API_BASE_URL}/auth/teachers/${id}`, {
             method: 'DELETE',
             headers: {
               'Authorization': `Bearer ${token}`
             }
           });
+          if (!response.ok) {
+            throw new Error(await readResponseError(response, 'Failed to delete teacher account'));
+          }
+          toast.success(`${teacherName}'s account deleted successfully!`);
           fetchTeachers();
-          setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
           console.error('Error deleting teacher:', err);
-          setConfirmModal({ ...confirmModal, isOpen: false });
+          toast.error(err.message || 'Failed to delete teacher account');
+        } finally {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
         }
       }
     });
