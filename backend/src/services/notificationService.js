@@ -368,9 +368,102 @@ async function deleteAllNotifications(userId) {
   }
 }
 
+/**
+ * Notify all active admin/teacher accounts about a new pending post
+ */
+async function notifyAdminsOfPendingPost({
+  type = 'GENERAL',
+  title,
+  message,
+  link = '/pending-approval',
+  senderName = null,
+  senderProfileImage = null
+}) {
+  try {
+    const staffUsers = await prisma.user.findMany({
+      where: {
+        role: { in: ['ADMIN', 'STAFF'] },
+        is_active: true,
+        is_blocked: false
+      },
+      select: {
+        id: true,
+        email: true,
+        notification_enabled: true
+      }
+    });
+
+    const recipientMap = new Map();
+    for (const staff of staffUsers) {
+      if (staff.notification_enabled === false) continue;
+      recipientMap.set(staff.id, staff.id);
+    }
+
+    // Also include all teachers from the teacher table (matching registration notifications)
+    const teachers = await prisma.teacher.findMany({
+      select: { id: true, email: true, username: true, password: true }
+    });
+
+    for (const teacher of teachers) {
+      if (!teacher.email) continue;
+      let teacherUser = await prisma.user.findUnique({
+        where: { email: teacher.email },
+        select: {
+          id: true,
+          email: true,
+          notification_enabled: true
+        }
+      });
+
+      if (!teacherUser) {
+        teacherUser = await prisma.user.create({
+          data: {
+            email: teacher.email,
+            username: teacher.username || teacher.email.split('@')[0],
+            role: 'ADMIN',
+            approval_status: 'APPROVED',
+            is_active: true,
+            password: teacher.password
+          },
+          select: {
+            id: true,
+            email: true,
+            notification_enabled: true
+          }
+        });
+      }
+
+      if (teacherUser.notification_enabled === false) continue;
+      recipientMap.set(teacherUser.id, teacherUser.id);
+    }
+
+    const recipientIds = Array.from(recipientMap.values());
+    if (!recipientIds.length) return 0;
+
+    await Promise.allSettled(
+      recipientIds.map((staffUserId) =>
+        createUserNotification(staffUserId, {
+          type,
+          title,
+          message,
+          link,
+          senderName,
+          senderProfileImage
+        })
+      )
+    );
+
+    return recipientIds.length;
+  } catch (error) {
+    console.error('Error notifying admins of pending post:', error);
+    return 0;
+  }
+}
+
 module.exports = {
   createNotifications,
   createUserNotification,
+  notifyAdminsOfPendingPost,
   getUserNotifications,
   markAsRead,
   markAllAsRead,

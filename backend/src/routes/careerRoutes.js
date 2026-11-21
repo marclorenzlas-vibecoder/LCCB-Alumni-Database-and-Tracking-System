@@ -180,7 +180,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     if (isOwnerAlumni && program_alignment && !manualAlignment) {
       return res.status(400).json({
-        error: 'Program match must be Related, Not Related, or Needs Checking',
+        error: 'Program match must be Related, Not Related, or Not Specified',
         allowed: ['ALIGNED', 'NOT_ALIGNED', 'NEEDS_REVIEW']
       });
     }
@@ -277,7 +277,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       const manualAlignment = normalizeProgramAlignment(program_alignment);
       if (!manualAlignment) {
         return res.status(400).json({
-          error: 'Program match must be Related, Not Related, or Needs Checking',
+          error: 'Program match must be Related, Not Related, or Not Specified',
           allowed: ['ALIGNED', 'NOT_ALIGNED', 'NEEDS_REVIEW']
         });
       }

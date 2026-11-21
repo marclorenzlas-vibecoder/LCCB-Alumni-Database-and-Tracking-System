@@ -67,9 +67,17 @@ const getBellDateGroup = (value) => {
   return "Earlier";
 };
 
+const isPendingApprovalNotification = (notification) => {
+  const link = String(notification?.link || "").toLowerCase();
+  return link.startsWith("/pending-approval");
+};
+
 const isUrgentNotification = (notification) => (
   !notification?.is_read &&
-  ["REGISTRATION", "JOB_APPLICATION"].includes(getEffectiveNotificationType(notification))
+  (
+    ["REGISTRATION", "JOB_APPLICATION"].includes(getEffectiveNotificationType(notification)) ||
+    isPendingApprovalNotification(notification)
+  )
 );
 
 const sortNotifications = (notifications) => (
@@ -600,11 +608,21 @@ const Navbar = () => {
       "notification.created",
       handleNotificationCreated,
     );
+    const unsubscribePendingAch = realtimeClient.subscribe(
+      "achievement.pending",
+      handleNotificationCreated,
+    );
+    const unsubscribePendingJob = realtimeClient.subscribe(
+      "job.pending",
+      handleNotificationCreated,
+    );
 
     return () => {
       window.removeEventListener("auth-user-updated", handleProfileUpdated);
       window.removeEventListener("storage", handleStorageChange);
       unsubscribeNotification();
+      unsubscribePendingAch();
+      unsubscribePendingJob();
     };
   }, [fetchNotifications, syncUserFromStorage, user?.role]);
 

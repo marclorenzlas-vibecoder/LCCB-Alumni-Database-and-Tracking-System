@@ -13,7 +13,7 @@ import FilterMenu from './FilterMenu';
 import MobileFilterButton from './MobileFilterButton';
 import CardSkeleton from './CardSkeleton';
 
-const STANDARD_CATEGORIES = ['Professional', 'Leadership', 'Business', 'Community Service', 'Affiliate'];
+const STANDARD_CATEGORIES = ['Professional', 'Leadership', 'Business', 'Community Service', 'Batch Event', 'Academic', 'Affiliate'];
 
 const getAchievementYear = (dateValue) => {
   if (!dateValue) return null;
@@ -84,9 +84,12 @@ function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
       </div>
 
       <div className="flex flex-col flex-1 px-6 pb-6 pt-5">
-        {(achievement.alumni_name || achievement.alumni) && (
+        {(achievement.posted_by_name || achievement.alumni_name || achievement.alumni || achievement.batch_label) && (
           <p className="text-sm text-gray-600 font-semibold mb-1">
-            {achievement.alumni_name || `${achievement.alumni.first_name} ${achievement.alumni.last_name}`}
+            {achievement.posted_by_name
+              || achievement.alumni_name
+              || (achievement.alumni ? `${achievement.alumni.first_name} ${achievement.alumni.last_name}` : null)
+              || achievement.batch_label}
           </p>
         )}
 
@@ -150,12 +153,15 @@ const Achievements = () => {
   const [achievements, setAchievements] = useState([]);
   const [alumniList, setAlumniList] = useState([]);
   const isTeacher = authService.isTeacher();
+  const currentUser = authService.getCurrentUser();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alumniSearch, setAlumniSearch] = useState('');
   const [showAlumniSuggestions, setShowAlumniSuggestions] = useState(false);
   const [formData, setFormData] = useState({
+    achievement_scope: 'INDIVIDUAL',
     alumni_id: '',
+    batch_label: '',
     title: '',
     category: '',
     description: '',
@@ -386,8 +392,8 @@ const Achievements = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.alumni_id) {
-      setError('Select an alumni from the suggestions before saving.');
+    if (!formData.title.trim()) {
+      setError('Please enter an achievement name.');
       return;
     }
     setLoading(true);
@@ -401,7 +407,7 @@ const Achievements = () => {
       let payload;
       if (formData.image || formData.video) {
         const fd = new FormData();
-        fd.append('alumni_id', formData.alumni_id);
+        fd.append('achievement_scope', 'GENERAL');
         fd.append('title', formData.title);
         fd.append('category', categoryToSave);
         if (formData.description) fd.append('description', formData.description);
@@ -411,7 +417,7 @@ const Achievements = () => {
         payload = fd;
       } else {
         payload = {
-          alumni_id: formData.alumni_id,
+          achievement_scope: 'GENERAL',
           title: formData.title,
           category: categoryToSave,
           description: formData.description,
@@ -422,13 +428,22 @@ const Achievements = () => {
       if (editingId) {
         // Update existing achievement
         const updated = await achievementService.updateAchievement(editingId, payload);
-        setAchievements(prev => prev.map(a => a.id === editingId ? updated : a));
-        toast.success('Achievement updated successfully!');
+        if (updated?.approval_status === 'PENDING' && !isTeacher) {
+          setAchievements(prev => prev.filter(a => a.id !== editingId));
+          toast.info('Achievement updated and submitted for admin approval.');
+        } else {
+          setAchievements(prev => prev.map(a => a.id === editingId ? updated : a));
+          toast.success('Achievement updated successfully!');
+        }
       } else {
         // Create new achievement
         const newAchievement = await achievementService.createAchievement(payload);
-        setAchievements(prev => [...prev, newAchievement]);
-        toast.success('Achievement added successfully!');
+        if (newAchievement?.approval_status === 'PENDING' && !isTeacher) {
+          toast.info('Achievement submitted! Waiting for admin approval.');
+        } else {
+          setAchievements(prev => [...prev, newAchievement]);
+          toast.success('Achievement added successfully!');
+        }
       }
       
       setShowModal(false);
@@ -438,7 +453,9 @@ const Achievements = () => {
       setModalCategorySelect('');
       setCustomModalCategory('');
       setFormData({
+        achievement_scope: 'INDIVIDUAL',
         alumni_id: '',
+        batch_label: '',
         title: '',
         category: '',
         description: '',
@@ -468,7 +485,9 @@ const Achievements = () => {
       setCustomModalCategory('');
     }
     setFormData({
+      achievement_scope: achievement.achievement_scope || (achievement.alumni_id ? 'INDIVIDUAL' : achievement.batch_label ? 'BATCH' : 'GENERAL'),
       alumni_id: achievement.alumni_id || '',
+      batch_label: achievement.batch_label || '',
       title: achievement.title || '',
       category: cat,
       description: achievement.description || '',
@@ -515,8 +534,8 @@ const Achievements = () => {
     const q = searchTerm.trim().toLowerCase();
     if (q) {
       result = result.filter(a => {
-        const alumniName = a.alumni_name || (a.alumni ? `${a.alumni.first_name} ${a.alumni.last_name}` : '');
-        return [a.title, a.category, a.description, alumniName]
+        const alumniName = a.posted_by_name || a.alumni_name || (a.alumni ? `${a.alumni.first_name} ${a.alumni.last_name}` : '');
+        return [a.title, a.category, a.description, alumniName, a.batch_label]
           .map(v => String(v || '').toLowerCase())
           .some(v => v.includes(q));
       });
@@ -559,16 +578,22 @@ const Achievements = () => {
               Showcasing real alumni accomplishments, leadership roles, event-hosting potential, and affiliate impact.
             </p>
           </div>
-          {isTeacher && (
+          {(isTeacher || currentUser) && (
             <button 
               onClick={() => {
+                const ownAlumniId = !isTeacher && currentUser?.alumni?.id ? String(currentUser.alumni.id) : '';
+                const ownAlumniName = !isTeacher && currentUser?.alumni
+                  ? getAlumniName(currentUser.alumni)
+                  : '';
                 setEditingId(null);
-                setAlumniSearch('');
+                setAlumniSearch(ownAlumniName);
                 setShowAlumniSuggestions(false);
                 setModalCategorySelect('');
                 setCustomModalCategory('');
                 setFormData({
-                  alumni_id: '',
+                  achievement_scope: 'INDIVIDUAL',
+                  alumni_id: ownAlumniId,
+                  batch_label: '',
                   title: '',
                   category: '',
                   description: '',
@@ -730,44 +755,7 @@ const Achievements = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Alumni Name *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={alumniSearch}
-                          onChange={handleAlumniSearchChange}
-                          onFocus={() => setShowAlumniSuggestions(true)}
-                          required
-                          className="app-input"
-                          placeholder="Type an alumni name"
-                          autoComplete="off"
-                          spellCheck={false}
-                          aria-autocomplete="list"
-                          aria-expanded={showAlumniSuggestions && alumniSearch.trim().length > 0}
-                        />
-                        {showAlumniSuggestions && alumniSearch.trim() && (
-                          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                            {alumniSuggestions.length > 0 ? alumniSuggestions.map((alumni) => (
-                              <button
-                                type="button"
-                                key={alumni.id}
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => handleAlumniSelect(alumni)}
-                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50"
-                              >
-                                {getAlumniName(alumni)}
-                              </button>
-                            )) : (
-                              <p className="px-3 py-2 text-sm text-gray-500">No alumni found</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Achievement / Role *
+                        Achievement Name *
                       </label>
                       <input
                         type="text"
@@ -776,7 +764,7 @@ const Achievements = () => {
                         onChange={handleInputChange}
                         required
                         className="app-input"
-                        placeholder="e.g. Chief of Staff, White House Military Office"
+                        placeholder="e.g. Batch 2021 Homecoming Success, Top 10 Board Passer"
                         autoComplete="off"
                         spellCheck={false}
                       />

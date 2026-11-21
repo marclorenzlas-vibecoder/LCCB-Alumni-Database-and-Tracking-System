@@ -98,7 +98,7 @@ const shouldIncludeProgramUsageAlumni = (alumni = {}) => {
   return PROGRAM_USAGE_PROGRAMS.has(normalizeProgramUsageProgram(alumni.course));
 };
 
-const buildProgramUsageInCareer = (careers = []) => {
+const buildProgramUsageInCareer = (careers = [], allAlumni = []) => {
   const latestCareerByAlumni = new Map();
 
   careers.forEach((career) => {
@@ -116,21 +116,27 @@ const buildProgramUsageInCareer = (careers = []) => {
     }])
   );
 
-  latestCareerByAlumni.forEach((career) => {
-    const alignment = String(career.program_alignment || '').toUpperCase();
-    if (alignment !== 'ALIGNED' && alignment !== 'NOT_ALIGNED' && alignment !== 'NEEDS_REVIEW') return;
-    if (!shouldIncludeProgramUsageAlumni(career.alumni)) return;
+  const sourceAlumni = allAlumni.length > 0
+    ? allAlumni
+    : Array.from(latestCareerByAlumni.values()).map((c) => c.alumni).filter(Boolean);
 
-    const program = normalizeProgramUsageProgram(career.alumni?.course);
+  sourceAlumni.forEach((alumniRecord) => {
+    if (!alumniRecord || !shouldIncludeProgramUsageAlumni(alumniRecord)) return;
+
+    const career = latestCareerByAlumni.get(alumniRecord.id);
+    const alignment = String(career?.program_alignment || '').toUpperCase();
+    const program = normalizeProgramUsageProgram(alumniRecord.course);
 
     const row = programs.get(program);
+    if (!row) return;
+
     const alumnus = {
-      id: career.alumni?.id || career.alumni_id,
-      name: getAlumniDisplayName(career.alumni),
+      id: alumniRecord.id,
+      name: getAlumniDisplayName(alumniRecord),
       program,
-      jobPosition: career.job_title || career.alumni?.current_position || 'Not provided',
-      company: career.company || career.alumni?.company || 'Not provided',
-      profileImage: career.alumni?.profile_image || null
+      jobPosition: career?.job_title || alumniRecord.current_position || 'Not provided',
+      company: career?.company || alumniRecord.company || 'Not provided',
+      profileImage: alumniRecord.profile_image || null
     };
 
     if (alignment === 'ALIGNED') {
@@ -498,14 +504,20 @@ router.get('/admin', async (req, res) => {
       prisma.alumni.findMany({
         where: alumniDirectoryWhere,
         select: {
+          id: true,
+          first_name: true,
+          last_name: true,
           level: true,
-          course: true
+          course: true,
+          current_position: true,
+          company: true,
+          profile_image: true
         }
       })
     ]);
 
     const monthlyActivity = buildMonthlyActivity(submittedRows, approvedRows);
-    const programUsageInCareer = buildProgramUsageInCareer(careerRows);
+    const programUsageInCareer = buildProgramUsageInCareer(careerRows, alumniLevelCourseRows);
     const alumniByLevelAndProgram = buildAlumniByLevelAndProgram(alumniLevelCourseRows);
     const alumniPerCourse = buildAlumniPerCourse(alumniLevelCourseRows);
     const activeMembers = getLimiterStatus().activeAlumniUsers;

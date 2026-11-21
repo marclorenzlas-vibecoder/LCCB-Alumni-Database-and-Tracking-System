@@ -178,8 +178,8 @@ app.use((err, req, res, next) => {
 
 // Start server with auto port-retry
 function startServer(port, attempt = 0, maxAttempts = 10) {
-  const server = app.listen(port, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${port}`);
+  const server = app.listen(port, () => {
+    console.log(`Server running on http://localhost:${port}`);
     console.log(`Network access: http://192.168.5.248:${port}`);
     initRealtime(server);
     console.log(`Realtime WebSocket available at ws://0.0.0.0:${port}/realtime`);

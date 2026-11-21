@@ -44,14 +44,15 @@ model activity_log {
 }
 
 model achievement {
-  id          Int       @id @default(autoincrement())
-  alumni_id   Int?
-  title       String
-  category    String?
-  image       String?
-  description String?
-  date        DateTime?
-  alumni      alumni?   @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  id              Int             @id @default(autoincrement())
+  alumni_id       Int?
+  title           String
+  category        String?
+  image           String?
+  description     String?
+  date            DateTime?
+  approval_status approval_status @default(APPROVED)
+  alumni          alumni?         @relation(fields: [alumni_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@index([alumni_id])
 }
@@ -81,9 +82,9 @@ model alumni {
   is_public                   Boolean?           @default(true)
   is_student_id_public        Boolean            @default(false)
   is_date_of_birth_public     Boolean            @default(false)
-  is_course_public            Boolean            @default(true)
-  is_graduation_year_public   Boolean            @default(true)
-  is_education_history_public Boolean            @default(true)
+  is_course_public            Boolean            @default(false)
+  is_graduation_year_public   Boolean            @default(false)
+  is_education_history_public Boolean            @default(false)
   is_email_public             Boolean            @default(false)
   is_phone_public             Boolean            @default(false)
   is_position_public          Boolean            @default(false)
@@ -160,6 +161,7 @@ model job_posting {
   description          String?
   application_url      String?
   application_deadline DateTime?
+  approval_status      approval_status   @default(APPROVED)
   created_at           DateTime?         @default(now())
   updated_at           DateTime?         @default(now())
   alumni               alumni?           @relation(fields: [posted_by_alumni_id], references: [id], onDelete: SetNull)

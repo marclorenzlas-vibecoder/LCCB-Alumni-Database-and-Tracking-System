@@ -18,6 +18,7 @@ const initialJobForm = {
   department: '',
   type: '',
   application_url: '',
+  application_deadline: '',
   description: ''
 };
 
@@ -354,6 +355,8 @@ const Employment = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
+  const [modalDepartmentSelect, setModalDepartmentSelect] = useState('');
+  const [customModalDepartment, setCustomModalDepartment] = useState('');
   const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
   const [showLocationMenu, setShowLocationMenu] = useState(false);
   const [showDepartmentMenu, setShowDepartmentMenu] = useState(false);
@@ -401,7 +404,13 @@ const Employment = () => {
     };
   }, [showLocationMenu, showDepartmentMenu, showWorkTypeMenu]);
 
-  const departments = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
+  const standardDepartments = ['Technology', 'Marketing', 'Analytics', 'Finance', 'Education'];
+  const departments = Array.from(
+    new Set([
+      ...standardDepartments,
+      ...postedJobs.map((j) => (j.department || '').trim()).filter(Boolean)
+    ])
+  );
   const workTypes = ['Full-time', 'Part-time', 'Contract', 'Remote'];
   const uniqueLocations = [...new Set(postedJobs.map(j => j.location).filter(Boolean))];
   const locationSections = [{ key: 'locations', title: '', items: uniqueLocations.map(l => ({ value: l, label: l })) }];
@@ -482,6 +491,10 @@ const Employment = () => {
         return;
       }
 
+      const departmentToSave = modalDepartmentSelect === 'Other'
+        ? customModalDepartment.trim()
+        : formData.department;
+
       // Prepare external job directory data for job_posting table
       const jobData = {
         posted_by_alumni_id: formData.alumni_id
@@ -490,30 +503,42 @@ const Employment = () => {
         job_title: formData.job_title,
         company: formData.company,
         location: formData.location,
-        department: formData.department || null,
+        department: departmentToSave || null,
         job_type: formData.type,
         requirements: null,
         benefits: null,
         description: formData.description || null,
-        application_url: applicationUrl
+        application_url: applicationUrl,
+        application_deadline: formData.application_deadline || null
       };
 
       if (editingId) {
         // Update existing job post
         const updated = await careerService.updateJob(editingId, jobData);
-        toast.success('Job updated successfully!');
-        if (selectedJob && selectedJob.id === editingId) {
-          setSelectedJob(prev => ({
-            ...prev,
-            ...jobData,
-            id: editingId,
-            ...(updated || {})
-          }));
+        if (updated?.approval_status === 'PENDING' && !isTeacher) {
+          toast.info('Job updated and submitted for admin approval.');
+          if (selectedJob && selectedJob.id === editingId) {
+            setSelectedJob(null);
+          }
+        } else {
+          toast.success('Job updated successfully!');
+          if (selectedJob && selectedJob.id === editingId) {
+            setSelectedJob(prev => ({
+              ...prev,
+              ...jobData,
+              id: editingId,
+              ...(updated || {})
+            }));
+          }
         }
       } else {
         // Create new job post
-        await careerService.createJob(jobData);
-        toast.success('Job posted successfully!');
+        const created = await careerService.createJob(jobData);
+        if (created?.approval_status === 'PENDING' && !isTeacher) {
+          toast.info('Job posting submitted! Waiting for admin approval.');
+        } else {
+          toast.success('Job posted successfully!');
+        }
       }
 
       await fetchPostedJobs(); // Refresh the list
@@ -521,6 +546,8 @@ const Employment = () => {
       setShowModal(false);
       setEditingId(null);
       setFormData(initialJobForm);
+      setModalDepartmentSelect('');
+      setCustomModalDepartment('');
     } catch (err) {
       console.error('Error saving job:', err);
       setError(
@@ -575,6 +602,15 @@ const Employment = () => {
 
       if (response && response.data) {
         const parsed = response.data;
+        if (parsed.department) {
+          if (standardDepartments.includes(parsed.department)) {
+            setModalDepartmentSelect(parsed.department);
+            setCustomModalDepartment('');
+          } else {
+            setModalDepartmentSelect('Other');
+            setCustomModalDepartment(parsed.department);
+          }
+        }
         setFormData(prev => ({
           ...prev,
           job_title: parsed.job_title || prev.job_title,
@@ -583,6 +619,9 @@ const Employment = () => {
           department: parsed.department || prev.department,
           type: parsed.type || prev.type,
           application_url: parsed.application_url || (scanType === 'url' ? scanUrl.trim() : prev.application_url),
+          application_deadline: parsed.application_deadline
+            ? String(parsed.application_deadline).slice(0, 10)
+            : prev.application_deadline,
           description: cleanClientText(parsed.description || prev.description)
         }));
         setScanSuccessNotice('Job details auto-filled! Please review and adjust any fields before posting.');
@@ -604,6 +643,17 @@ const Employment = () => {
     setEntryMode('manual');
     setScanError('');
     setScanSuccessNotice('');
+    const dept = (job.department || '').trim();
+    if (dept && standardDepartments.includes(dept)) {
+      setModalDepartmentSelect(dept);
+      setCustomModalDepartment('');
+    } else if (dept) {
+      setModalDepartmentSelect('Other');
+      setCustomModalDepartment(dept);
+    } else {
+      setModalDepartmentSelect('');
+      setCustomModalDepartment('');
+    }
     setFormData({
       alumni_id: job.posted_by_user_id ? '' : job.posted_by_alumni_id?.toString() || '',
       company: job.company || '',
@@ -612,6 +662,9 @@ const Employment = () => {
       department: job.department || '',
       type: job.job_type || '',
       application_url: job.application_url || '',
+      application_deadline: job.application_deadline
+        ? new Date(job.application_deadline).toISOString().split('T')[0]
+        : '',
       description: cleanClientText(job.description || '')
     });
     setShowModal(true);
@@ -703,6 +756,8 @@ const Employment = () => {
               <button
                 onClick={() => {
                   setEditingId(null);
+                  setModalDepartmentSelect('');
+                  setCustomModalDepartment('');
                   setFormData({
                     ...initialJobForm,
                     alumni_id: isTeacher && !currentAlumniId ? '' : (currentAlumniId ? currentAlumniId.toString() : '')
@@ -1360,17 +1415,39 @@ const Employment = () => {
                         </label>
                         <select
                           name="department"
-                          value={formData.department}
-                          onChange={handleInputChange}
+                          value={modalDepartmentSelect}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setModalDepartmentSelect(val);
+                            if (val === 'Other') {
+                              setFormData((prev) => ({ ...prev, department: customModalDepartment }));
+                            } else {
+                              setCustomModalDepartment('');
+                              setFormData((prev) => ({ ...prev, department: val }));
+                            }
+                          }}
                           className={selectFieldClass}
                         >
                           <option value="">Select department</option>
-                          <option value="Technology">Technology</option>
-                          <option value="Marketing">Marketing</option>
-                          <option value="Analytics">Analytics</option>
-                          <option value="Finance">Finance</option>
-                          <option value="Education">Education</option>
+                          {standardDepartments.map((dept) => (
+                            <option key={dept} value={dept}>{dept}</option>
+                          ))}
+                          <option value="Other">Other</option>
                         </select>
+                        {modalDepartmentSelect === 'Other' && (
+                          <input
+                            type="text"
+                            value={customModalDepartment}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomModalDepartment(val);
+                              setFormData((prev) => ({ ...prev, department: val }));
+                            }}
+                            placeholder="Enter custom department..."
+                            required
+                            className={`${fieldClass} mt-2`}
+                          />
+                        )}
                       </div>
 
                       <div>
@@ -1392,7 +1469,7 @@ const Employment = () => {
                         </select>
                       </div>
 
-                      <div className="sm:col-span-2">
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Application Link *
                         </label>
@@ -1405,6 +1482,19 @@ const Employment = () => {
                           required
                           className={fieldClass}
                           placeholder="https://www.linkedin.com/jobs/view/... or https://company.com/apply"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Application Deadline
+                        </label>
+                        <input
+                          type="date"
+                          name="application_deadline"
+                          value={formData.application_deadline}
+                          onChange={handleInputChange}
+                          className={fieldClass}
                         />
                       </div>
 
@@ -1688,6 +1778,27 @@ const Employment = () => {
                           </p>
                         </div>
                       </div>
+
+                      {/* Application Deadline */}
+                      {selectedJob.application_deadline && (
+                        <div className="flex items-center gap-3.5 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 transition hover:bg-slate-50 hover:border-slate-200">
+                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 border border-rose-200/50">
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Deadline</p>
+                            <p className="mt-0.5 text-sm font-bold text-slate-900 truncate">
+                              {new Date(selectedJob.application_deadline).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

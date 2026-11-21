@@ -3,6 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const { broadcastUpdate } = require("../services/realtimeService");
 const { authenticateToken } = require("../middleware/auth");
 const { buildChangeSet, recordActivity } = require("../services/activityLogService");
+const notificationService = require("../services/notificationService");
 const prisma = require('../config/prisma');
 const router = express.Router();
 const { uploadToSupabase } = require('../services/storageService');
@@ -26,6 +27,30 @@ const genderNeutralize = (text) => {
 const isStaffRequest = (req) => {
   const role = String(req.user?.role || '').toUpperCase();
   return role === 'TEACHER' || role === 'ADMIN';
+};
+
+let ensureProfileOnlyColPromise = null;
+const ensureAchievementProfileOnlyColumn = () => {
+  if (!ensureProfileOnlyColPromise) {
+    ensureProfileOnlyColPromise = Promise.all([
+      prisma.$executeRawUnsafe(
+        'ALTER TABLE "achievement" ADD COLUMN IF NOT EXISTS "is_profile_only" BOOLEAN NOT NULL DEFAULT false'
+      ),
+      prisma.$executeRawUnsafe(
+        'ALTER TABLE "achievement" ADD COLUMN IF NOT EXISTS "achievement_scope" TEXT NOT NULL DEFAULT \'INDIVIDUAL\''
+      ),
+      prisma.$executeRawUnsafe(
+        'ALTER TABLE "achievement" ADD COLUMN IF NOT EXISTS "batch_label" TEXT'
+      ),
+      prisma.$executeRawUnsafe(
+        'ALTER TABLE "achievement" ADD COLUMN IF NOT EXISTS "posted_by_name" TEXT'
+      ),
+    ]).catch((err) => {
+      ensureProfileOnlyColPromise = null;
+      console.warn('Could not ensure achievement extra columns:', err?.message || err);
+    });
+  }
+  return ensureProfileOnlyColPromise;
 };
 
 const getAuthenticatedAlumniId = async (req) => {
@@ -55,46 +80,98 @@ const getAuthenticatedAlumniId = async (req) => {
   return null;
 };
 
-// Get all achievements
+const mapAchievementRow = (row) => ({
+  id: row.id,
+  alumni_id: row.alumni_id,
+  title: row.title,
+  category: row.category,
+  image: row.image,
+  description: row.description,
+  date: row.date,
+  approval_status: row.approval_status || 'APPROVED',
+  achievement_scope: row.achievement_scope || 'INDIVIDUAL',
+  batch_label: row.batch_label || null,
+  posted_by_name: row.posted_by_name || null,
+  alumni: (row.first_name || row.last_name || row.email)
+    ? {
+        first_name: row.first_name,
+        last_name: row.last_name,
+        email: row.email,
+        ...(row.profile_image !== undefined ? { profile_image: row.profile_image } : {}),
+      }
+    : null,
+});
+
+// Get all approved achievements (excluding profile-only achievements)
 router.get("/", async (req, res) => {
   try {
-    const achievements = await prisma.achievement.findMany({
-      include: {
-        alumni: {
-          select: {
-            first_name: true,
-            last_name: true,
-            email: true,
-          },
-        },
-      },
-      orderBy: { date: "desc" },
-    });
-    res.json(achievements);
+    await ensureAchievementProfileOnlyColumn();
+    const rows = await prisma.$queryRawUnsafe(`
+      SELECT ach.id, ach.alumni_id, ach.title, ach.category, ach.image, ach.description, ach.date,
+             ach.approval_status::text AS approval_status,
+             COALESCE(ach.achievement_scope, 'INDIVIDUAL') AS achievement_scope,
+             ach.batch_label,
+             ach.posted_by_name,
+             a.first_name, a.last_name, a.email
+      FROM achievement ach
+      LEFT JOIN alumni a ON a.id = ach.alumni_id
+      WHERE ach.approval_status = 'APPROVED'
+        AND COALESCE(ach.is_profile_only, false) = false
+      ORDER BY ach.date DESC NULLS LAST, ach.id DESC
+    `);
+    res.json(rows.map(mapAchievementRow));
   } catch (error) {
     console.error("Error fetching all achievements:", error);
     res.status(500).json({ error: "Failed to fetch achievements" });
   }
 });
 
-// Get all achievements for an alumni
+// Get pending achievements for admin/teacher review
+router.get("/pending", authenticateToken, async (req, res) => {
+  try {
+    if (!isStaffRequest(req)) {
+      return res.status(403).json({ error: "Access denied. Admin or Teacher privileges required." });
+    }
+    await ensureAchievementProfileOnlyColumn();
+    const rows = await prisma.$queryRawUnsafe(`
+      SELECT ach.id, ach.alumni_id, ach.title, ach.category, ach.image, ach.description, ach.date,
+             ach.approval_status::text AS approval_status,
+             COALESCE(ach.achievement_scope, 'INDIVIDUAL') AS achievement_scope,
+             ach.batch_label,
+             ach.posted_by_name,
+             a.first_name, a.last_name, a.email, a.profile_image
+      FROM achievement ach
+      LEFT JOIN alumni a ON a.id = ach.alumni_id
+      WHERE ach.approval_status = 'PENDING'
+      ORDER BY ach.id DESC
+    `);
+    res.json(rows.map(mapAchievementRow));
+  } catch (error) {
+    console.error("Error fetching pending achievements:", error);
+    res.status(500).json({ error: "Failed to fetch pending achievements" });
+  }
+});
+
+// Get all approved achievements for an alumni (includes profile-only and admin-approved page achievements)
 router.get("/alumni/:alumniId", async (req, res) => {
   try {
+    await ensureAchievementProfileOnlyColumn();
     const { alumniId } = req.params;
-    const achievements = await prisma.achievement.findMany({
-      where: { alumni_id: Number(alumniId) },
-      orderBy: { date: "desc" },
-      include: {
-        alumni: {
-          select: {
-            first_name: true,
-            last_name: true,
-            email: true,
-          },
-        },
-      },
-    });
-    res.json(achievements);
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT ach.id, ach.alumni_id, ach.title, ach.category, ach.image, ach.description, ach.date,
+              ach.approval_status::text AS approval_status,
+              COALESCE(ach.is_profile_only, false) AS is_profile_only,
+              a.first_name, a.last_name, a.email
+       FROM achievement ach
+       LEFT JOIN alumni a ON a.id = ach.alumni_id
+       WHERE ach.alumni_id = $1 AND ach.approval_status = 'APPROVED'
+       ORDER BY ach.date DESC NULLS LAST, ach.id DESC`,
+      Number(alumniId)
+    );
+    res.json(rows.map((row) => ({
+      ...mapAchievementRow(row),
+      is_profile_only: Boolean(row.is_profile_only),
+    })));
   } catch (error) {
     console.error("Error fetching achievements:", error);
     res.status(500).json({ error: "Failed to fetch achievements" });
@@ -162,8 +239,23 @@ router.post(
   upload.any(),
   async (req, res) => {
     try {
+      await ensureAchievementProfileOnlyColumn();
+
       // fields come from multipart/form-data
       const { alumni_id, title, category, description, date } = req.body;
+      const isProfileOnly =
+        req.body.is_profile_only === 'true' ||
+        req.body.is_profile_only === true ||
+        String(req.body.source || '').toLowerCase() === 'profile';
+
+      const rawScope = String(req.body.achievement_scope || '').trim().toUpperCase();
+      const achievementScope = isProfileOnly
+        ? 'INDIVIDUAL'
+        : (rawScope === 'BATCH' || rawScope === 'GENERAL' ? rawScope : 'INDIVIDUAL');
+      const batchLabel =
+        achievementScope === 'BATCH' && typeof req.body.batch_label === 'string'
+          ? req.body.batch_label.trim()
+          : null;
 
       if (!title) {
         return res.status(400).json({
@@ -172,12 +264,38 @@ router.post(
         });
       }
 
-      const requestedAlumniId = alumni_id ? Number(alumni_id) : null;
+      if (achievementScope === 'BATCH' && !batchLabel) {
+        return res.status(400).json({
+          error: "Batch / Group name is required for batch achievements",
+        });
+      }
+
       const authenticatedAlumniId = await getAuthenticatedAlumniId(req);
-      if (!isStaffRequest(req)) {
+      const requestedAlumniId = achievementScope === 'INDIVIDUAL'
+        ? (alumni_id ? Number(alumni_id) : (isProfileOnly ? authenticatedAlumniId : null))
+        : null;
+      if (!isStaffRequest(req) && achievementScope === 'INDIVIDUAL') {
         if (!requestedAlumniId || authenticatedAlumniId !== requestedAlumniId) {
-          return res.status(403).json({ error: "You can only create achievements for your own profile" });
+          return res.status(403).json({ error: "You can only create individual achievements for your own profile" });
         }
+      }
+
+      let postedByName = null;
+      if (authenticatedAlumniId) {
+        const posterAlumni = await prisma.alumni.findUnique({
+          where: { id: authenticatedAlumniId },
+          select: { first_name: true, last_name: true }
+        });
+        if (posterAlumni) {
+          postedByName = `${posterAlumni.first_name || ''} ${posterAlumni.last_name || ''}`.trim() || null;
+        }
+      }
+      if (!postedByName && req.user?.id) {
+        const posterUser = await prisma.user.findUnique({
+          where: { id: Number(req.user.id) },
+          select: { username: true, email: true }
+        });
+        postedByName = posterUser?.username || posterUser?.email || null;
       }
 
       const mediaFile = req.files?.find(f => f.fieldname === 'image' || f.fieldname === 'video');
@@ -191,14 +309,16 @@ router.post(
         date: date ? new Date(date) : null,
       };
 
-      if (alumni_id) {
+      if (requestedAlumniId) {
         createData.alumni_id = requestedAlumniId;
       }
+
+      const approvalStatus = (isStaffRequest(req) || isProfileOnly) ? 'APPROVED' : 'PENDING';
 
       const achievement = await prisma.achievement.create({
         data: createData,
         include: {
-          alumni: alumni_id
+          alumni: requestedAlumniId
             ? {
                 select: {
                   first_name: true,
@@ -210,10 +330,45 @@ router.post(
         },
       });
 
-      broadcastUpdate("achievement.created", {
+      await prisma.$executeRawUnsafe(
+        'UPDATE "achievement" SET "approval_status" = $1::"approval_status", "is_profile_only" = $2, "achievement_scope" = $3, "batch_label" = $4, "posted_by_name" = $5 WHERE id = $6',
+        approvalStatus,
+        isProfileOnly,
+        achievementScope,
+        batchLabel,
+        postedByName,
+        achievement.id
+      );
+
+      const responseAchievement = {
+        ...achievement,
+        approval_status: approvalStatus,
+        is_profile_only: isProfileOnly,
+        achievement_scope: achievementScope,
+        batch_label: batchLabel,
+        posted_by_name: postedByName,
+      };
+
+      broadcastUpdate(approvalStatus === 'APPROVED' ? "achievement.created" : "achievement.pending", {
         achievementId: achievement.id,
         alumniId: achievement.alumni_id || null,
+        title: achievement.title,
+        approvalStatus,
       });
+
+      if (approvalStatus === 'PENDING') {
+        const submitterName = postedByName
+          || (achievement.alumni
+            ? `${achievement.alumni.first_name || ''} ${achievement.alumni.last_name || ''}`.trim() || achievement.alumni.email
+            : 'An alumni');
+        await notificationService.notifyAdminsOfPendingPost({
+          type: 'ACHIEVEMENT',
+          title: 'New Pending Achievement Post',
+          message: `${submitterName} submitted "${achievement.title}" for approval.`,
+          link: '/pending-approval?tab=achievements',
+          senderName: submitterName
+        });
+      }
 
       await recordActivity({
         req,
@@ -221,11 +376,11 @@ router.post(
         entityType: "achievement",
         entityId: achievement.id,
         entityLabel: achievement.title,
-        summary: `Created achievement "${achievement.title}"`,
-        details: { alumniId: achievement.alumni_id || null }
+        summary: `Created achievement "${achievement.title}" (${approvalStatus})`,
+        details: { alumniId: achievement.alumni_id || null, approvalStatus }
       });
 
-      res.status(201).json(achievement);
+      res.status(201).json(responseAchievement);
     } catch (error) {
       console.error("Error creating achievement:", error);
       res.status(500).json({
@@ -298,10 +453,37 @@ router.put(
         },
       });
 
-      broadcastUpdate("achievement.updated", {
+      if (!isStaffRequest(req)) {
+        await prisma.$executeRawUnsafe(
+          'UPDATE "achievement" SET "approval_status" = $1::"approval_status" WHERE id = $2',
+          'PENDING',
+          achievement.id
+        );
+      }
+
+      const finalApprovalStatus = isStaffRequest(req) ? undefined : 'PENDING';
+      const responseAchievement = finalApprovalStatus
+        ? { ...achievement, approval_status: finalApprovalStatus }
+        : achievement;
+
+      broadcastUpdate(isStaffRequest(req) ? "achievement.updated" : "achievement.pending", {
         achievementId: achievement.id,
         alumniId: achievement.alumni_id,
+        title: achievement.title,
       });
+
+      if (!isStaffRequest(req)) {
+        const submitterName = achievement.alumni
+          ? `${achievement.alumni.first_name || ''} ${achievement.alumni.last_name || ''}`.trim() || achievement.alumni.email
+          : 'An alumni';
+        await notificationService.notifyAdminsOfPendingPost({
+          type: 'ACHIEVEMENT',
+          title: 'Updated Achievement Pending Review',
+          message: `${submitterName} updated "${achievement.title}" and needs re-approval.`,
+          link: '/pending-approval?tab=achievements',
+          senderName: submitterName
+        });
+      }
 
       await recordActivity({
         req,
@@ -321,7 +503,7 @@ router.put(
         }
       });
 
-      res.json(achievement);
+      res.json(responseAchievement);
     } catch (error) {
       console.error("Error updating achievement:", error);
       res.status(500).json({
@@ -331,6 +513,86 @@ router.put(
     }
   },
 );
+
+// Approve or reject a pending achievement (Admin / Teacher)
+router.patch("/:id/approval", authenticateToken, async (req, res) => {
+  try {
+    if (!isStaffRequest(req)) {
+      return res.status(403).json({ error: "Access denied. Admin or Teacher privileges required." });
+    }
+
+    const achievementId = Number(req.params.id);
+    const status = String(req.body?.status || '').toUpperCase();
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: "Invalid approval status. Must be APPROVED or REJECTED." });
+    }
+
+    const existing = await prisma.achievement.findUnique({
+      where: { id: achievementId },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Achievement not found" });
+    }
+
+    if (status === 'REJECTED') {
+      await prisma.achievement.delete({
+        where: { id: achievementId },
+      });
+
+      if (existing.image && !existing.image.startsWith('http')) {
+        const imagePath = path.join(__dirname, "../../", existing.image);
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+      }
+
+      broadcastUpdate("achievement.deleted", {
+        achievementId,
+        alumniId: existing.alumni_id || null,
+        approvalStatus: 'REJECTED',
+      });
+
+      await recordActivity({
+        req,
+        action: "REJECT",
+        entityType: "achievement",
+        entityId: achievementId,
+        entityLabel: existing.title,
+        summary: `Rejected and deleted pending achievement "${existing.title}"`,
+        details: { alumniId: existing.alumni_id || null, status, deleted: true }
+      });
+
+      return res.json({ success: true, id: achievementId, approval_status: status, deleted: true });
+    }
+
+    await prisma.$executeRawUnsafe(
+      'UPDATE "achievement" SET "approval_status" = $1::"approval_status" WHERE id = $2',
+      status,
+      achievementId
+    );
+
+    broadcastUpdate("achievement.created", {
+      achievementId,
+      alumniId: existing.alumni_id || null,
+      approvalStatus: status,
+    });
+
+    await recordActivity({
+      req,
+      action: "APPROVE",
+      entityType: "achievement",
+      entityId: achievementId,
+      entityLabel: existing.title,
+      summary: `Approved achievement "${existing.title}"`,
+      details: { alumniId: existing.alumni_id || null, status }
+    });
+
+    res.json({ success: true, id: achievementId, approval_status: status });
+  } catch (error) {
+    console.error("Error updating achievement approval:", error);
+    res.status(500).json({ error: "Failed to update achievement approval status" });
+  }
+});
 
 // Delete an achievement
 router.delete("/:id", authenticateToken, async (req, res) => {

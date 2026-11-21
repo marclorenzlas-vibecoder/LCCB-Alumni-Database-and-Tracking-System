@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import UserLayout from './UserLayout';
 import BirthdayGreetingComposer from './BirthdayGreetingComposer';
 import { API_BASE_URL, getImageUrl } from '../config/apiBaseUrl';
+import { realtimeClient } from '../services/realtimeClient';
 
 const BIRTHDAY_ICON = 'M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7';
 
@@ -47,6 +48,8 @@ const TYPE_CONFIG = {
   DONATION:     { color: 'from-emerald-500 to-teal-600',  badgeBg: 'bg-emerald-600', label: 'Donation',   icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
   JOB_APPLICATION: { color: 'from-rose-500 to-red-600',   badgeBg: 'bg-rose-500',    label: 'Job Application', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   REGISTRATION: { color: 'from-red-500 to-rose-600',      badgeBg: 'bg-red-600',     label: 'Registration', icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
+  PENDING_ACHIEVEMENT: { color: 'from-amber-500 to-orange-600', badgeBg: 'bg-amber-600', label: 'Pending Achievement', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
+  PENDING_EMPLOYMENT: { color: 'from-indigo-500 to-blue-600', badgeBg: 'bg-indigo-600', label: 'Pending Employment', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   GENERAL:      { color: 'from-blue-500 to-blue-700',     badgeBg: 'bg-blue-600',    label: 'System',    icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
 };
 
@@ -60,6 +63,9 @@ const isPendingRegistrationNotification = (notification) => {
 };
 
 const getEffectiveType = (notification) => {
+  const link = String(notification?.link || '').toLowerCase();
+  if (link.includes('/pending-approval?tab=achievements')) return 'PENDING_ACHIEVEMENT';
+  if (link.includes('/pending-approval?tab=employment')) return 'PENDING_EMPLOYMENT';
   const type = String(notification?.type || 'GENERAL').toUpperCase();
   if (type === 'JOB_APPLICATION') return 'JOB_APPLICATION';
   if (isPendingRegistrationNotification(notification)) return 'REGISTRATION';
@@ -82,9 +88,17 @@ const getDateGroup = (value) => {
   return 'Earlier';
 };
 
+const isPendingApprovalNotification = (notification) => {
+  const link = String(notification?.link || '').toLowerCase();
+  return link.startsWith('/pending-approval');
+};
+
 const isUrgentNotification = (notification) => (
   !notification?.is_read &&
-  ['REGISTRATION', 'JOB_APPLICATION'].includes(getEffectiveType(notification))
+  (
+    ['REGISTRATION', 'JOB_APPLICATION'].includes(getEffectiveType(notification)) ||
+    isPendingApprovalNotification(notification)
+  )
 );
 
 const getNotificationRank = (notification) => {
@@ -169,7 +183,15 @@ const Notifications = () => {
   useEffect(() => {
     fetchNotifications();
     const poll = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(poll);
+    const unsubCreated = realtimeClient.subscribe('notification.created', fetchNotifications);
+    const unsubPendingAch = realtimeClient.subscribe('achievement.pending', fetchNotifications);
+    const unsubPendingJob = realtimeClient.subscribe('job.pending', fetchNotifications);
+    return () => {
+      clearInterval(poll);
+      try { unsubCreated(); } catch {}
+      try { unsubPendingAch(); } catch {}
+      try { unsubPendingJob(); } catch {}
+    };
   }, [fetchNotifications]);
 
   const isBirthdayNotification = (notification) => {

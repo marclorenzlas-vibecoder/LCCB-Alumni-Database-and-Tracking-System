@@ -306,9 +306,9 @@ const AlumniProfile = () => {
   };
   const isStudentIdPublic = flagIsPublic('isStudentIdPublic', 'is_student_id_public', false);
   const isDateOfBirthPublic = flagIsPublic('isDateOfBirthPublic', 'is_date_of_birth_public', false);
-  const isCoursePublic = flagIsPublic('isCoursePublic', 'is_course_public', true);
-  const isGraduationYearPublic = flagIsPublic('isGraduationYearPublic', 'is_graduation_year_public', true);
-  const isEducationHistoryPublic = flagIsPublic('isEducationHistoryPublic', 'is_education_history_public', true);
+  const isCoursePublic = flagIsPublic('isCoursePublic', 'is_course_public', false);
+  const isGraduationYearPublic = flagIsPublic('isGraduationYearPublic', 'is_graduation_year_public', false);
+  const isEducationHistoryPublic = flagIsPublic('isEducationHistoryPublic', 'is_education_history_public', false);
   const isEmailPublic = flagIsPublic('isEmailPublic', 'is_email_public', false);
   const isPhonePublic = flagIsPublic('isPhonePublic', 'is_phone_public', false);
   const isPositionPublic = flagIsPublic('isPositionPublic', 'is_position_public', false);

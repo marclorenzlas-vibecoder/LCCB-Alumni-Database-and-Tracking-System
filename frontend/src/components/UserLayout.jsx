@@ -7,6 +7,8 @@ import ConfirmModal from "./ConfirmModal";
 import AuthStatusOverlay from "./AuthStatusOverlay";
 import { authService } from "../services/authService";
 import { IMAGE_BASE_URL } from "../config/apiBaseUrl";
+import { realtimeClient } from "../services/realtimeClient";
+import { toast } from "react-toastify";
 
 const topNavItems = [
   {
@@ -248,6 +250,28 @@ const UserLayout = ({ children }) => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAdminSide) return undefined;
+
+    const handlePendingAchievement = (payload) => {
+      const title = payload?.title ? `"${payload.title}"` : "an achievement post";
+      toast.info(`New pending achievement: ${title} is waiting for approval.`);
+    };
+
+    const handlePendingJob = (payload) => {
+      const title = payload?.jobTitle ? `"${payload.jobTitle}"` : "an employment post";
+      toast.info(`New pending employment post: ${title} is waiting for approval.`);
+    };
+
+    const unsubAch = realtimeClient.subscribe("achievement.pending", handlePendingAchievement);
+    const unsubJob = realtimeClient.subscribe("job.pending", handlePendingJob);
+
+    return () => {
+      try { unsubAch(); } catch {}
+      try { unsubJob(); } catch {}
+    };
+  }, [isAdminSide]);
 
   useEffect(() => {
     if (prevScrollRef.current != null) {

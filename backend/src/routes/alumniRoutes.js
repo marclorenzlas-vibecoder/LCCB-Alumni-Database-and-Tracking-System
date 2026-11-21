@@ -127,9 +127,9 @@ const hasPrivacyInput = (body) =>
 const PRIVACY_DEFAULTS = {
   is_student_id_public: false,
   is_date_of_birth_public: false,
-  is_course_public: true,
-  is_graduation_year_public: true,
-  is_education_history_public: true,
+  is_course_public: false,
+  is_graduation_year_public: false,
+  is_education_history_public: false,
   is_email_public: false,
   is_phone_public: false,
   is_position_public: false,
@@ -389,6 +389,10 @@ router.get("/", softAuth, async (req, res) => {
           },
         },
         social_link: true,
+        achievement: {
+          where: { approval_status: 'APPROVED' },
+          orderBy: { date: 'desc' },
+        },
       },
       orderBy: {
         id: 'desc'
@@ -549,7 +553,7 @@ router.post("/", runProfileUpload, async (req, res) => {
           : null,
       date_of_birth:
         parsedDateOfBirth instanceof Date &&
-        !Number.isNaN(parsedDateOfBirth.getTime())
+          !Number.isNaN(parsedDateOfBirth.getTime())
           ? parsedDateOfBirth
           : null,
       ...PRIVACY_DEFAULTS,
@@ -562,7 +566,7 @@ router.post("/", runProfileUpload, async (req, res) => {
     } else {
       alumniData.profile_image = null;
     }
-    
+
     appendPrivacyUpdates(req.body, alumniData);
 
     // Only add user_id if we found an existing user
@@ -702,14 +706,14 @@ router.get("/birthdays/today", authMiddleware, async (req, res) => {
     const isYourBirthday =
       currentAlumni && currentAlumni.date_of_birth
         ? (() => {
-            const dob = new Date(currentAlumni.date_of_birth);
-            return (
-              currentBirthdayVisibility !== "OFF" &&
-              !Number.isNaN(dob.getTime()) &&
-              dob.getUTCDate() === today.getUTCDate() &&
-              dob.getUTCMonth() === today.getUTCMonth()
-            );
-          })()
+          const dob = new Date(currentAlumni.date_of_birth);
+          return (
+            currentBirthdayVisibility !== "OFF" &&
+            !Number.isNaN(dob.getTime()) &&
+            dob.getUTCDate() === today.getUTCDate() &&
+            dob.getUTCMonth() === today.getUTCMonth()
+          );
+        })()
         : false;
 
     res.json({
@@ -738,6 +742,10 @@ router.get("/:id", softAuth, async (req, res) => {
           },
         },
         social_link: true,
+        achievement: {
+          where: { approval_status: 'APPROVED' },
+          orderBy: { date: 'desc' },
+        },
       },
     });
 
@@ -760,6 +768,7 @@ router.get("/:id", softAuth, async (req, res) => {
     res.json({
       ...visibleAlumni,
       ...alumniPrivacyPayload(visibleAlumni),
+      achievements: Array.isArray(alumni.achievement) ? alumni.achievement : [],
       education_history: history,
       educationHistory: history,
     });

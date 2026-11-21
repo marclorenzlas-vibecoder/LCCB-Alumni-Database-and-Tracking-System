@@ -609,7 +609,7 @@ const Register = () => {
                 {isRegistering && (
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                 )}
-                {isRegistering ? 'Processing...' : 'I Agree & Register'}
+                {isRegistering ? 'Processing...' : 'Register'}
               </button>
               </div>
             </div>

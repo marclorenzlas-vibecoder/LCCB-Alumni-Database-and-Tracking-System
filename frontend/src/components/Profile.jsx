@@ -134,9 +134,9 @@ const PROFILE_UPDATED_EVENT = 'auth-user-updated';
 const DEFAULT_PRIVACY_SETTINGS = {
   isStudentIdPublic: false,
   isDateOfBirthPublic: false,
-  isCoursePublic: true,
-  isGraduationYearPublic: true,
-  isEducationHistoryPublic: true,
+  isCoursePublic: false,
+  isGraduationYearPublic: false,
+  isEducationHistoryPublic: false,
   isEmailPublic: false,
   isPhonePublic: false,
   isPositionPublic: false,
@@ -147,7 +147,7 @@ const DEFAULT_PRIVACY_SETTINGS = {
   isSkillsPublic: false
 };
 
-const pickPrivacyFlag = (source = {}, camelKey, snakeKey, fallback = true) => {
+const pickPrivacyFlag = (source = {}, camelKey, snakeKey, fallback = false) => {
   const value = source[camelKey] ?? source[snakeKey];
   return value === undefined ? fallback : value !== false;
 };
@@ -155,9 +155,9 @@ const pickPrivacyFlag = (source = {}, camelKey, snakeKey, fallback = true) => {
 const normalizePrivacySettings = (alumni = {}) => ({
   isStudentIdPublic: pickPrivacyFlag(alumni, 'isStudentIdPublic', 'is_student_id_public', DEFAULT_PRIVACY_SETTINGS.isStudentIdPublic),
   isDateOfBirthPublic: pickPrivacyFlag(alumni, 'isDateOfBirthPublic', 'is_date_of_birth_public', DEFAULT_PRIVACY_SETTINGS.isDateOfBirthPublic),
-  isCoursePublic: pickPrivacyFlag(alumni, 'isCoursePublic', 'is_course_public'),
-  isGraduationYearPublic: pickPrivacyFlag(alumni, 'isGraduationYearPublic', 'is_graduation_year_public'),
-  isEducationHistoryPublic: pickPrivacyFlag(alumni, 'isEducationHistoryPublic', 'is_education_history_public'),
+  isCoursePublic: pickPrivacyFlag(alumni, 'isCoursePublic', 'is_course_public', DEFAULT_PRIVACY_SETTINGS.isCoursePublic),
+  isGraduationYearPublic: pickPrivacyFlag(alumni, 'isGraduationYearPublic', 'is_graduation_year_public', DEFAULT_PRIVACY_SETTINGS.isGraduationYearPublic),
+  isEducationHistoryPublic: pickPrivacyFlag(alumni, 'isEducationHistoryPublic', 'is_education_history_public', DEFAULT_PRIVACY_SETTINGS.isEducationHistoryPublic),
   isEmailPublic: pickPrivacyFlag(alumni, 'isEmailPublic', 'is_email_public', DEFAULT_PRIVACY_SETTINGS.isEmailPublic),
   isPhonePublic: pickPrivacyFlag(alumni, 'isPhonePublic', 'is_phone_public', DEFAULT_PRIVACY_SETTINGS.isPhonePublic),
   isPositionPublic: pickPrivacyFlag(alumni, 'isPositionPublic', 'is_position_public', DEFAULT_PRIVACY_SETTINGS.isPositionPublic),
@@ -241,13 +241,14 @@ const createCareerForm = () => ({
   start_date: '',
   end_date: '',
   is_current: false,
+  program_alignment: 'NEEDS_REVIEW',
   description: ''
 });
 
 const getProgramMatchLabel = (value) => {
   if (value === 'ALIGNED') return 'Related';
   if (value === 'NOT_ALIGNED') return 'Not Related';
-  return 'Needs Checking';
+  return 'Not Specified';
 };
 
 const getProgramMatchClass = (value) => {
@@ -348,6 +349,16 @@ const Profile = () => {
   const [editingCareerId, setEditingCareerId] = useState(null);
   const [careerForm, setCareerForm] = useState(createCareerForm());
   const [careerSubmitting, setCareerSubmitting] = useState(false);
+  const [profileAchievements, setProfileAchievements] = useState([]);
+  const [showAchievementForm, setShowAchievementForm] = useState(false);
+  const [achievementForm, setAchievementForm] = useState({
+    title: '',
+    category: '',
+    date: '',
+    description: '',
+    image: null
+  });
+  const [achievementSubmitting, setAchievementSubmitting] = useState(false);
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -360,74 +371,14 @@ const Profile = () => {
 
   const [cooldowns, setCooldowns] = useState({});
 
-  const fetchCooldowns = async (targetUserId) => {
-    if (!targetUserId) return;
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/auth/profile-cooldown-status/${targetUserId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCooldowns(data || {});
-      }
-    } catch (error) {
-      console.error('Error fetching profile cooldowns:', error);
-    }
+  const fetchCooldowns = async () => {
+    // Field edit locking/cooldown has been removed; keep all fields editable.
+    setCooldowns({});
   };
 
-  const isFieldDisabled = (fieldName) => {
-    const status = cooldowns[fieldName];
-    return status ? !status.editable : false;
-  };
+  const isFieldDisabled = () => false;
 
-  const renderUnlockMessage = (fieldName) => {
-    const status = cooldowns[fieldName];
-    if (status && !status.editable && status.availableAt) {
-      const dateStr = new Date(status.availableAt).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-      });
-      return (
-        <p className="mt-1.5 text-xs font-medium text-amber-600 flex items-center gap-1.5 bg-amber-50 border border-amber-200/50 rounded-lg px-2.5 py-1 w-fit">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          Locked: Edit again on {dateStr}
-        </p>
-      );
-    }
-    
-    // For editable fields that are subject to cooldown (all except profileImage)
-    const hasCooldown = fieldName !== 'profileImage';
-    if (hasCooldown) {
-      const hasBeenEdited = status && status.lastChangedAt;
-      let helperText = 'Never edited. Updates to this field are restricted to once every 30 days.';
-      
-      if (hasBeenEdited) {
-        const lastDateStr = new Date(status.lastChangedAt).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric'
-        });
-        helperText = `Last updated on ${lastDateStr}. Updates to this field are restricted to once every 30 days.`;
-      }
-
-      return (
-        <p className={`mt-1 text-[11px] flex items-center gap-1 font-normal ${hasBeenEdited ? 'text-blue-600' : 'text-gray-400'}`}>
-          <svg className={`w-3.5 h-3.5 ${hasBeenEdited ? 'text-blue-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          {helperText}
-        </p>
-      );
-    }
-    
-    return null;
-  };
+  const renderUnlockMessage = () => null;
 
   const togglePrivacy = (key) => {
     if (!isEditing) return;
@@ -539,6 +490,85 @@ const Profile = () => {
     }
   };
 
+  const loadProfileAchievements = async (alumniId) => {
+    if (!alumniId) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/achievements/alumni/${alumniId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error('Failed to load achievements');
+      const data = await res.json();
+      setProfileAchievements(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching profile achievements:', error);
+      setProfileAchievements([]);
+    }
+  };
+
+  const handleSaveProfileAchievement = async () => {
+    const alumniId = user?.alumni?.id;
+    if (!alumniId) {
+      toast.error('Alumni profile is not linked yet.');
+      return;
+    }
+    if (!achievementForm.title.trim()) {
+      toast.error('Please enter an achievement title.');
+      return;
+    }
+
+    setAchievementSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const body = new FormData();
+      body.append('alumni_id', String(alumniId));
+      body.append('title', achievementForm.title.trim());
+      if (achievementForm.category.trim()) body.append('category', achievementForm.category.trim());
+      if (achievementForm.date) body.append('date', achievementForm.date);
+      if (achievementForm.description.trim()) body.append('description', achievementForm.description.trim());
+      if (achievementForm.image) body.append('image', achievementForm.image);
+      body.append('is_profile_only', 'true');
+      body.append('source', 'profile');
+
+      const res = await fetch(`${API_BASE_URL}/achievements`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to add achievement');
+      }
+
+      await loadProfileAchievements(alumniId);
+      setAchievementForm({ title: '', category: '', date: '', description: '', image: null });
+      setShowAchievementForm(false);
+      toast.success('Achievement added to your profile!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to add achievement');
+    } finally {
+      setAchievementSubmitting(false);
+    }
+  };
+
+  const handleDeleteProfileAchievement = async (achievementId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/achievements/${achievementId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete achievement');
+      }
+      setProfileAchievements((prev) => prev.filter((item) => item.id !== achievementId));
+      toast.success('Achievement removed from your profile.');
+    } catch (error) {
+      toast.error(error.message || 'Failed to delete achievement');
+    }
+  };
+
   useEffect(() => {
     const userData = authService.getCurrentUser();
     if (userData) {
@@ -578,6 +608,7 @@ const Profile = () => {
       if (userData.alumni?.id) {
         fetchLatestAlumniDetails(userData.alumni.id);
         loadCareerHistory(userData.alumni.id);
+        loadProfileAchievements(userData.alumni.id);
       }
       fetchCooldowns(userData.id);
     }
@@ -963,9 +994,33 @@ const Profile = () => {
       start_date: formatDateForInput(career.start_date),
       end_date: formatDateForInput(career.end_date),
       is_current: Boolean(career.is_current),
+      program_alignment: career.program_alignment || 'NEEDS_REVIEW',
       description: career.description || ''
     });
     setShowCareerForm(true);
+  };
+
+  const handleUpdateCareerProgramMatch = async (careerId, programAlignment) => {
+    const previous = careerHistory;
+    setCareerHistory((prev) =>
+      prev.map((c) => (Number(c.id) === Number(careerId) ? { ...c, program_alignment: programAlignment } : c))
+    );
+    try {
+      const updated = await careerService.reviewCareerAlignment(careerId, {
+        program_alignment: programAlignment
+      });
+      setCareerHistory((prev) =>
+        prev.map((c) =>
+          Number(c.id) === Number(careerId)
+            ? { ...c, ...updated, program_alignment: updated?.program_alignment || programAlignment }
+            : c
+        )
+      );
+      toast.success('Program match updated');
+    } catch (error) {
+      setCareerHistory(previous);
+      toast.error(error?.response?.data?.error || 'Failed to update program match');
+    }
   };
 
   const handleSaveCareer = async (event) => {
@@ -1677,6 +1732,19 @@ const Profile = () => {
                           I currently work here
                         </label>
                         <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Program Match</label>
+                          <select
+                            name="program_alignment"
+                            value={careerForm.program_alignment || 'NEEDS_REVIEW'}
+                            onChange={handleCareerFormChange}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          >
+                            <option value="ALIGNED">Related</option>
+                            <option value="NOT_ALIGNED">Not Related</option>
+                            <option value="NEEDS_REVIEW">Not Specified</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
                           <label className="mb-1 block text-xs font-semibold text-slate-600">Description</label>
                           <textarea
                             name="description"
@@ -1862,6 +1930,119 @@ const Profile = () => {
                       ))
                     ) : (
                       <p className="text-sm text-gray-500 py-2">No social links added yet</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Profile Achievements Section (Edit Mode) */}
+                <div className="sm:col-span-2 mt-4 pt-6 border-t border-gray-200">
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Achievements</label>
+                      <p className="text-xs text-gray-500">Add personal achievements to display on your profile.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAchievementForm((prev) => !prev)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                    >
+                      {showAchievementForm ? 'Cancel' : '+ Add Achievement'}
+                    </button>
+                  </div>
+
+                  {showAchievementForm && (
+                    <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Title *</label>
+                          <input
+                            type="text"
+                            value={achievementForm.title}
+                            onChange={(e) => setAchievementForm((prev) => ({ ...prev, title: e.target.value }))}
+                            placeholder="e.g. Top 10 Board Passer, Best Capstone Project"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Category</label>
+                          <input
+                            type="text"
+                            value={achievementForm.category}
+                            onChange={(e) => setAchievementForm((prev) => ({ ...prev, category: e.target.value }))}
+                            placeholder="e.g. Academic, Career, Award"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Date</label>
+                          <input
+                            type="date"
+                            value={achievementForm.date}
+                            onChange={(e) => setAchievementForm((prev) => ({ ...prev, date: e.target.value }))}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Description</label>
+                          <textarea
+                            rows="3"
+                            value={achievementForm.description}
+                            onChange={(e) => setAchievementForm((prev) => ({ ...prev, description: e.target.value }))}
+                            placeholder="Share details about this achievement..."
+                            className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">Photo / Certificate (optional)</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setAchievementForm((prev) => ({ ...prev, image: e.target.files?.[0] || null }))}
+                            className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleSaveProfileAchievement}
+                          disabled={achievementSubmitting}
+                          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {achievementSubmitting ? 'Saving...' : 'Save Achievement'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2.5">
+                    {profileAchievements.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+                        No achievements added to your profile yet.
+                      </p>
+                    ) : (
+                      profileAchievements.map((ach) => (
+                        <div key={ach.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900">{ach.title}</p>
+                            {(ach.category || ach.date) && (
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {[ach.category, ach.date ? new Date(ach.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                            {ach.description && (
+                              <p className="mt-1.5 text-sm text-slate-600 line-clamp-2">{ach.description}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProfileAchievement(ach.id)}
+                            className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))
                     )}
                   </div>
                 </div>
@@ -2118,7 +2299,118 @@ const Profile = () => {
                           disabled
                         />
                       </div>
+                      {user?.alumni?.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (showCareerForm) {
+                              resetCareerForm();
+                            } else {
+                              setEditingCareerId(null);
+                              setCareerForm(createCareerForm());
+                              setShowCareerForm(true);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                        >
+                          {showCareerForm ? 'Cancel' : '+ Add Employment'}
+                        </button>
+                      )}
                     </div>
+
+                    {showCareerForm && !isEditing && (
+                      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+                        <h5 className="mb-3 text-sm font-semibold text-slate-900">
+                          {editingCareerId ? 'Edit Employment Record' : 'Add Employment Record'}
+                        </h5>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Position *</label>
+                            <input
+                              type="text"
+                              name="job_title"
+                              value={careerForm.job_title}
+                              onChange={handleCareerFormChange}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Company *</label>
+                            <input
+                              type="text"
+                              name="company"
+                              value={careerForm.company}
+                              onChange={handleCareerFormChange}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Start Date</label>
+                            <input
+                              type="date"
+                              name="start_date"
+                              value={careerForm.start_date}
+                              onChange={handleCareerFormChange}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">End Date</label>
+                            <input
+                              type="date"
+                              name="end_date"
+                              value={careerForm.end_date}
+                              onChange={handleCareerFormChange}
+                              disabled={careerForm.is_current}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                            />
+                          </div>
+                          <label className="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm font-medium text-slate-700 sm:col-span-2">
+                            <input
+                              type="checkbox"
+                              name="is_current"
+                              checked={careerForm.is_current}
+                              onChange={handleCareerFormChange}
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            I currently work here
+                          </label>
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Program Match</label>
+                            <select
+                              name="program_alignment"
+                              value={careerForm.program_alignment || 'NEEDS_REVIEW'}
+                              onChange={handleCareerFormChange}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            >
+                              <option value="ALIGNED">Related</option>
+                              <option value="NOT_ALIGNED">Not Related</option>
+                              <option value="NEEDS_REVIEW">Not Specified</option>
+                            </select>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Description</label>
+                            <textarea
+                              name="description"
+                              value={careerForm.description}
+                              onChange={handleCareerFormChange}
+                              rows="3"
+                              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={handleSaveCareer}
+                            disabled={careerSubmitting}
+                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {careerSubmitting ? 'Saving...' : editingCareerId ? 'Update Employment' : 'Save Employment'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-3">
                       {careerHistory.length === 0 ? (
@@ -2136,6 +2428,20 @@ const Profile = () => {
                               </p>
                             </div>
                             <ProgramMatchReview value={career.program_alignment} notes={career.alignment_notes} />
+                            {user?.alumni?.id && (
+                              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Program Match</label>
+                                <select
+                                  value={career.program_alignment || 'NEEDS_REVIEW'}
+                                  onChange={(e) => handleUpdateCareerProgramMatch(career.id, e.target.value)}
+                                  className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                                >
+                                  <option value="ALIGNED">Related</option>
+                                  <option value="NOT_ALIGNED">Not Related</option>
+                                  <option value="NEEDS_REVIEW">Not Specified</option>
+                                </select>
+                              </div>
+                            )}
                             {career.description && <p className="mt-2 text-sm text-slate-600">{career.description}</p>}
                           </div>
                         ))
@@ -2165,6 +2471,110 @@ const Profile = () => {
                       />
                     </div>
                     <p className="text-gray-900">{socialLinks.length > 0 ? `${socialLinks.length} link${socialLinks.length === 1 ? '' : 's'} added` : 'No social links added yet'}</p>
+                  </div>
+                  <div className="sm:col-span-2 mt-4 pt-6 border-t border-gray-200">
+                    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <label className="block text-sm font-medium text-gray-500">Achievements</label>
+                      {user?.alumni?.id && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAchievementForm((prev) => !prev)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                        >
+                          {showAchievementForm ? 'Cancel' : '+ Add Achievement'}
+                        </button>
+                      )}
+                    </div>
+
+                    {showAchievementForm && !isEditing && (
+                      <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Title *</label>
+                            <input
+                              type="text"
+                              value={achievementForm.title}
+                              onChange={(e) => setAchievementForm((prev) => ({ ...prev, title: e.target.value }))}
+                              placeholder="e.g. Top 10 Board Passer, Best Capstone Project"
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Category</label>
+                            <input
+                              type="text"
+                              value={achievementForm.category}
+                              onChange={(e) => setAchievementForm((prev) => ({ ...prev, category: e.target.value }))}
+                              placeholder="e.g. Academic, Career, Award"
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Date</label>
+                            <input
+                              type="date"
+                              value={achievementForm.date}
+                              onChange={(e) => setAchievementForm((prev) => ({ ...prev, date: e.target.value }))}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Description</label>
+                            <textarea
+                              rows="3"
+                              value={achievementForm.description}
+                              onChange={(e) => setAchievementForm((prev) => ({ ...prev, description: e.target.value }))}
+                              placeholder="Share details about this achievement..."
+                              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold text-slate-600">Photo / Certificate (optional)</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => setAchievementForm((prev) => ({ ...prev, image: e.target.files?.[0] || null }))}
+                              className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={handleSaveProfileAchievement}
+                            disabled={achievementSubmitting}
+                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {achievementSubmitting ? 'Saving...' : 'Save Achievement'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      {profileAchievements.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+                          No achievements added yet.
+                        </p>
+                      ) : (
+                        profileAchievements.map((ach) => (
+                          <div key={ach.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="font-semibold text-slate-900">{ach.title}</p>
+                                {ach.category && <p className="text-xs font-medium text-blue-700">{ach.category}</p>}
+                              </div>
+                              {ach.date && (
+                                <p className="text-xs text-slate-500">
+                                  {new Date(ach.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                              )}
+                            </div>
+                            {ach.description && <p className="mt-2 text-sm text-slate-600 line-clamp-2">{ach.description}</p>}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

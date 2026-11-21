@@ -457,7 +457,7 @@ const AuthForm = ({ isLogin, toggleForm }) => {
                 }`}
               >
                 {isSubmitting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
-                {isSubmitting ? 'Processing...' : 'I Agree & Register'}
+                {isSubmitting ? 'Processing...' : 'Register'}
               </button>
               </div>
             </div>

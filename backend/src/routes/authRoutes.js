@@ -102,9 +102,9 @@ const hasPrivacyInput = (body) =>
 const PRIVACY_DEFAULTS = {
   is_student_id_public: false,
   is_date_of_birth_public: false,
-  is_course_public: true,
-  is_graduation_year_public: true,
-  is_education_history_public: true,
+  is_course_public: false,
+  is_graduation_year_public: false,
+  is_education_history_public: false,
   is_email_public: false,
   is_phone_public: false,
   is_position_public: false,

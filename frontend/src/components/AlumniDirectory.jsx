@@ -147,17 +147,17 @@ const PROGRAM_ALIGNMENT_OPTIONS = [
   { value: '', label: 'Auto-check' },
   { value: 'ALIGNED', label: 'Related' },
   { value: 'NOT_ALIGNED', label: 'Not Related' },
-  { value: 'NEEDS_REVIEW', label: 'Needs Checking' }
+  { value: 'NEEDS_REVIEW', label: 'Not Specified' }
 ];
 
 const getProgramAlignmentLabel = (value) => (
-  PROGRAM_ALIGNMENT_OPTIONS.find((option) => option.value === value)?.label || 'Needs Checking'
+  PROGRAM_ALIGNMENT_OPTIONS.find((option) => option.value === value)?.label || 'Not Specified'
 );
 
 const getProgramAlignmentNote = (value) => {
   if (value === 'ALIGNED') return 'Alumni marked this job as related to their program.';
   if (value === 'NOT_ALIGNED') return 'Alumni marked this job as not related to their program.';
-  return 'Alumni marked this job as needing checking.';
+  return 'Program alignment is not yet specified.';
 };
 
 const getProgramAlignmentClass = (value) => {
@@ -402,6 +402,22 @@ const AlumniDirectory = () => {
     return batches;
   }, [myAlumniRecord]);
 
+  const myCourses = useMemo(() => {
+    if (!myAlumniRecord) return [];
+    const courses = [];
+    const addCourse = (value) => {
+      const normalized = String(value || '').trim().toUpperCase();
+      if (normalized && !courses.includes(normalized)) {
+        courses.push(normalized);
+      }
+    };
+    addCourse(myAlumniRecord.course);
+    if (myAlumniRecord.educationHistory) {
+      myAlumniRecord.educationHistory.forEach((edu) => addCourse(edu.course));
+    }
+    return courses;
+  }, [myAlumniRecord]);
+
   // Education history helpers
   const handleEducationHistoryChange = (index, field, value) => {
     setEducationHistory((prev) => prev.map((entry, i) => {
@@ -476,34 +492,10 @@ const AlumniDirectory = () => {
     };
   }, []);
 
-  const baseFilteredAlumni = useMemo(() => {
-    let data = [...alumni];
+  const hasExplicitFilter = Boolean(searchTerm.trim() || selectedLevel || selectedGroup || selectedBatch);
 
-    // Filter by batch scope ONLY if the user is a regular alumni and NOT currently searching
-    if (!isTeacher && !searchTerm.trim()) {
-      data = data.filter((a) => {
-        // Always show the user's own profile in the directory list
-        if (isOwnerOfRecord(a)) return true;
-
-        // Check if the other alumnus shares any batch with myBatches
-        const itemBatches = [];
-        if (a.batch) {
-          itemBatches.push(Number(a.batch));
-        }
-        if (a.educationHistory) {
-          a.educationHistory.forEach((edu) => {
-            if (edu.batch) {
-              const bNum = Number(edu.batch);
-              if (!itemBatches.includes(bNum)) {
-                itemBatches.push(bNum);
-              }
-            }
-          });
-        }
-
-        return itemBatches.some((b) => myBatches.includes(b));
-      });
-    }
+  const filterBySearchLevelGroup = (sourceList) => {
+    let data = [...sourceList];
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
@@ -546,12 +538,64 @@ const AlumniDirectory = () => {
     }
 
     return data;
-  }, [alumni, searchTerm, selectedLevel, selectedGroup, isTeacher, myBatches]);
+  };
 
-  // Derived batches from currently matching alumni only
+  const baseFilteredAlumni = useMemo(() => {
+    let data = [...alumni];
+
+    // Default alumni view (no explicit search/level/program/batch filter):
+    // show peers matching BOTH the user's program and batch.
+    // Once any filter is chosen (e.g., choosing Batch 2019), lift the default scoping
+    // so all matching alumni across programs appear and filters combine freely.
+    if (!isTeacher && !hasExplicitFilter) {
+      const shouldScopeToMyCourse = myCourses.length > 0;
+      const shouldScopeToMyBatch = myBatches.length > 0;
+
+      if (shouldScopeToMyCourse || shouldScopeToMyBatch) {
+        data = data.filter((a) => {
+          if (isOwnerOfRecord(a)) return true;
+
+          let matchesBatch = true;
+          if (shouldScopeToMyBatch) {
+            const itemBatches = [];
+            if (a.batch) itemBatches.push(Number(a.batch));
+            if (a.educationHistory) {
+              a.educationHistory.forEach((edu) => {
+                if (edu.batch) {
+                  const bNum = Number(edu.batch);
+                  if (!itemBatches.includes(bNum)) itemBatches.push(bNum);
+                }
+              });
+            }
+            matchesBatch = itemBatches.some((b) => myBatches.includes(b));
+          }
+
+          let matchesCourse = true;
+          if (shouldScopeToMyCourse) {
+            const itemCourses = [];
+            const addCourse = (value) => {
+              const normalized = String(value || '').trim().toUpperCase();
+              if (normalized && !itemCourses.includes(normalized)) itemCourses.push(normalized);
+            };
+            addCourse(a.course);
+            if (a.educationHistory) {
+              a.educationHistory.forEach((edu) => addCourse(edu.course));
+            }
+            matchesCourse = itemCourses.some((c) => myCourses.includes(c));
+          }
+
+          return matchesBatch && matchesCourse;
+        });
+      }
+    }
+
+    return filterBySearchLevelGroup(data);
+  }, [alumni, searchTerm, selectedLevel, selectedGroup, hasExplicitFilter, isTeacher, myBatches, myCourses]);
+
+  // Derived batches across alumni so multiple filters can be combined freely
   const batches = useMemo(() => {
     const set = new Set();
-    baseFilteredAlumni.forEach((item) => {
+    alumni.forEach((item) => {
       const batchValue = item.batch;
       if (batchValue !== null && batchValue !== undefined && batchValue !== '') {
         set.add(String(batchValue));
@@ -565,13 +609,7 @@ const AlumniDirectory = () => {
       }
     });
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
-  }, [baseFilteredAlumni]);
-
-  useEffect(() => {
-    if (selectedBatch && !batches.includes(String(selectedBatch))) {
-      setSelectedBatch('');
-    }
-  }, [selectedBatch, batches]);
+  }, [alumni]);
 
   useEffect(() => {
     const handlePointerDown = (event) => {
@@ -611,7 +649,12 @@ const AlumniDirectory = () => {
     let data = [...baseFilteredAlumni];
 
     // Batch filter
-    if (selectedBatch) data = data.filter((a) => String(a.batch) === String(selectedBatch));
+    if (selectedBatch) {
+      data = data.filter((a) =>
+        String(a.batch) === String(selectedBatch) ||
+        (Array.isArray(a.educationHistory) && a.educationHistory.some((edu) => String(edu.batch) === String(selectedBatch)))
+      );
+    }
 
     // Sort
     data.sort((a, b) => {
@@ -1446,15 +1489,6 @@ const AlumniDirectory = () => {
                   {canViewEmploymentHistory(viewingAlumni) && <div className="rounded-lg border border-transparent bg-transparent py-3 px-4 md:col-span-2">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                       <h3 className="text-lg font-semibold text-gray-900 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Employment History</h3>
-                      {isOwnAlumniProfile(viewingAlumni) && (
-                        <button
-                          type="button"
-                          onClick={() => setShowCareerModal(true)}
-                          className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
-                        >
-                          Add Employment
-                        </button>
-                      )}
                     </div>
                     <div className="space-y-2">
                       {isLoadingRelatedRecords ? (
@@ -1483,20 +1517,6 @@ const AlumniDirectory = () => {
                               </div>
                               <p className="text-sm text-blue-600 font-medium">{c.company}</p>
                               <ProgramAlignmentReview value={c.program_alignment} notes={c.alignment_notes} />
-                              {isOwnAlumniProfile(viewingAlumni) && (
-                                <div className="mt-3 flex flex-wrap items-center gap-2">
-                                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Program Match</label>
-                                  <select
-                                    value={c.program_alignment || 'NEEDS_REVIEW'}
-                                    onChange={(event) => handleReviewCareerMatch(c.id, event.target.value)}
-                                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                                  >
-                                    {PROGRAM_ALIGNMENT_OPTIONS.filter((option) => option.value).map((option) => (
-                                      <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
                               {c.description && <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{c.description}</p>}
                             </div>
                             {isTeacher && <button onClick={() => handleDeleteCareer(c.id)} className="text-red-600 hover:text-red-800 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}
@@ -1815,119 +1835,6 @@ const AlumniDirectory = () => {
                       </>
                     ) : (
                       'Add Achievement'
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Career Modal */}
-        {showCareerModal && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-3 sm:p-4 z-[110]">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto scrollbar-hide">
-              <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-4 sm:mb-6">Add Employment Record</h3>
-              <form onSubmit={handleAddCareer} className="space-y-4 sm:space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Position *</label>
-                    <input
-                      type="text"
-                      value={newCareer.job_title}
-                      onChange={e => setNewCareer(s => ({ ...s, job_title: e.target.value }))}
-                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                      placeholder="e.g., Senior Software Engineer"
-                      required
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
-                    <input
-                      type="text"
-                      value={newCareer.company}
-                      onChange={e => setNewCareer(s => ({ ...s, company: e.target.value }))}
-                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                      placeholder="Company name"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                    <input
-                      type="date"
-                      value={newCareer.start_date}
-                      onChange={e => setNewCareer(s => ({ ...s, start_date: e.target.value }))}
-                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                    <input
-                      type="date"
-                      value={newCareer.end_date}
-                      onChange={e => setNewCareer(s => ({ ...s, end_date: e.target.value }))}
-                      disabled={newCareer.is_current}
-                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <div className="flex items-center bg-blue-50 rounded-lg px-4 py-3 border border-blue-200">
-                      <input
-                        type="checkbox"
-                        checked={newCareer.is_current}
-                        onChange={e => setNewCareer(s => ({ ...s, is_current: e.target.checked, end_date: e.target.checked ? '' : s.end_date }))}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label className="ml-3 block text-sm font-medium text-gray-700">I currently work here</label>
-                    </div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Program Match</label>
-                    <select
-                      value={newCareer.program_alignment}
-                      onChange={e => setNewCareer(s => ({ ...s, program_alignment: e.target.value }))}
-                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                    >
-                      {PROGRAM_ALIGNMENT_OPTIONS.filter((option) => option.value).map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Match Notes</label>
-                    <input
-                      type="text"
-                      value={newCareer.alignment_notes}
-                      onChange={e => setNewCareer(s => ({ ...s, alignment_notes: e.target.value }))}
-                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-                      placeholder="Optional note about how this job relates to your program"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                    <textarea
-                      value={newCareer.description}
-                      onChange={e => setNewCareer(s => ({ ...s, description: e.target.value }))}
-                      rows="4"
-                      className="mt-1 block w-full px-4 py-3 text-sm rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors resize-none"
-                      placeholder="Describe your responsibilities and achievements..."
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-6 sm:mt-8 pt-4 border-t border-gray-200">
-                  <button type="button" disabled={isSubmitting} onClick={() => setShowCareerModal(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">Cancel</button>
-                  <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center w-full sm:w-auto px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                    {isSubmitting ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                        </svg>
-                        Adding...
-                      </>
-                    ) : (
-                      'Add Employment'
                     )}
                   </button>
                 </div>

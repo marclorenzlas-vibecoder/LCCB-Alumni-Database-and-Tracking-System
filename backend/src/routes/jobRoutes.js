@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { buildChangeSet, recordActivity } = require('../services/activityLogService');
 const { broadcastUpdate } = require('../services/realtimeService');
+const notificationService = require('../services/notificationService');
 const { syncTableSequence } = require('../services/dbSequenceService');
 
 const prisma = require('../config/prisma');
@@ -61,6 +62,7 @@ const normalizeJobRow = (row) => {
     description: row.description,
     application_url: row.application_url,
     application_deadline: row.application_deadline,
+    approval_status: row.approval_status || 'APPROVED',
     created_at: row.created_at,
     updated_at: row.updated_at,
     staff: row.staff_user_id
@@ -132,6 +134,7 @@ const selectJobSql = `
     jp.description,
     jp.application_url,
     jp.application_deadline,
+    jp.approval_status::text AS approval_status,
     jp.created_at,
     jp.updated_at,
     a.id AS alumni_id,
@@ -164,14 +167,28 @@ const getJobById = async (client, id) => {
   return normalizeJobRow(rows[0]);
 };
 
-// Get all job postings
+// Get all approved job postings
 router.get('/', async (req, res) => {
   try {
-    const rows = await prisma.$queryRawUnsafe(`${selectJobSql} ORDER BY jp.created_at DESC`);
+    const rows = await prisma.$queryRawUnsafe(`${selectJobSql} WHERE jp.approval_status = 'APPROVED' ORDER BY jp.created_at DESC`);
     res.json(rows.map(normalizeJobRow));
   } catch (error) {
     console.error('Error fetching job postings:', error);
     res.status(500).json({ error: 'Failed to fetch job postings' });
+  }
+});
+
+// Get pending job postings for admin/teacher review
+router.get('/pending', authenticateToken, async (req, res) => {
+  try {
+    if (!isStaffRequest(req)) {
+      return res.status(403).json({ error: 'Access denied. Admin or Teacher privileges required.' });
+    }
+    const rows = await prisma.$queryRawUnsafe(`${selectJobSql} WHERE jp.approval_status = 'PENDING' ORDER BY jp.created_at DESC, jp.id DESC`);
+    res.json(rows.map(normalizeJobRow));
+  } catch (error) {
+    console.error('Error fetching pending job postings:', error);
+    res.status(500).json({ error: 'Failed to fetch pending job postings' });
   }
 });
 
@@ -286,6 +303,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     const sanitizedDescription = description ? cleanHtmlToFormattedText(description) : null;
+    const approvalStatus = isStaffRequest(req) ? 'APPROVED' : 'PENDING';
 
     const job = await prisma.$transaction(async (tx) => {
       const inserted = await tx.$queryRaw`
@@ -302,7 +320,8 @@ router.post('/', authenticateToken, async (req, res) => {
           benefits,
           description,
           application_url,
-          application_deadline
+          application_deadline,
+          approval_status
         ) VALUES (
           ${posterId},
           ${posterUserId},
@@ -316,7 +335,8 @@ router.post('/', authenticateToken, async (req, res) => {
           ${benefits || null},
           ${sanitizedDescription},
           ${normalizedApplicationUrl},
-          ${application_deadline ? new Date(application_deadline) : null}
+          ${application_deadline ? new Date(application_deadline) : null},
+          ${approvalStatus}::approval_status
         ) RETURNING id
       `;
 
@@ -330,11 +350,29 @@ router.post('/', authenticateToken, async (req, res) => {
       entityType: 'job_posting',
       entityId: job.id,
       entityLabel: job.job_title,
-      summary: `Created job posting "${job.job_title}"`,
-      details: { company: job.company, location: job.location }
+      summary: `Created job posting "${job.job_title}" (${approvalStatus})`,
+      details: { company: job.company, location: job.location, approvalStatus }
     });
 
-    broadcastUpdate('job.created', { jobId: job.id });
+    broadcastUpdate(approvalStatus === 'APPROVED' ? 'job.created' : 'job.pending', {
+      jobId: job.id,
+      jobTitle: job.job_title,
+      company: job.company,
+      approvalStatus
+    });
+
+    if (approvalStatus === 'PENDING') {
+      const posterName = job.alumni
+        ? `${job.alumni.first_name || ''} ${job.alumni.last_name || ''}`.trim() || job.alumni.email
+        : 'An alumni';
+      await notificationService.notifyAdminsOfPendingPost({
+        type: 'JOB_APPLICATION',
+        title: 'New Pending Employment Post',
+        message: `${posterName} posted "${job.job_title}" at ${job.company} for approval.`,
+        link: '/pending-approval?tab=employment',
+        senderName: posterName
+      });
+    }
 
     res.status(201).json(job);
   } catch (error) {
@@ -412,6 +450,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    if (!isStaff) {
+      await prisma.$executeRawUnsafe(
+        'UPDATE "job_posting" SET "approval_status" = $1::"approval_status" WHERE id = $2',
+        'PENDING',
+        Number(id)
+      );
+    }
+
     const job = await getJobById(prisma, id);
     if (!job) {
       return res.status(404).json({ error: 'Job posting not found' });
@@ -441,7 +487,24 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     });
 
-    broadcastUpdate('job.updated', { jobId: job.id });
+    broadcastUpdate(isStaff ? 'job.updated' : 'job.pending', {
+      jobId: job.id,
+      jobTitle: job.job_title,
+      company: job.company
+    });
+
+    if (!isStaff) {
+      const posterName = job.alumni
+        ? `${job.alumni.first_name || ''} ${job.alumni.last_name || ''}`.trim() || job.alumni.email
+        : 'An alumni';
+      await notificationService.notifyAdminsOfPendingPost({
+        type: 'JOB_APPLICATION',
+        title: 'Updated Employment Post Pending Review',
+        message: `${posterName} updated "${job.job_title}" at ${job.company} and needs re-approval.`,
+        link: '/pending-approval?tab=employment',
+        senderName: posterName
+      });
+    }
 
     res.json(job);
   } catch (error) {
@@ -450,6 +513,75 @@ router.put('/:id', authenticateToken, async (req, res) => {
       error: error.statusCode ? error.message : 'Failed to update job posting',
       details: error.statusCode ? undefined : error.message
     });
+  }
+});
+
+// Approve or reject a pending job posting (Admin / Teacher)
+router.patch('/:id/approval', authenticateToken, async (req, res) => {
+  try {
+    if (!isStaffRequest(req)) {
+      return res.status(403).json({ error: 'Access denied. Admin or Teacher privileges required.' });
+    }
+
+    const jobId = Number(req.params.id);
+    const status = String(req.body?.status || '').toUpperCase();
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid approval status. Must be APPROVED or REJECTED.' });
+    }
+
+    const existing = await getJobById(prisma, jobId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Job posting not found' });
+    }
+
+    if (status === 'REJECTED') {
+      await prisma.job_posting.delete({
+        where: { id: jobId }
+      });
+
+      broadcastUpdate('job.deleted', {
+        jobId,
+        approvalStatus: 'REJECTED'
+      });
+
+      await recordActivity({
+        req,
+        action: 'REJECT',
+        entityType: 'job_posting',
+        entityId: jobId,
+        entityLabel: existing.job_title,
+        summary: `Rejected and deleted pending job posting "${existing.job_title}"`,
+        details: { company: existing.company, status, deleted: true }
+      });
+
+      return res.json({ success: true, id: jobId, approval_status: status, deleted: true });
+    }
+
+    await prisma.$executeRawUnsafe(
+      'UPDATE "job_posting" SET "approval_status" = $1::"approval_status", "updated_at" = NOW() WHERE id = $2',
+      status,
+      jobId
+    );
+
+    broadcastUpdate('job.created', {
+      jobId,
+      approvalStatus: status
+    });
+
+    await recordActivity({
+      req,
+      action: 'APPROVE',
+      entityType: 'job_posting',
+      entityId: jobId,
+      entityLabel: existing.job_title,
+      summary: `Approved job posting "${existing.job_title}"`,
+      details: { company: existing.company, status }
+    });
+
+    res.json({ success: true, id: jobId, approval_status: status });
+  } catch (error) {
+    console.error('Error updating job posting approval:', error);
+    res.status(500).json({ error: 'Failed to update job posting approval status' });
   }
 });
 
