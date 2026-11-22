@@ -127,9 +127,9 @@ const hasPrivacyInput = (body) =>
 const PRIVACY_DEFAULTS = {
   is_student_id_public: false,
   is_date_of_birth_public: false,
-  is_course_public: false,
+  is_course_public: true,
   is_graduation_year_public: false,
-  is_education_history_public: false,
+  is_education_history_public: true,
   is_email_public: false,
   is_phone_public: false,
   is_position_public: false,
@@ -417,9 +417,31 @@ router.get("/", softAuth, async (req, res) => {
           ? historyByAlumniId.get(entry.id) || []
           : [],
       );
+      const rawHistory = historyByAlumniId.get(entry.id) || [];
+      const directoryBatches = Array.from(
+        new Set(
+          [entry.batch, ...rawHistory.map((h) => h.batch)]
+            .filter((b) => b !== null && b !== undefined && b !== '')
+            .map((b) => Number(b))
+            .filter((b) => Number.isFinite(b))
+        )
+      );
+      const directoryEducationHistory = rawHistory.length > 0
+        ? rawHistory.map((h) => ({
+            level: h.level || null,
+            batch: h.batch ?? null,
+          }))
+        : (entry.level || entry.batch
+            ? [{ level: entry.level || null, batch: entry.batch ?? null }]
+            : []);
       return {
         ...visibleEntry,
         ...alumniPrivacyPayload(visibleEntry),
+        directory_course: entry.course || null,
+        directory_level: entry.level || null,
+        directory_batch: entry.batch ?? null,
+        directory_batches: directoryBatches,
+        directory_education_history: directoryEducationHistory,
         education_history: history,
         educationHistory: history,
       };

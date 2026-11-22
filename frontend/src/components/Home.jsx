@@ -7,6 +7,7 @@ import careerService from '../services/careerService';
 import donationService from '../services/donationService';
 import statsService from '../services/statsService';
 import backgroundImage from '../assets/homeimage.jpg';
+import { realtimeClient } from '../services/realtimeClient';
 import NotificationPermissionPopup from './NotificationPermissionPopup';
 import UserLayout from './UserLayout';
 import { IMAGE_BASE_URL } from '../config/apiBaseUrl';
@@ -251,6 +252,27 @@ const Home = () => {
 
   useEffect(() => {
     fetchPreviewData();
+
+    const eventsToWatch = [
+      'event.created',
+      'event.updated',
+      'event.deleted',
+      'achievement.created',
+      'achievement.updated',
+      'achievement.deleted',
+      'job.created',
+      'job.updated',
+      'job.deleted',
+      'donation.created',
+      'donation.updated',
+      'donation.deleted'
+    ];
+    const unsubs = eventsToWatch.map((ev) => realtimeClient.subscribe(ev, fetchPreviewData));
+    return () => {
+      unsubs.forEach((unsub) => {
+        try { unsub(); } catch {}
+      });
+    };
   }, []);
 
   const fetchPreviewData = async () => {

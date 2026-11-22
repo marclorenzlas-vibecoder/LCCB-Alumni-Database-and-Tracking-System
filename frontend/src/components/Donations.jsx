@@ -116,8 +116,52 @@ function DonationCard({ donation, isTeacher, isAdminDonationPage, donationStats,
   const { cleanDescription, meta } = extractDonationMeta(donation.description || '');
   const progress = calculateProgress(donation.amount, donation.goal);
 
+  const deadlineStatus = (() => {
+    if (!donation.date) {
+      return { state: 'active', label: 'Active', isEnded: false };
+    }
+    const endDate = new Date(donation.date);
+    if (Number.isNaN(endDate.getTime())) {
+      return { state: 'active', label: 'Active', isEnded: false };
+    }
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const endDayStart = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    const diffDays = Math.round((endDayStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+    const dateLabel = endDate.toLocaleDateString();
+
+    if (diffDays < 0) {
+      return { state: 'ended', label: `Ended · ${dateLabel}`, isEnded: true };
+    }
+    if (diffDays === 0) {
+      return { state: 'ending-soon', label: `Ends Today · ${dateLabel}`, isEnded: false };
+    }
+    if (diffDays <= 7) {
+      return {
+        state: 'ending-soon',
+        label: `${diffDays} ${diffDays === 1 ? 'day' : 'days'} left · ${dateLabel}`,
+        isEnded: false
+      };
+    }
+    return { state: 'active', label: `Active · Ends ${dateLabel}`, isEnded: false };
+  })();
+
+  const statusBadgeClass =
+    deadlineStatus.state === 'ended'
+      ? 'bg-rose-600/95 text-white ring-1 ring-rose-500/40'
+      : deadlineStatus.state === 'ending-soon'
+      ? 'bg-amber-500/95 text-white ring-1 ring-amber-400/40'
+      : 'bg-white/95 text-emerald-700 ring-1 ring-emerald-200/80';
+
+  const statusDotClass =
+    deadlineStatus.state === 'ended'
+      ? 'bg-rose-200'
+      : deadlineStatus.state === 'ending-soon'
+      ? 'bg-white animate-pulse'
+      : 'bg-emerald-500';
+
   return (
-    <div className="app-card overflow-hidden group flex h-full flex-col p-0">
+    <div className={`app-card overflow-hidden group flex h-full flex-col p-0 ${deadlineStatus.isEnded ? 'opacity-90' : ''}`}>
       <div className="relative h-48 overflow-hidden">
         <img
           src={
@@ -126,21 +170,18 @@ function DonationCard({ donation, isTeacher, isAdminDonationPage, donationStats,
               : 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Donation+Campaign'
           }
           alt={donation.purpose}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${deadlineStatus.isEnded ? 'grayscale-[35%] brightness-90' : ''}`}
         />
         <div className="absolute left-4 top-4 flex items-center gap-2 flex-wrap">
-          <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-blue-900 shadow-sm backdrop-blur">
-            {donation.category || 'General'}
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-sm backdrop-blur ${statusBadgeClass}`}>
+            {deadlineStatus.label}
           </span>
           {isAdminDonationPage && donationStats?.recentCount > 0 && (
-            <span className="rounded-full bg-emerald-600/90 px-3 py-1 text-sm font-medium text-white shadow-sm backdrop-blur">
+            <span className="rounded-full bg-emerald-600/90 px-3 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur">
               Recent activity
             </span>
           )}
         </div>
-        <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
-          {donation.date ? `Ends ${new Date(donation.date).toLocaleDateString()}` : ''}
-        </span>
       </div>
 
       <div className="flex flex-1 flex-col px-6 pb-6 pt-5">
@@ -219,9 +260,14 @@ function DonationCard({ donation, isTeacher, isAdminDonationPage, donationStats,
             <div className="col-span-2 flex w-full items-center gap-2">
               <button
                 onClick={() => onDonate(donation)}
-                className="flex-1 min-w-[112px] px-4 py-2 bg-blue-900 text-white rounded-md hover:bg-blue-800 transition-colors duration-200 text-sm font-medium shadow-xs flex items-center justify-center gap-2"
+                disabled={!isTeacher && deadlineStatus.isEnded}
+                className={`flex-1 min-w-[112px] px-4 py-2 rounded-md transition-colors duration-200 text-sm font-medium shadow-xs flex items-center justify-center gap-2 ${
+                  !isTeacher && deadlineStatus.isEnded
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'bg-blue-900 text-white hover:bg-blue-800'
+                }`}
               >
-                {isTeacher ? 'View Receipts' : 'Donate'}
+                {isTeacher ? 'View Receipts' : deadlineStatus.isEnded ? 'Campaign Ended' : 'Donate'}
               </button>
               <button
                 onClick={() => onShare(donation)}
@@ -616,22 +662,6 @@ const Donations = () => {
 
 
 
-          {/* Categories */}
-          <div className="flex flex-wrap justify-center gap-2 mb-12">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${selectedCategory === category
-                    ? 'bg-blue-900 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
-                  } border border-gray-200`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
           {/* Campaign Cards */}
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
             {loading ? (
@@ -709,25 +739,6 @@ const Donations = () => {
                           className="app-textarea"
                           placeholder="Describe the purpose and impact of this campaign..."
                         />
-                      </div>
-
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Category *
-                        </label>
-                        <select
-                          name="category"
-                          value={formData.category}
-                          onChange={handleInputChange}
-                          required
-                          className="app-select"
-                        >
-                          <option value="">Select a category</option>
-                          <option value="Education">Education</option>
-                          <option value="Infrastructure">Infrastructure</option>
-                          <option value="Community">Community</option>
-                          <option value="Research">Research</option>
-                        </select>
                       </div>
 
                       <div>

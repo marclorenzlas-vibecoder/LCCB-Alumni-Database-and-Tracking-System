@@ -79,6 +79,15 @@ class AlumniService {
       level: alumnus.level || "",
       batch: alumnus.batch || "",
       course: alumnus.course || "",
+      directoryLevel: alumnus.directory_level || alumnus.level || "",
+      directoryBatch: alumnus.directory_batch ?? alumnus.batch ?? "",
+      directoryCourse: alumnus.directory_course || alumnus.course || "",
+      directoryBatches: Array.isArray(alumnus.directory_batches)
+        ? alumnus.directory_batches
+        : [],
+      directoryEducationHistory: Array.isArray(alumnus.directory_education_history)
+        ? alumnus.directory_education_history
+        : [],
       currentPosition:
         alumnus.current_position || alumnus.currentPosition || "",
       company: alumnus.company || "",
@@ -103,12 +112,12 @@ class AlumniService {
       is_student_id_public: pickPrivacyFlag(alumnus, 'isStudentIdPublic', 'is_student_id_public', false),
       isDateOfBirthPublic: pickPrivacyFlag(alumnus, 'isDateOfBirthPublic', 'is_date_of_birth_public', false),
       is_date_of_birth_public: pickPrivacyFlag(alumnus, 'isDateOfBirthPublic', 'is_date_of_birth_public', false),
-      isCoursePublic: pickPrivacyFlag(alumnus, 'isCoursePublic', 'is_course_public', false),
-      is_course_public: pickPrivacyFlag(alumnus, 'isCoursePublic', 'is_course_public', false),
+      isCoursePublic: pickPrivacyFlag(alumnus, 'isCoursePublic', 'is_course_public', true),
+      is_course_public: pickPrivacyFlag(alumnus, 'isCoursePublic', 'is_course_public', true),
       isGraduationYearPublic: pickPrivacyFlag(alumnus, 'isGraduationYearPublic', 'is_graduation_year_public', false),
       is_graduation_year_public: pickPrivacyFlag(alumnus, 'isGraduationYearPublic', 'is_graduation_year_public', false),
-      isEducationHistoryPublic: pickPrivacyFlag(alumnus, 'isEducationHistoryPublic', 'is_education_history_public', false),
-      is_education_history_public: pickPrivacyFlag(alumnus, 'isEducationHistoryPublic', 'is_education_history_public', false),
+      isEducationHistoryPublic: pickPrivacyFlag(alumnus, 'isEducationHistoryPublic', 'is_education_history_public', true),
+      is_education_history_public: pickPrivacyFlag(alumnus, 'isEducationHistoryPublic', 'is_education_history_public', true),
       isEmailPublic: pickPrivacyFlag(alumnus, 'isEmailPublic', 'is_email_public', false),
       is_email_public: pickPrivacyFlag(alumnus, 'isEmailPublic', 'is_email_public', false),
       isPhonePublic: pickPrivacyFlag(alumnus, 'isPhonePublic', 'is_phone_public', false),

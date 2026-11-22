@@ -195,7 +195,7 @@ router.get('/home', async (req, res) => {
           ]
         }
       }),
-      prisma.job_posting.count()
+      prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS count FROM job_posting WHERE approval_status = 'APPROVED'`).then((r) => r?.[0]?.count || 0)
     ]);
 
     const totalAlumni = alumniCount;
@@ -245,46 +245,78 @@ router.get('/home-snapshot', async (req, res) => {
           ]
         }
       }),
-      prisma.job_posting.count(),
+      prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS count FROM job_posting WHERE approval_status = 'APPROVED'`).then((r) => r?.[0]?.count || 0),
       
-      // Top 3 events
+      // Top 3 events (newest first)
       prisma.event.findMany({
-        orderBy: { date: 'desc' },
+        orderBy: [{ id: 'desc' }],
         take: 3
       }),
       
-      // Top 3 achievements
-      prisma.achievement.findMany({
-        include: {
-          alumni: {
-            select: {
-              first_name: true,
-              last_name: true,
-              email: true
-            }
-          }
-        },
-        orderBy: { date: 'desc' },
-        take: 3
-      }),
+      // Top 3 approved public achievements (excluding profile-only and pending/rejected)
+      prisma.$queryRawUnsafe(`
+        SELECT ach.id, ach.alumni_id, ach.title, ach.category, ach.image, ach.description, ach.date,
+               ach.approval_status::text AS approval_status,
+               ach.posted_by_name,
+               a.first_name, a.last_name, a.email
+        FROM achievement ach
+        LEFT JOIN alumni a ON a.id = ach.alumni_id
+        WHERE ach.approval_status = 'APPROVED'
+          AND COALESCE(ach.is_profile_only, false) = false
+        ORDER BY ach.id DESC
+        LIMIT 3
+      `).then((rows) =>
+        rows.map((row) => ({
+          id: row.id,
+          alumni_id: row.alumni_id,
+          title: row.title,
+          category: row.category,
+          image: row.image,
+          description: row.description,
+          date: row.date,
+          approval_status: row.approval_status,
+          posted_by_name: row.posted_by_name || null,
+          alumni: row.first_name || row.last_name || row.email
+            ? { first_name: row.first_name, last_name: row.last_name, email: row.email }
+            : null
+        }))
+      ),
       
-      // Top 3 jobs
-      prisma.job_posting.findMany({
-        include: {
-          alumni: {
-            select: {
-              id: true,
-              first_name: true,
-              last_name: true,
-              email: true
-            }
-          }
-        },
-        orderBy: { created_at: 'desc' },
-        take: 3
-      }),
+      // Top 3 approved job postings (excluding pending/rejected)
+      prisma.$queryRawUnsafe(`
+        SELECT jp.id, jp.posted_by_alumni_id, jp.posted_by_user_id, jp.job_title, jp.company,
+               jp.location, jp.department, jp.job_type, jp.salary_range, jp.description,
+               jp.application_url, jp.application_deadline, jp.created_at,
+               jp.approval_status::text AS approval_status,
+               a.id AS alumni_ref_id, a.first_name, a.last_name, a.email
+        FROM job_posting jp
+        LEFT JOIN alumni a ON a.id = jp.posted_by_alumni_id
+        WHERE jp.approval_status = 'APPROVED'
+        ORDER BY jp.created_at DESC NULLS LAST, jp.id DESC
+        LIMIT 3
+      `).then((rows) =>
+        rows.map((row) => ({
+          id: row.id,
+          posted_by_alumni_id: row.posted_by_alumni_id,
+          posted_by_user_id: row.posted_by_user_id,
+          job_title: row.job_title,
+          company: row.company,
+          location: row.location,
+          department: row.department,
+          job_type: row.job_type,
+          salary_range: row.salary_range,
+          description: row.description,
+          application_url: row.application_url,
+          application_deadline: row.application_deadline,
+          created_at: row.created_at,
+          approval_status: row.approval_status,
+          alumni: row.alumni_ref_id
+            ? { id: row.alumni_ref_id, first_name: row.first_name, last_name: row.last_name, email: row.email }
+            : null
+        }))
+      ),
       
-      // Top 3 donations
+      // Top 3 donations (newest first)
       prisma.donation.findMany({
         include: {
           alumni: {
@@ -295,7 +327,7 @@ router.get('/home-snapshot', async (req, res) => {
             }
           }
         },
-        orderBy: { date: 'desc' },
+        orderBy: [{ id: 'desc' }],
         take: 3
       })
     ]);
@@ -445,7 +477,7 @@ router.get('/admin', async (req, res) => {
           ]
         }
       }),
-      prisma.job_posting.count(),
+      prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS count FROM job_posting WHERE approval_status = 'APPROVED'`).then((r) => r?.[0]?.count || 0),
       Promise.resolve(0),
       prisma.pending_registration.findMany({
         where: {

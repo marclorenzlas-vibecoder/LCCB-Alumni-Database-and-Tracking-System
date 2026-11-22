@@ -402,6 +402,31 @@ const AlumniDirectory = () => {
     return batches;
   }, [myAlumniRecord]);
 
+  const myEducationCriteria = useMemo(() => {
+    if (!myAlumniRecord) return [];
+    const seen = new Set();
+    const list = [];
+    const addEntry = (levelVal, batchVal) => {
+      const lvl = String(levelVal || '').trim().toUpperCase();
+      const bNum = batchVal !== null && batchVal !== undefined && batchVal !== '' ? Number(batchVal) : null;
+      if (!lvl && !Number.isFinite(bNum)) return;
+      const key = `${lvl}::${Number.isFinite(bNum) ? bNum : ''}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push({ level: lvl || null, batch: Number.isFinite(bNum) ? bNum : null });
+    };
+
+    const eduList = Array.isArray(myAlumniRecord.educationHistory) && myAlumniRecord.educationHistory.length > 0
+      ? myAlumniRecord.educationHistory
+      : (Array.isArray(myAlumniRecord.directoryEducationHistory) ? myAlumniRecord.directoryEducationHistory : []);
+
+    eduList.forEach((edu) => addEntry(edu.level, edu.batch));
+    if (list.length === 0) {
+      addEntry(myAlumniRecord.level || myAlumniRecord.directoryLevel, myAlumniRecord.batch || myAlumniRecord.directoryBatch);
+    }
+    return list;
+  }, [myAlumniRecord]);
+
   const myCourses = useMemo(() => {
     if (!myAlumniRecord) return [];
     const courses = [];
@@ -412,6 +437,7 @@ const AlumniDirectory = () => {
       }
     };
     addCourse(myAlumniRecord.course);
+    addCourse(myAlumniRecord.directoryCourse);
     if (myAlumniRecord.educationHistory) {
       myAlumniRecord.educationHistory.forEach((edu) => addCourse(edu.course));
     }
@@ -530,11 +556,11 @@ const AlumniDirectory = () => {
     }
 
     if (selectedLevel) {
-      data = data.filter((a) => a.level === selectedLevel);
+      data = data.filter((a) => (a.level || a.directoryLevel) === selectedLevel);
     }
 
     if (selectedGroup) {
-      data = data.filter((a) => a.course === selectedGroup);
+      data = data.filter((a) => (a.course || a.directoryCourse) === selectedGroup);
     }
 
     return data;
@@ -544,68 +570,82 @@ const AlumniDirectory = () => {
     let data = [...alumni];
 
     // Default alumni view (no explicit search/level/program/batch filter):
-    // show peers matching BOTH the user's program and batch.
-    // Once any filter is chosen (e.g., choosing Batch 2019), lift the default scoping
-    // so all matching alumni across programs appear and filters combine freely.
-    if (!isTeacher && !hasExplicitFilter) {
-      const shouldScopeToMyCourse = myCourses.length > 0;
-      const shouldScopeToMyBatch = myBatches.length > 0;
+    // show peers matching ANY (level, batch) entry in the user's Education History.
+    // For College / ETEEAP / Grad School entries, also require matching the user's program.
+    // For Integrated School / Night High / Senior High entries, match by level + batch.
+    if (!isTeacher && !hasExplicitFilter && (myEducationCriteria.length > 0 || myCourses.length > 0 || myBatches.length > 0)) {
+      const PROGRAM_LEVELS = new Set(['COLLEGE', 'ETEEAP', 'GRAD_SCHOOL']);
 
-      if (shouldScopeToMyCourse || shouldScopeToMyBatch) {
-        data = data.filter((a) => {
-          if (isOwnerOfRecord(a)) return true;
+      data = data.filter((a) => {
+        if (isOwnerOfRecord(a)) return true;
 
-          let matchesBatch = true;
-          if (shouldScopeToMyBatch) {
-            const itemBatches = [];
-            if (a.batch) itemBatches.push(Number(a.batch));
-            if (a.educationHistory) {
-              a.educationHistory.forEach((edu) => {
-                if (edu.batch) {
-                  const bNum = Number(edu.batch);
-                  if (!itemBatches.includes(bNum)) itemBatches.push(bNum);
-                }
-              });
+        // Collect all (level, batch) pairs for this alumnus
+        const peerEntries = [];
+        const addPeerEntry = (levelVal, batchVal) => {
+          const lvl = String(levelVal || '').trim().toUpperCase();
+          const bNum = batchVal !== null && batchVal !== undefined && batchVal !== '' ? Number(batchVal) : null;
+          if (!lvl && !Number.isFinite(bNum)) return;
+          peerEntries.push({ level: lvl || null, batch: Number.isFinite(bNum) ? bNum : null });
+        };
+
+        const peerEdu = Array.isArray(a.directoryEducationHistory) && a.directoryEducationHistory.length > 0
+          ? a.directoryEducationHistory
+          : (Array.isArray(a.educationHistory) && a.educationHistory.length > 0 ? a.educationHistory : []);
+
+        peerEdu.forEach((edu) => addPeerEntry(edu.level, edu.batch));
+        addPeerEntry(a.level || a.directoryLevel, a.batch || a.directoryBatch);
+
+        const peerCourses = [];
+        const addCourse = (value) => {
+          const normalized = String(value || '').trim().toUpperCase();
+          if (normalized && !peerCourses.includes(normalized)) peerCourses.push(normalized);
+        };
+        addCourse(a.course);
+        addCourse(a.directoryCourse);
+        if (a.educationHistory) {
+          a.educationHistory.forEach((edu) => addCourse(edu.course));
+        }
+
+        if (myEducationCriteria.length > 0) {
+          return myEducationCriteria.some((crit) => {
+            const matchesLevelAndBatch = peerEntries.some((peer) => {
+              const levelOk = !crit.level || !peer.level || peer.level === crit.level;
+              const batchOk = crit.batch === null || peer.batch === crit.batch;
+              return levelOk && batchOk;
+            });
+            if (!matchesLevelAndBatch) return false;
+
+            // For College / ETEEAP / Grad School, also match the user's program
+            if (crit.level && PROGRAM_LEVELS.has(crit.level) && myCourses.length > 0) {
+              return peerCourses.some((c) => myCourses.includes(c));
             }
-            matchesBatch = itemBatches.some((b) => myBatches.includes(b));
-          }
+            return true;
+          });
+        }
 
-          let matchesCourse = true;
-          if (shouldScopeToMyCourse) {
-            const itemCourses = [];
-            const addCourse = (value) => {
-              const normalized = String(value || '').trim().toUpperCase();
-              if (normalized && !itemCourses.includes(normalized)) itemCourses.push(normalized);
-            };
-            addCourse(a.course);
-            if (a.educationHistory) {
-              a.educationHistory.forEach((edu) => addCourse(edu.course));
-            }
-            matchesCourse = itemCourses.some((c) => myCourses.includes(c));
-          }
-
-          return matchesBatch && matchesCourse;
-        });
-      }
+        // Fallback if no education criteria
+        const peerBatches = peerEntries.map((p) => p.batch).filter((b) => b !== null);
+        const matchesBatch = myBatches.length === 0 || peerBatches.some((b) => myBatches.includes(b));
+        const matchesCourse = myCourses.length === 0 || peerCourses.some((c) => myCourses.includes(c));
+        return matchesBatch && matchesCourse;
+      });
     }
 
     return filterBySearchLevelGroup(data);
-  }, [alumni, searchTerm, selectedLevel, selectedGroup, hasExplicitFilter, isTeacher, myBatches, myCourses]);
+  }, [alumni, searchTerm, selectedLevel, selectedGroup, hasExplicitFilter, isTeacher, myEducationCriteria, myBatches, myCourses]);
 
   // Derived batches across alumni so multiple filters can be combined freely
   const batches = useMemo(() => {
     const set = new Set();
     alumni.forEach((item) => {
-      const batchValue = item.batch;
-      if (batchValue !== null && batchValue !== undefined && batchValue !== '') {
-        set.add(String(batchValue));
-      }
+      const addBatchStr = (val) => {
+        if (val !== null && val !== undefined && val !== '') set.add(String(val));
+      };
+      addBatchStr(item.batch);
+      addBatchStr(item.directoryBatch);
+      if (Array.isArray(item.directoryBatches)) item.directoryBatches.forEach(addBatchStr);
       if (item.educationHistory) {
-        item.educationHistory.forEach((edu) => {
-          if (edu.batch !== null && edu.batch !== undefined && edu.batch !== '') {
-            set.add(String(edu.batch));
-          }
-        });
+        item.educationHistory.forEach((edu) => addBatchStr(edu.batch));
       }
     });
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
@@ -652,6 +692,8 @@ const AlumniDirectory = () => {
     if (selectedBatch) {
       data = data.filter((a) =>
         String(a.batch) === String(selectedBatch) ||
+        String(a.directoryBatch) === String(selectedBatch) ||
+        (Array.isArray(a.directoryBatches) && a.directoryBatches.some((b) => String(b) === String(selectedBatch))) ||
         (Array.isArray(a.educationHistory) && a.educationHistory.some((edu) => String(edu.batch) === String(selectedBatch)))
       );
     }

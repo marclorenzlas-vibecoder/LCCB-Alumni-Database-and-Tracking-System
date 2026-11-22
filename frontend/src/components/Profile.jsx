@@ -134,9 +134,9 @@ const PROFILE_UPDATED_EVENT = 'auth-user-updated';
 const DEFAULT_PRIVACY_SETTINGS = {
   isStudentIdPublic: false,
   isDateOfBirthPublic: false,
-  isCoursePublic: false,
+  isCoursePublic: true,
   isGraduationYearPublic: false,
-  isEducationHistoryPublic: false,
+  isEducationHistoryPublic: true,
   isEmailPublic: false,
   isPhonePublic: false,
   isPositionPublic: false,

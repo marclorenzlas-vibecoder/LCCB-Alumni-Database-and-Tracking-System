@@ -73,12 +73,7 @@ function AchievementGridCard({ achievement, isTeacher, onEdit, handleDelete }) {
             No image available
           </div>
         )}
-        <div className="absolute left-4 top-4 flex items-center gap-2">
-          <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-blue-900 shadow-sm backdrop-blur">
-            {achievement.category || 'General'}
-          </span>
-        </div>
-        <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
+        <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur">
           {achievement.date ? new Date(achievement.date).getFullYear() : 'N/A'}
         </span>
       </div>
@@ -613,9 +608,9 @@ const Achievements = () => {
 
         {/* Unified Search and Filter Card */}
         <div className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm px-5 py-4">
-          {/* Search Bar */}
-          <div className="mb-4">
-            <div className="relative group">
+          {/* Search Bar + Year Filter in 1 Row */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative group flex-1">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-blue-600 transition group-focus-within:text-blue-900">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-transparent">
                   <svg className="h-4.5 w-4.5 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -625,7 +620,7 @@ const Achievements = () => {
               </div>
               <input
                 type="text"
-                placeholder="Search achievements by name, title, or category..."
+                placeholder="Search achievements by name or title..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 autoComplete="off"
@@ -645,74 +640,47 @@ const Achievements = () => {
                 </button>
               )}
             </div>
-          </div>
 
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="hidden md:block">
-              <FilterMenu
-                menuRef={categoryMenuRef}
-                isOpen={showCategoryMenu}
-                setIsOpen={setOnlyCategoryMenuOpen}
-                buttonLabel="Category"
-                selectedLabel={categoryFilterLabel}
-                selectedValue={selectedCategory}
-                icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
-                sections={categoryMenuSections}
-                onSelect={handleCategorySelect}
-                panelTitle="Categories"
-                panelWidthClass="w-64"
-                alignClass="left-0"
-              />
-            </div>
-            <MobileFilterButton
-              buttonLabel="Category"
-              selectedLabel={categoryFilterLabel}
-              selectedValue={selectedCategory}
-              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>}
-              sections={categoryMenuSections}
-              onSelect={handleCategorySelect}
-              panelTitle="Categories"
-            />
-
-            <div className="hidden md:block">
-              <FilterMenu
-                menuRef={yearMenuRef}
-                isOpen={showYearMenu}
-                setIsOpen={setOnlyYearMenuOpen}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="hidden md:block">
+                <FilterMenu
+                  menuRef={yearMenuRef}
+                  isOpen={showYearMenu}
+                  setIsOpen={setOnlyYearMenuOpen}
+                  buttonLabel="Year"
+                  selectedLabel={selectedYear === 'All' ? 'All Years' : selectedYear}
+                  selectedValue={selectedYear}
+                  icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                  sections={yearMenuSections}
+                  onSelect={(value) => {
+                    setSelectedYear(value);
+                    setShowYearMenu(false);
+                  }}
+                  panelTitle="Years"
+                  panelWidthClass="w-48"
+                  alignClass="right-0"
+                />
+              </div>
+              <MobileFilterButton
                 buttonLabel="Year"
                 selectedLabel={selectedYear === 'All' ? 'All Years' : selectedYear}
                 selectedValue={selectedYear}
                 icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
                 sections={yearMenuSections}
-                onSelect={(value) => {
-                  setSelectedYear(value);
-                  setShowYearMenu(false);
-                }}
+                onSelect={(value) => setSelectedYear(value)}
                 panelTitle="Years"
-                panelWidthClass="w-48"
-                alignClass="left-0"
               />
-            </div>
-            <MobileFilterButton
-              buttonLabel="Year"
-              selectedLabel={selectedYear === 'All' ? 'All Years' : selectedYear}
-              selectedValue={selectedYear}
-              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-              sections={yearMenuSections}
-              onSelect={(value) => setSelectedYear(value)}
-              panelTitle="Years"
-            />
 
-            {(selectedCategory !== 'All' || selectedYear !== 'All') && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="inline-flex h-[42px] items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
-              >
-                Clear Filters
-              </button>
-            )}
+              {selectedYear !== 'All' && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex h-[42px] items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -768,46 +736,6 @@ const Achievements = () => {
                         autoComplete="off"
                         spellCheck={false}
                       />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Category
-                      </label>
-                      <select
-                        name="category"
-                        value={modalCategorySelect}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setModalCategorySelect(val);
-                          if (val !== 'Other') {
-                            setFormData(prev => ({ ...prev, category: val }));
-                          }
-                        }}
-                        className="app-input"
-                      >
-                        <option value="">Select a category</option>
-                        {STANDARD_CATEGORIES.map((cat) => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                        <option value="Other">Other</option>
-                      </select>
-                      {modalCategorySelect === 'Other' && (
-                        <div className="mt-2 animate-fadeIn">
-                          <input
-                            type="text"
-                            placeholder="Enter custom category name..."
-                            value={customModalCategory}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCustomModalCategory(val);
-                              setFormData(prev => ({ ...prev, category: val }));
-                            }}
-                            required
-                            className="app-input"
-                            autoFocus
-                          />
-                        </div>
-                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">

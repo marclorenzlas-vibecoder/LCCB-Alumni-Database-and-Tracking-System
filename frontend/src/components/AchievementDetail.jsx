@@ -133,17 +133,6 @@ const AchievementDetail = () => {
                 {achievement.description || 'No description provided'}
               </p>
             </div>
-
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Category</h3>
-                <p className="text-gray-600">{achievement.category || 'General'}</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Posted</h3>
-                <p className="text-gray-600">{formattedCreatedAt}</p>
-              </div>
-            </div>
           </div>
 
           <div className="w-full lg:max-w-[420px] lg:justify-self-end">
